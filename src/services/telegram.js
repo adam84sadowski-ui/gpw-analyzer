@@ -40,7 +40,7 @@ ${learning}
 💰 PORTFEL: ${portfolio} PLN
 📌 Pozycja: ${positionSize} PLN = ~${shares} akcji po ${price} PLN
 
-📱 <a href="https://maklerski.ipko.pl">Otwórz iPKO Maklerskie</a>
+📱 Zaloguj się do iPKO → Dom Maklerski
 
 ⚠️ <i>Analiza edukacyjna. Decyzja należy do Ciebie.</i>`
 }
