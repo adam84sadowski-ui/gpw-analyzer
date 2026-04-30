@@ -5,9 +5,18 @@ function isFresh(ts) {
   return Date.now() - ts < CACHE_TTL_MS
 }
 
-// "pkn.pl" → "PKN.WA", "wig20.pl" → "WIG20.WA"
+// Stooq ticker → Yahoo Finance ticker overrides
+const TICKER_MAP = {
+  'kghm.pl':   'KGH.WA',
+  'mwig40.pl': 'MWIG40.WA',
+  'swig80.pl': 'SWIG80.WA',
+}
+
+// "pkn.pl" → "PKN.WA", with exceptions for tickers that differ on Yahoo
 function toYahooTicker(ticker) {
-  return ticker.replace(/\.pl$/i, '').toUpperCase() + '.WA'
+  const lower = ticker.toLowerCase()
+  if (TICKER_MAP[lower]) return TICKER_MAP[lower]
+  return lower.replace(/\.pl$/, '').toUpperCase() + '.WA'
 }
 
 async function fetchYahooChart(symbol, range = '1y') {
