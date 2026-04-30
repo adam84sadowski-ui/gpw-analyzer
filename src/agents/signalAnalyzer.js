@@ -30,8 +30,8 @@ export async function analyzeStrategy(strategyName, thresholds = {}) {
   if (!indexData) return []
 
   // Basic index signal: if close > open the market has some strength
-  const indexClose = parseFloat(indexData.Close)
-  const indexOpen  = parseFloat(indexData.Open)
+  const indexClose = indexData.close ?? parseFloat(indexData.Close)
+  const indexOpen  = indexData.open  ?? parseFloat(indexData.Open)
   const indexBull  = indexClose >= indexOpen * 0.995 // within 0.5% of open
 
   if (!indexBull && strategyName !== 'swing') {

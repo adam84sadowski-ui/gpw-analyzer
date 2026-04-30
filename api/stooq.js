@@ -5,15 +5,21 @@ function isFresh(ts) {
   return Date.now() - ts < CACHE_TTL_MS
 }
 
-function csvToRows(text) {
-  const [header, ...lines] = text.trim().split('\n')
-  const keys = header.split(',').map(k => k.trim())
-  return lines
-    .filter(l => l.trim())
-    .map(l => {
-      const vals = l.split(',')
-      return Object.fromEntries(keys.map((k, i) => [k, vals[i]?.trim()]))
-    })
+// "pkn.pl" → "PKN.WA", "wig20.pl" → "WIG20.WA"
+function toYahooTicker(ticker) {
+  return ticker.replace(/\.pl$/i, '').toUpperCase() + '.WA'
+}
+
+async function fetchYahooChart(symbol, range = '1y') {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}&includePrePost=false`
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      'Accept': 'application/json',
+    },
+  })
+  if (!res.ok) throw new Error(`Yahoo Finance error: ${res.status}`)
+  return res.json()
 }
 
 export default async function handler(req, res) {
@@ -24,59 +30,57 @@ export default async function handler(req, res) {
 
   const cacheKey = `${type}_${ticker}`
   const hit = cache.get(cacheKey)
-  if (hit && isFresh(hit.ts)) {
-    return res.json(hit.data)
-  }
+  if (hit && isFresh(hit.ts)) return res.json(hit.data)
 
   try {
-    let url
+    const symbol = toYahooTicker(ticker)
+
     if (type === 'current' || type === 'index') {
-      url = `https://stooq.com/q/l/?s=${ticker}&f=sd2t2ohlcv&h&e=csv`
-    } else {
-      url = `https://stooq.com/q/d/l/?s=${ticker}&i=d`
+      const json = await fetchYahooChart(symbol, '5d')
+      const result = json?.chart?.result?.[0]
+      if (!result) return res.json(null)
+
+      const meta = result.meta
+      const data = {
+        date:   new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10),
+        open:   meta.regularMarketOpen ?? null,
+        high:   meta.regularMarketDayHigh ?? null,
+        low:    meta.regularMarketDayLow ?? null,
+        close:  meta.regularMarketPrice ?? null,
+        volume: meta.regularMarketVolume ?? null,
+        Open:   String(meta.regularMarketOpen ?? 'N/D'),
+        High:   String(meta.regularMarketDayHigh ?? 'N/D'),
+        Low:    String(meta.regularMarketDayLow ?? 'N/D'),
+        Close:  String(meta.regularMarketPrice ?? 'N/D'),
+        Volume: String(meta.regularMarketVolume ?? 'N/D'),
+      }
+      cache.set(cacheKey, { data, ts: Date.now() })
+      return res.json(data)
     }
 
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    })
+    // daily historical
+    const json = await fetchYahooChart(symbol, '1y')
+    const result = json?.chart?.result?.[0]
+    if (!result) return res.json([])
 
-    if (!response.ok) {
-      return res.status(502).json({ error: `Stooq error: ${response.status}` })
-    }
+    const timestamps = result.timestamp ?? []
+    const q = result.indicators.quote[0]
 
-    const text = await response.text()
-    const rows = csvToRows(text)
-
-    let data
-    if (type === 'current' || type === 'index') {
-      data = rows[0] ? {
-        date:   rows[0].Date,
-        open:   parseFloat(rows[0].Open),
-        high:   parseFloat(rows[0].High),
-        low:    parseFloat(rows[0].Low),
-        close:  parseFloat(rows[0].Close),
-        volume: parseInt(rows[0].Volume, 10),
-      } : null
-    } else {
-      const cutoff = new Date()
-      cutoff.setMonth(cutoff.getMonth() - 12)
-      data = rows
-        .filter(r => r.Date && new Date(r.Date) >= cutoff)
-        .map(r => ({
-          date:   r.Date,
-          open:   parseFloat(r.Open),
-          high:   parseFloat(r.High),
-          low:    parseFloat(r.Low),
-          close:  parseFloat(r.Close),
-          volume: parseInt(r.Volume, 10),
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-    }
+    const data = timestamps
+      .map((ts, i) => ({
+        date:   new Date(ts * 1000).toISOString().slice(0, 10),
+        open:   q.open[i]   ? Math.round(q.open[i]   * 100) / 100 : null,
+        high:   q.high[i]   ? Math.round(q.high[i]   * 100) / 100 : null,
+        low:    q.low[i]    ? Math.round(q.low[i]    * 100) / 100 : null,
+        close:  q.close[i]  ? Math.round(q.close[i]  * 100) / 100 : null,
+        volume: q.volume[i] ?? null,
+      }))
+      .filter(c => c.close !== null)
 
     cache.set(cacheKey, { data, ts: Date.now() })
     res.json(data)
   } catch (e) {
-    console.error('Stooq proxy error:', e)
+    console.error('Yahoo Finance proxy error:', e)
     res.status(500).json({ error: e.message })
   }
 }
