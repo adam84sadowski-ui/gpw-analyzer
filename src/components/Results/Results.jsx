@@ -46,6 +46,7 @@ export default function Results() {
   const [loading, setLoading]       = useState(true)
   const [prices, setPrices]         = useState({})
   const [closing, setClosing]       = useState(null)
+  const [addingTest, setAddingTest] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -71,6 +72,31 @@ export default function Results() {
   }, [tab])
 
   useEffect(() => { load() }, [load])
+
+  async function addTestPosition() {
+    setAddingTest(true)
+    try {
+      const r = await fetch('/api/stooq?ticker=pkn.pl&type=current')
+      const d = await r.json()
+      const price = d?.close ?? 48.50
+      await fetch('/api/positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker:       'pkn.pl',
+          strategy:     'scalping',
+          entryPrice:   price,
+          positionSize: 1500,
+          target:       5,
+          stopLoss:     3,
+          signal:       'TEST',
+        }),
+      })
+      load()
+    } finally {
+      setAddingTest(false)
+    }
+  }
 
   async function closePosition(exitPrice) {
     await fetch('/api/positions', {
@@ -120,32 +146,52 @@ export default function Results() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gpw-border">
-        {[['open', 'Aktywne'], ['closed', 'Zamknięte']].map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`px-4 py-2 text-sm border-b-2 transition-colors ${
-              tab === id ? 'border-gpw-blue text-white' : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            {label}
-            {id === 'open' && openPositions.length > 0 && (
-              <span className="ml-1.5 bg-gpw-blue text-white text-xs px-1.5 rounded-full">
-                {openPositions.length}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex items-center border-b border-gpw-border">
+        <div className="flex flex-1">
+          {[['open', 'Aktywne'], ['closed', 'Zamknięte']].map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`px-4 py-2 text-sm border-b-2 transition-colors ${
+                tab === id ? 'border-gpw-blue text-white' : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              {label}
+              {id === 'open' && openPositions.length > 0 && (
+                <span className="ml-1.5 bg-gpw-blue text-white text-xs px-1.5 rounded-full">
+                  {openPositions.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={addTestPosition}
+          disabled={addingTest}
+          className="mb-1 text-xs text-gray-500 hover:text-gray-300 border border-gpw-border hover:border-gray-500 px-2 py-1 rounded transition-colors disabled:opacity-50"
+        >
+          {addingTest ? '…' : '+ TEST PKN'}
+        </button>
       </div>
 
       {loading ? (
         <div className="text-gray-400 text-sm py-8 text-center">Ładowanie…</div>
       ) : positions.length === 0 ? (
-        <div className="bg-gpw-card border border-gpw-border rounded-lg p-8 text-center text-gray-400 text-sm">
-          {tab === 'open'
-            ? 'Brak aktywnych pozycji. Potwierdź rekomendację w zakładce Strategie.'
-            : 'Brak zamkniętych pozycji.'}
+        <div className="bg-gpw-card border border-gpw-border rounded-lg p-8 text-center text-gray-400 text-sm space-y-3">
+          <p>
+            {tab === 'open'
+              ? 'Brak aktywnych pozycji. Potwierdź rekomendację w zakładce Strategie.'
+              : 'Brak zamkniętych pozycji.'}
+          </p>
+          {tab === 'open' && (
+            <button
+              onClick={addTestPosition}
+              disabled={addingTest}
+              className="mx-auto block border border-gpw-border hover:border-gray-400 text-gray-300 px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+            >
+              {addingTest ? 'Dodawanie…' : '+ Dodaj testową pozycję (PKN)'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

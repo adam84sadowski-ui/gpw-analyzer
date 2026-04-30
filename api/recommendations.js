@@ -108,14 +108,27 @@ function detectSignal(candles, strategy, thresholds = {}) {
   return null
 }
 
+function calcIndicators(candles, strategy, thresholds = {}) {
+  const closes  = candles.map(c => c.close)
+  const volumes = candles.map(c => c.volume)
+  const rsi     = calcRSI(closes)
+  const sma20   = calcSMA(closes, 20)
+  const sma50   = calcSMA(closes, 50)
+  const avg     = avgVol(volumes)
+  const volMult = avg ? Math.round((volumes[volumes.length - 1] / avg) * 100) / 100 : null
+  const price   = closes[closes.length - 1]
+  const sig     = detectSignal(candles, strategy, thresholds)
+  return { rsi, sma20, sma50, volMult, price, signal: sig?.signal ?? null, hasSignal: sig !== null }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { strategy = 'swing' } = req.query
+  const { strategy = 'swing', mode = 'signals' } = req.query
   const universe = UNIVERSES[strategy]
   if (!universe) return res.status(400).json({ error: 'Unknown strategy' })
 
-  const cacheKey = `rec_${strategy}`
+  const cacheKey = `rec_${strategy}_${mode}`
   const hit = cache.get(cacheKey)
   if (hit && Date.now() - hit.ts < CACHE_TTL_MS) return res.json(hit.data)
 
@@ -127,23 +140,41 @@ export default async function handler(req, res) {
     try {
       const candles = await fetchYahooDaily(toYahoo(ticker))
       if (!candles || candles.length < 25) continue
-      const sig = detectSignal(candles, strategy, thresholds)
-      if (sig) {
+
+      if (mode === 'scan') {
+        const ind = calcIndicators(candles, strategy, thresholds)
         results.push({
           ticker,
           tickerDisplay: ticker.replace('.pl', '').toUpperCase(),
           strategy,
-          label: config.label,
           target: config.target,
           stopLoss: config.stopLoss,
           timestamp: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          ...sig,
+          ...ind,
         })
+      } else {
+        const sig = detectSignal(candles, strategy, thresholds)
+        if (sig) {
+          results.push({
+            ticker,
+            tickerDisplay: ticker.replace('.pl', '').toUpperCase(),
+            strategy,
+            label: config.label,
+            target: config.target,
+            stopLoss: config.stopLoss,
+            timestamp: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            ...sig,
+          })
+        }
       }
     } catch (e) {
       console.error(`recommendations: error scanning ${ticker}:`, e.message)
     }
+  }
+
+  if (mode === 'scan') {
+    results.sort((a, b) => (b.hasSignal ? 1 : 0) - (a.hasSignal ? 1 : 0))
   }
 
   cache.set(cacheKey, { data: results, ts: Date.now() })

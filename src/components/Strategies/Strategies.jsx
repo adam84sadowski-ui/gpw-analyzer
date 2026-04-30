@@ -10,10 +10,13 @@ const STRATEGY_META = {
 }
 
 function RecommendationPanel({ strategy }) {
-  const [recs, setRecs]       = useState([])
-  const [loading, setLoading] = useState(true)
-  const [amounts, setAmounts] = useState({})
-  const [done, setDone]       = useState({})
+  const [viewMode, setViewMode]   = useState('signals')
+  const [recs, setRecs]           = useState([])
+  const [scanData, setScanData]   = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [amounts, setAmounts]     = useState({})
+  const [done, setDone]           = useState({})
 
   const portfolio = (() => {
     try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
@@ -26,20 +29,30 @@ function RecommendationPanel({ strategy }) {
   })()
 
   useEffect(() => {
-    setLoading(true)
-    setRecs([])
-    setDone({})
-    fetch(`/api/recommendations?strategy=${strategy}`)
-      .then(r => r.json())
-      .then(data => {
-        setRecs(data)
-        const init = {}
-        data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
-        setAmounts(init)
-      })
-      .catch(() => setRecs([]))
-      .finally(() => setLoading(false))
-  }, [strategy])
+    if (viewMode === 'signals') {
+      setLoading(true)
+      setRecs([])
+      setDone({})
+      fetch(`/api/recommendations?strategy=${strategy}&mode=signals`)
+        .then(r => r.json())
+        .then(data => {
+          setRecs(data)
+          const init = {}
+          data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
+          setAmounts(init)
+        })
+        .catch(() => setRecs([]))
+        .finally(() => setLoading(false))
+    } else {
+      setScanLoading(true)
+      setScanData([])
+      fetch(`/api/recommendations?strategy=${strategy}&mode=scan`)
+        .then(r => r.json())
+        .then(data => setScanData(data))
+        .catch(() => setScanData([]))
+        .finally(() => setScanLoading(false))
+    }
+  }, [strategy, viewMode])
 
   async function confirm(rec) {
     const positionSize = amounts[rec.ticker]
@@ -63,98 +76,161 @@ function RecommendationPanel({ strategy }) {
     setDone(d => ({ ...d, [ticker]: 'skipped' }))
   }
 
-  if (loading) {
-    return <div className="text-gray-400 text-sm py-4 text-center">Szukam sygnałów… (może potrwać 30s)</div>
-  }
-
-  const visible = recs.filter(r => !done[r.ticker])
-
-  if (visible.length === 0 && recs.length === 0) {
-    return (
-      <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
-        Brak sygnałów dla tej strategii. Sprawdź ponownie jutro rano.
-      </div>
-    )
-  }
-
-  if (visible.length === 0) {
-    return (
-      <div className="bg-gpw-dark rounded-lg p-4 text-sm text-center">
-        {Object.values(done).filter(v => v === 'confirmed').length > 0
-          ? <span className="text-gpw-green">✅ Pozycje zapisane w Moich wynikach.</span>
-          : <span className="text-gray-400">Wszystkie rekomendacje przetworzone.</span>
-        }
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
-      {visible.map(rec => {
-        const amt   = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
-        const shares = Math.floor(amt / rec.price)
-        return (
-          <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="font-bold text-lg">{rec.tickerDisplay}</span>
-                <span className="ml-2 text-xs text-gray-400">{rec.signal}</span>
-              </div>
-              <div className="text-right">
-                <div className="font-semibold">{rec.price} PLN</div>
-                <div className="text-xs text-gray-400">{new Date(rec.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
-              </div>
-            </div>
+      {/* View toggle */}
+      <div className="flex border border-gpw-border rounded-lg overflow-hidden text-sm">
+        <button
+          onClick={() => setViewMode('signals')}
+          className={`flex-1 py-2 transition-colors ${viewMode === 'signals' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
+        >
+          Tylko sygnały
+        </button>
+        <button
+          onClick={() => setViewMode('scan')}
+          className={`flex-1 py-2 transition-colors ${viewMode === 'scan' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
+        >
+          Wszystkie spółki
+        </button>
+      </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs text-center">
-              {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
-              {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
-              <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Cel</div><div className="font-bold text-gpw-green">+{rec.target}%</div></div>
-              <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Stop loss</div><div className="font-bold text-gpw-red">-{rec.stopLoss}%</div></div>
-              {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
-              {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs text-gray-400 mb-1">
-                <span>Kwota pozycji</span>
-                <span className="text-white font-semibold">{amt.toLocaleString('pl-PL')} PLN ≈ {shares} akcji</span>
+      {/* Signals view */}
+      {viewMode === 'signals' && (
+        loading ? (
+          <div className="text-gray-400 text-sm py-4 text-center">Szukam sygnałów… (może potrwać 30s)</div>
+        ) : (() => {
+          const visible = recs.filter(r => !done[r.ticker])
+          if (visible.length === 0 && recs.length === 0) {
+            return (
+              <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
+                Brak sygnałów dla tej strategii. Sprawdź widok „Wszystkie spółki" aby zobaczyć aktualne wskaźniki.
               </div>
-              <input
-                type="range"
-                min={Math.round(portfolio * 0.05)}
-                max={Math.round(portfolio * maxPct / 100)}
-                step={100}
-                value={amt}
-                onChange={e => setAmounts(a => ({ ...a, [rec.ticker]: Number(e.target.value) }))}
-                className="w-full accent-blue-500"
-              />
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>5%</span><span>{maxPct}%</span>
+            )
+          }
+          if (visible.length === 0) {
+            return (
+              <div className="bg-gpw-dark rounded-lg p-4 text-sm text-center">
+                {Object.values(done).filter(v => v === 'confirmed').length > 0
+                  ? <span className="text-gpw-green">✅ Pozycje zapisane w Moich wynikach.</span>
+                  : <span className="text-gray-400">Wszystkie rekomendacje przetworzone.</span>
+                }
               </div>
-            </div>
+            )
+          }
+          return visible.map(rec => {
+            const amt    = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
+            const shares = Math.floor(amt / rec.price)
+            return (
+              <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="font-bold text-lg">{rec.tickerDisplay}</span>
+                    <span className="ml-2 text-xs text-gray-400">{rec.signal}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold">{rec.price} PLN</div>
+                    <div className="text-xs text-gray-400">{new Date(rec.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
+                  </div>
+                </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => confirm(rec)}
-                className="flex-1 bg-gpw-green hover:bg-green-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
-              >
-                ✅ Realizuję
-              </button>
-              <button
-                onClick={() => skip(rec.ticker)}
-                className="flex-1 bg-gpw-card hover:bg-gpw-border text-gray-300 py-2 rounded-lg text-sm transition-colors"
-              >
-                Pomijam
-              </button>
-            </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                  {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
+                  {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
+                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Cel</div><div className="font-bold text-gpw-green">+{rec.target}%</div></div>
+                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Stop loss</div><div className="font-bold text-gpw-red">-{rec.stopLoss}%</div></div>
+                  {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
+                  {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
+                </div>
 
-            <p className="text-xs text-gray-500 text-center">
-              ⚠️ Analiza edukacyjna. Ceny z ~15 min opóźnieniem.
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Kwota pozycji</span>
+                    <span className="text-white font-semibold">{amt.toLocaleString('pl-PL')} PLN ≈ {shares} akcji</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={Math.round(portfolio * 0.05)}
+                    max={Math.round(portfolio * maxPct / 100)}
+                    step={100}
+                    value={amt}
+                    onChange={e => setAmounts(a => ({ ...a, [rec.ticker]: Number(e.target.value) }))}
+                    className="w-full accent-blue-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>5%</span><span>{maxPct}%</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => confirm(rec)}
+                    className="flex-1 bg-gpw-green hover:bg-green-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    ✅ Realizuję
+                  </button>
+                  <button
+                    onClick={() => skip(rec.ticker)}
+                    className="flex-1 bg-gpw-card hover:bg-gpw-border text-gray-300 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    Pomijam
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-500 text-center">
+                  ⚠️ Analiza edukacyjna. Ceny z ~15 min opóźnieniem.
+                </p>
+              </div>
+            )
+          })
+        })()
+      )}
+
+      {/* Scan view — all stocks with indicators */}
+      {viewMode === 'scan' && (
+        scanLoading ? (
+          <div className="text-gray-400 text-sm py-4 text-center">Skanem spółki… (może potrwać 30s)</div>
+        ) : scanData.length === 0 ? (
+          <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
+            Brak danych. Sprawdź ponownie za chwilę.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {scanData.map(row => {
+              const rsiColor = row.rsi === null ? 'text-gray-400'
+                : row.rsi < 30 ? 'text-gpw-green font-bold'
+                : row.rsi > 70 ? 'text-gpw-red font-bold'
+                : 'text-white'
+              const volColor = row.volMult && row.volMult >= 2 ? 'text-yellow-400 font-bold' : 'text-white'
+              return (
+                <div
+                  key={row.ticker}
+                  className={`bg-gpw-dark border rounded-lg p-3 ${row.hasSignal ? 'border-gpw-green' : 'border-gpw-border'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{row.tickerDisplay}</span>
+                      {row.hasSignal
+                        ? <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded">⚡ {row.signal}</span>
+                        : <span className="text-xs text-gray-500">brak sygnału</span>
+                      }
+                    </div>
+                    <span className="font-semibold text-sm">{row.price} PLN</span>
+                  </div>
+                  <div className="flex gap-3 mt-2 text-xs">
+                    <span className="text-gray-400">RSI: <span className={rsiColor}>{row.rsi ?? '—'}</span></span>
+                    <span className="text-gray-400">Vol: <span className={volColor}>{row.volMult ? `${row.volMult}x` : '—'}</span></span>
+                    {row.sma50 && <span className="text-gray-400">SMA50: <span className="text-white">{row.sma50.toFixed(2)}</span></span>}
+                    {row.sma20 && <span className="text-gray-400">SMA20: <span className="text-white">{row.sma20.toFixed(2)}</span></span>}
+                  </div>
+                </div>
+              )
+            })}
+            <p className="text-xs text-gray-500 text-center pt-1">
+              ⚠️ Dane edukacyjne z ~15 min opóźnieniem.
             </p>
           </div>
         )
-      })}
+      )}
     </div>
   )
 }
