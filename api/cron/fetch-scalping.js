@@ -1,0 +1,44 @@
+import { analyzeStrategy } from '../../src/agents/signalAnalyzer.js'
+import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
+
+const IS_STAGING = process.env.VITE_ENV === 'staging'
+
+export default async function handler(req, res) {
+  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).end()
+  }
+
+  const now = new Date()
+  const day = now.getDay()
+  if (day === 0 || day === 6) return res.json({ skipped: 'weekend' })
+
+  try {
+    const signals = await analyzeStrategy('scalping')
+    let sent = 0
+
+    for (const signal of signals.slice(0, 3)) {
+      const msg = formatAlert({
+        ticker:       signal.ticker.replace('.pl', '').toUpperCase(),
+        strategy:     '⚡ Scalping',
+        price:        signal.price,
+        signal:       signal.signal,
+        target:       signal.target,
+        stopLoss:     signal.stopLoss,
+        portfolio:    10000,
+        positionSize: 1500,
+        shares:       Math.floor(1500 / signal.price),
+        description:  `RSI = ${signal.rsi} (oversold), wolumen ${signal.volumeMultiplier}x powyżej średniej. Potencjalne odbicie krótkoterminowe.`,
+        history:      'Dane historyczne w trakcie zbierania.',
+        learning:     'Pierwsza analiza — brak wcześniejszych danych dla tej spółki.',
+      })
+
+      await sendTelegram(msg, IS_STAGING)
+      sent++
+    }
+
+    res.json({ signals: signals.length, sent })
+  } catch (e) {
+    console.error('Cron scalping error:', e)
+    res.status(500).json({ error: e.message })
+  }
+}

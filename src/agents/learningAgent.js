@@ -1,0 +1,59 @@
+const MODEL = 'claude-sonnet-4-20250514'
+
+export async function runLearningAgent(alertHistory) {
+  if (!alertHistory || alertHistory.length === 0) return null
+
+  const prompt = `Przeanalizuj wyniki poniższych rekomendacji GPW.
+Wykryj wzorce skutecznych i nieskutecznych sygnałów.
+Porównaj progi które dawały trafne vs fałszywe sygnały.
+Zaproponuj korektę progów wskaźników.
+Odpowiedz TYLKO w JSON bez żadnego tekstu przed ani po JSON:
+{
+  "rsi_threshold": number,
+  "volume_multiplier": number,
+  "sma_buffer_percent": number,
+  "insights": "string po polsku, max 3 zdania",
+  "best_stocks": ["ticker1", "ticker2"],
+  "worst_stocks": ["ticker1", "ticker2"]
+}
+
+DANE:
+${JSON.stringify(alertHistory, null, 2)}`
+
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemPrompt: 'Jesteś Learning Agentem GPW Analyzer. Analizujesz wyniki rekomendacji i zwracasz JSON z korektami progów.',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  if (!res.ok) throw new Error(`Claude error: ${res.status}`)
+  const data = await res.json()
+  return JSON.parse(data.content)
+}
+
+export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, focusTickers }) {
+  const pct = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0
+
+  return `🧠 <b>RAPORT TYGODNIOWY — Learning Agent</b>
+
+📊 <b>SKUTECZNOŚĆ (ostatnie 30 dni):</b>
+⚡ Scalping:   ${scalping.hit}/${scalping.total} trafnych (${pct(scalping.hit, scalping.total)}%)
+📈 Swing:      ${swing.hit}/${swing.total} trafnych (${pct(swing.hit, swing.total)}%)
+🚀 Agresywna:  ${aggressive.hit}/${aggressive.total} trafnych (${pct(aggressive.hit, aggressive.total)}%)
+
+🏆 <b>NAJLEPSZA SPÓŁKA:</b> ${bestStock.ticker} (${bestStock.pct}% trafności)
+📉 <b>NAJSŁABSZA:</b>       ${worstStock.ticker} (${worstStock.pct}% trafności)
+
+🔧 <b>KOREKTY PROGÓW (od jutra):</b>
+- RSI próg: ${newThresholds.rsiOld} → ${newThresholds.rsiNew}
+- Wolumen mnożnik: ${newThresholds.volOld}x → ${newThresholds.volNew}x
+- SMA50 bufor: ${newThresholds.smaBuffer}%
+
+💡 <b>WNIOSEK TYGODNIA:</b>
+${insights}
+
+📈 Fokus na przyszły tydzień: ${focusTickers.join(', ')}`
+}
