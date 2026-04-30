@@ -57,17 +57,47 @@ wyników poprzednich rekomendacji.
 - Testy: *.test.jsx
 
 ## Środowiska
-- PROD: gpw-analyzer.vercel.app (gałąź main)
-- STAGING: gpw-analyzer-staging.vercel.app (gałąź staging)
+- PROD: https://gpw-analyzer.vercel.app (gałąź main)
+- STAGING: https://gpw-analyzer-staging.vercel.app (gałąź staging)
+- GitHub: https://github.com/adam84sadowski-ui/gpw-analyzer
 
 ## Zmienne środowiskowe
 Zawsze używaj .env — nigdy nie hardcoduj kluczy.
 
-## Workflow
-- feature/* → PR do staging → QA → PR do main → PROD
-- Nigdy nie push bezpośrednio do main
-- Każdy deploy staging: `vercel --yes` (bez --prod)
-- Każdy deploy PROD: wymaga jawnej zgody Adama
+```
+ANTHROPIC_API_KEY=        # Claude API
+EODHD_API_KEY=            # EODHD (P/E, dywidendy)
+TELEGRAM_BOT_TOKEN=       # Telegram PROD
+TELEGRAM_CHAT_ID=         # Telegram PROD
+TELEGRAM_BOT_TOKEN_STAGING= # Telegram STAGING
+TELEGRAM_CHAT_ID_STAGING=   # Telegram STAGING
+VERCEL_TOKEN=             # Vercel CLI
+CRON_SECRET=              # autoryzacja cron endpoints
+VITE_ENV=staging          # staging | production
+# KV dodawane automatycznie przez Vercel/Upstash:
+KV_REST_API_URL=
+KV_REST_API_TOKEN=
+```
+
+## Workflow — WAŻNE
+- Zmiany tylko na gałęzi `staging`
+- Nigdy nie push bezpośrednio do `main`
+- Po zakończeniu pracy: "Gotowe na staging — zatwierdzasz merge do main?"
+- Merge do `main` tylko po jawnej zgodzie Adama (`tak`)
+- Każdy deploy PROD: `vercel --prod --yes` (tylko po zgodzie!)
+
+```bash
+# Standardowy cykl:
+git checkout staging
+# ... wprowadź zmiany ...
+git add <pliki>
+git commit -m "feat/fix: opis"
+git push origin staging
+# → poczekaj na akceptację Adama
+git checkout main && git merge staging --no-ff -m "release: opis"
+git push origin main && git checkout staging
+vercel --prod --yes
+```
 
 ## Komendy
 
@@ -75,23 +105,37 @@ Zawsze używaj .env — nigdy nie hardcoduj kluczy.
 cd gpw-analyzer
 npm run dev          # lokalny dev server (Vite HMR)
 npm run build        # build produkcyjny → dist/
-npm run test         # testy jednostkowe
+npm run test         # testy jednostkowe (vitest)
 npm run lint         # ESLint
-vercel --yes         # deploy staging
-vercel --prod --yes  # deploy PROD (tylko za zgodą!)
+vercel --yes         # deploy staging + przestaw alias ręcznie
+vercel --prod --yes  # deploy PROD (tylko za zgodą Adama!)
+vercel alias set <url> gpw-analyzer-staging.vercel.app  # po deploy staging
 ```
 
 ## Źródła danych
-- Stooq.com: dane dzienne i bieżące (30 min opóźnienie), darmowe
-- EODHD: P/E ratio i dywidendy, max 10 zapytań dziennie
-- Tickery GPW: suffix .pl (np. pkn.pl, kghm.pl)
+- **Yahoo Finance** (`/api/stooq` proxy): dane dzienne i bieżące, darmowe, bez klucza
+  - Ticker format wewnętrzny: suffix `.pl` (np. `pkn.pl`, `kghm.pl`)
+  - Ticker format Yahoo: suffix `.WA` (np. `PKN.WA`, `KGH.WA`) — konwersja w `api/stooq.js`
+  - NIGDY nie odpytuj Yahoo Finance bezpośrednio z przeglądarki (CORS) — zawsze przez `/api/stooq`
+- **EODHD**: P/E ratio i dywidendy, max 10 zapytań dziennie, raz o 17:30
+- **Claude API**: `claude-sonnet-4-20250514` — chat window + Learning Agent
 
-## Strategia cache
-- Vercel KV: dane świeższe niż 25 min → nie odpytuj
-- localStorage: portfel, ustawienia
-- Filtr indeksowy: sprawdź indeks PRZED spółkami (1 call)
+## Vercel KV (Upstash Redis)
+- Jedna baza dla wszystkich środowisk
+- Prefiks kluczy: `prod:` dla PROD, `staging:` dla STAGING
+- Przykłady: `prod:alert:swing:pkn.pl:1234567890`, `staging:thresholds`
+- TTL alertów: 90 dni
+- Cache danych rynkowych: 25 minut (in-memory w `api/stooq.js`)
 
-## Linki
-- GitHub: https://github.com/adam84sadowski/gpw-analyzer
-- PROD: https://gpw-analyzer.vercel.app
-- STAGING: https://gpw-analyzer-staging.vercel.app
+## Cron Jobs (Vercel Hobby — 1x dziennie)
+- Scalping:   `05 09 * * 1-5` — WIG20
+- Swing:      `15 09 * * 1-5` — mWIG40
+- Agresywna:  `30 09 * * 1-5` — sWIG80
+- Learning:   `00 18 * * 0`   — niedziela
+- Issue #1: przywrócenie pełnej częstotliwości wymaga Vercel Pro
+
+## Strategia cache / filtr indeksowy
+- Sprawdź indeks PRZED spółkami (1 call)
+- Brak sygnału na indeksie → pomiń spółki → 0 dodatkowych calls
+- Cache in-memory 25 min w `api/stooq.js`
+- localStorage: portfel, ustawienia użytkownika
