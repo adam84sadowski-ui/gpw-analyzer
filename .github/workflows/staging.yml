@@ -25,6 +25,7 @@ jobs:
         run: npm run test
 
       - name: Deploy to Vercel (staging)
+        id: deploy
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -32,9 +33,14 @@ jobs:
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: '--env VITE_ENV=staging'
 
+      - name: Re-point staging alias
+        run: |
+          npx vercel alias set ${{ steps.deploy.outputs.preview-url }} gpw-analyzer-staging.vercel.app \
+            --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Notify Telegram (staging)
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN_STAGING }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID_STAGING }}" \
-            -d text="🟣 STAGING deploy zakończony pomyślnie ✅%0AGałąź: staging%0AKommit: ${{ github.sha }}"
+            -d text="🟣 STAGING deploy zakończony pomyślnie ✅%0AURL: https://gpw-analyzer-staging.vercel.app%0AKommit: ${{ github.sha }}"
