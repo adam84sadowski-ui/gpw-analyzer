@@ -86,22 +86,37 @@ function detectSignal(candles, strategy, thresholds = {}) {
   const price   = closes[closes.length - 1]
 
   if (strategy === 'scalping') {
-    const rsiThr = thresholds.rsi_threshold ?? 30
-    const volThr = thresholds.volume_multiplier ?? 2
+    const rsiThr = thresholds.rsi_threshold ?? 35
+    const volThr = thresholds.volume_multiplier ?? 1.5
     if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
       return { signal: 'RSI_OVERSOLD', rsi, volMult, sma20, sma50, price }
     }
   }
   if (strategy === 'swing') {
-    const prevClose = closes[closes.length - 2]
-    const prevSMA50 = closes.length >= 51 ? closes.slice(-51, -1).reduce((a, b) => a + b, 0) / 50 : null
-    if (prevSMA50 && prevClose <= prevSMA50 && price > sma50 && volMult && volMult >= 1.5) {
+    const volThr = thresholds.swing_volume_multiplier ?? 1.2
+    // crossover window: check if price crossed above SMA50 within last 3 days
+    const window = Math.min(3, closes.length - 1)
+    let crossed = false
+    for (let i = 1; i <= window; i++) {
+      const dayClose   = closes[closes.length - i]
+      const daySMA50   = calcSMA(closes.slice(0, closes.length - i + 1), 50)
+      const prevClose2 = closes[closes.length - i - 1]
+      const prevSMA50  = closes.length >= 51
+        ? closes.slice(closes.length - i - 50, closes.length - i).reduce((a, b) => a + b, 0) / 50
+        : null
+      if (prevSMA50 && prevClose2 <= prevSMA50 && daySMA50 && dayClose > daySMA50) {
+        crossed = true
+        break
+      }
+    }
+    if (crossed && volMult && volMult >= volThr) {
       return { signal: 'SMA50_CROSSOVER', volMult, sma20, sma50, price }
     }
   }
   if (strategy === 'aggressive') {
+    const volThr = thresholds.aggressive_volume_multiplier ?? 2
     const max20 = Math.max(...candles.slice(-21, -1).map(c => c.high))
-    if (price > max20 && rsi && rsi > 60 && volMult && volMult >= 3) {
+    if (price > max20 && rsi && rsi > 60 && volMult && volMult >= volThr) {
       return { signal: 'BREAKOUT', rsi, volMult, sma20, sma50, price }
     }
   }
