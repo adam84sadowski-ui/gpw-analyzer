@@ -235,7 +235,7 @@ function RecommendationPanel({ strategy }) {
   )
 }
 
-const IS_STAGING = import.meta.env.VITE_ENV === 'staging'
+const IS_STAGING = window.location.hostname !== 'gpw-analyzer.vercel.app'
 
 export default function Strategies() {
   const [active, setActive] = useState(

@@ -70,7 +70,7 @@ export default function Settings() {
         </p>
         <div className="text-xs text-gray-500">
           Środowisko: <span className="text-white">
-            {import.meta.env.VITE_ENV === 'staging' ? '🟣 STAGING' : '🔵 PROD'}
+            {window.location.hostname !== 'gpw-analyzer.vercel.app' ? '🟣 STAGING' : '🔵 PROD'}
           </span>
         </div>
       </div>

@@ -22,7 +22,7 @@ export default function App() {
       <header className="bg-gpw-card border-b border-gpw-border px-4 py-3 flex items-center gap-3">
         <span className="text-xl font-bold">GPW Analyzer</span>
         <span className="text-xs text-gray-500 bg-gpw-dark px-2 py-0.5 rounded">
-          {import.meta.env.VITE_ENV === 'staging' ? '🟣 STAGING' : '🔵 PROD'}
+          {window.location.hostname !== 'gpw-analyzer.vercel.app' ? '🟣 STAGING' : '🔵 PROD'}
         </span>
       </header>
 
