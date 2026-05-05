@@ -10,10 +10,35 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
+const STRATEGY_CONFIG = {
+  scalping: {
+    label:     '⚡ Scalping',
+    maxAlerts: 3,
+    describe:  s => `RSI = ${s.rsi} (oversold), wolumen ${s.volumeMultiplier}x powyżej średniej. Potencjalne odbicie krótkoterminowe.`,
+    kvExtra:   s => ({ rsi: s.rsi }),
+  },
+  swing: {
+    label:     '📈 Swing',
+    maxAlerts: 1,
+    describe:  s => `Cena przebiła SMA50 od dołu przy ponadprzeciętnym wolumenie (${s.volumeMultiplier}x). Sygnał swing wzrostowy.`,
+    kvExtra:   () => ({}),
+  },
+  aggressive: {
+    label:     '🚀 Agresywna',
+    maxAlerts: 2,
+    describe:  s => `Breakout powyżej max 20 dni, RSI ${s.rsi}, wolumen ${s.volumeMultiplier}x. Sygnał momentum. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
+    kvExtra:   s => ({ rsi: s.rsi }),
+  },
+}
+
 export default async function handler(req, res) {
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).end()
   }
+
+  const { strategy } = req.query
+  const config = STRATEGY_CONFIG[strategy]
+  if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
 
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
@@ -21,17 +46,17 @@ export default async function handler(req, res) {
   const thresholds = await kv.get(`${ENV_PREFIX}:thresholds`) ?? {}
 
   try {
-    const signals = await analyzeStrategy('aggressive', thresholds)
+    const signals = await analyzeStrategy(strategy, thresholds)
     let sent = 0
 
-    for (const signal of signals.slice(0, 2)) {
-      const alertId = `${ENV_PREFIX}:alert:aggressive:${signal.ticker}:${Date.now()}`
+    for (const signal of signals.slice(0, config.maxAlerts)) {
+      const alertId = `${ENV_PREFIX}:alert:${strategy}:${signal.ticker}:${Date.now()}`
       const portfolio = 10000
       const positionSize = Math.round(portfolio * 0.15)
 
       const msg = formatAlert({
         ticker:       signal.ticker.replace('.pl', '').toUpperCase(),
-        strategy:     '🚀 Agresywna',
+        strategy:     config.label,
         price:        signal.price,
         signal:       signal.signal,
         target:       signal.target,
@@ -39,7 +64,7 @@ export default async function handler(req, res) {
         portfolio,
         positionSize,
         shares:       Math.floor(positionSize / signal.price),
-        description:  `Breakout powyżej max 20 dni, RSI ${signal.rsi}, wolumen ${signal.volumeMultiplier}x. Sygnał momentum. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
+        description:  config.describe(signal),
         history:      'Dane historyczne w trakcie zbierania.',
         learning:     'Pierwsza analiza — brak wcześniejszych danych dla tej spółki.',
       })
@@ -49,15 +74,15 @@ export default async function handler(req, res) {
       await kv.set(alertId, {
         id: alertId,
         ticker: signal.ticker,
-        strategy: 'aggressive',
+        strategy,
         signal: signal.signal,
         price: signal.price,
-        rsi: signal.rsi,
         target: signal.target,
         stopLoss: signal.stopLoss,
         timestamp: now.toISOString(),
         targetAchieved: null,
         thresholdsAtSignal: thresholds,
+        ...config.kvExtra(signal),
       }, { ex: 90 * 24 * 60 * 60 })
 
       sent++
@@ -65,7 +90,7 @@ export default async function handler(req, res) {
 
     res.json({ signals: signals.length, sent })
   } catch (e) {
-    console.error('Cron aggressive error:', e)
+    console.error(`Cron ${strategy} error:`, e)
     res.status(500).json({ error: e.message })
   }
 }

@@ -1,9 +1,9 @@
 {
   "crons": [
-    { "path": "/api/cron/fetch-scalping",  "schedule": "5 9 * * 1-5" },
-    { "path": "/api/cron/fetch-swing",     "schedule": "15 9 * * 1-5" },
-    { "path": "/api/cron/fetch-aggressive","schedule": "30 9 * * 1-5" },
-    { "path": "/api/cron/learning-weekly", "schedule": "0 18 * * 0" }
+    { "path": "/api/cron/fetch?strategy=scalping",   "schedule": "5 9 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=swing",      "schedule": "15 9 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=aggressive", "schedule": "30 9 * * 1-5" },
+    { "path": "/api/cron/learning-weekly",           "schedule": "0 18 * * 0" }
   ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
