@@ -30,14 +30,14 @@ jobs:
       - name: Deploy to Vercel (staging)
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | tail -1)
+          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | grep -E "^https://" | tail -1)
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Re-point staging alias
-        run: vercel alias set ${{ steps.deploy.outputs.url }} gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
