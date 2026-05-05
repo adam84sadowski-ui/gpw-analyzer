@@ -24,23 +24,27 @@ jobs:
       - name: Test
         run: npm run test
 
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
       - name: Deploy to Vercel (staging)
         id: deploy
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--env VITE_ENV=staging'
+        run: |
+          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -1)
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Re-point staging alias
-        run: |
-          npx vercel alias set ${{ steps.deploy.outputs.preview-url }} gpw-analyzer-staging.vercel.app \
-            --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Notify Telegram (staging)
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN_STAGING }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID_STAGING }}" \
-            -d text="🟣 STAGING deploy zakończony pomyślnie ✅%0AURL: https://gpw-analyzer-staging.vercel.app%0AKommit: ${{ github.sha }}"
+            -d "text=🟣 STAGING deploy zakończony pomyślnie ✅%0AURL: https://gpw-analyzer-staging.vercel.app%0AKommit: ${{ github.sha }}"

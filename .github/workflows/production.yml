@@ -24,23 +24,18 @@ jobs:
       - name: Test
         run: npm run test
 
-      - name: Deploy to Vercel (PROD)
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod --env VITE_ENV=production'
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
 
-      - name: Tag version
-        run: |
-          VERSION="v$(date +'%Y.%m.%d')-$(echo ${{ github.sha }} | cut -c1-7)"
-          git tag $VERSION
-          git push origin $VERSION
+      - name: Deploy to Vercel (PROD)
+        run: vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Notify Telegram (PROD)
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="🔵 PROD deploy zakończony pomyślnie ✅%0AKommit: ${{ github.sha }}"
+            -d "text=🔵 PROD deploy zakończony pomyślnie ✅%0AKommit: ${{ github.sha }}"
