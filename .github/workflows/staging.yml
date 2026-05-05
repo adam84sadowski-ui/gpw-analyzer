@@ -37,7 +37,12 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Re-point staging alias
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          for i in 1 2 3 4 5; do
+            vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }} && break
+            echo "Deployment not ready yet, retrying in 15s ($i/5)..."
+            sleep 15
+          done
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
