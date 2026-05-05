@@ -2,12 +2,12 @@ import { calcRSI } from '../indicators/rsi.js'
 import { volumeMultiplier } from '../indicators/volume.js'
 
 export const SCALPING_DEFAULTS = {
-  rsiThreshold: 30,
-  volumeMultiplierMin: 2,
+  rsiThreshold: 35,
+  volumeMultiplierMin: 1.5,
   targetPct: 5,
   stopLossPct: 3,
   maxAlertsPerDay: 3,
-  universe: ['pkn.pl', 'kghm.pl', 'pko.pl', 'pzu.pl', 'cdr.pl', 'ale.pl', 'mbk.pl', 'lpp.pl', 'pge.pl', 'jsw.pl'],
+  universe: ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl'],
 }
 
 export function scalpingSignal(candles, thresholds = {}) {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { SCALPING_DEFAULTS } from '../../strategies/scalping.js'
 import { SWING_DEFAULTS } from '../../strategies/swing.js'
 import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
+import { useExchange } from '../../context/ExchangeContext.jsx'
 
 const STRATEGY_META = {
   scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni' },
@@ -9,7 +10,7 @@ const STRATEGY_META = {
   aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A' },
 }
 
-function RecommendationPanel({ strategy }) {
+function RecommendationPanel({ strategy, exchange }) {
   const [viewMode, setViewMode]   = useState('signals')
   const [recs, setRecs]           = useState([])
   const [scanData, setScanData]   = useState([])
@@ -33,7 +34,7 @@ function RecommendationPanel({ strategy }) {
       setLoading(true)
       setRecs([])
       setDone({})
-      fetch(`/api/recommendations?strategy=${strategy}&mode=signals`)
+      fetch(`/api/market?mode=signals&strategy=${strategy}&exchange=${exchange}`)
         .then(r => r.json())
         .then(data => {
           setRecs(data)
@@ -46,13 +47,13 @@ function RecommendationPanel({ strategy }) {
     } else {
       setScanLoading(true)
       setScanData([])
-      fetch(`/api/recommendations?strategy=${strategy}&mode=scan`)
+      fetch(`/api/market?mode=scan&strategy=${strategy}&exchange=${exchange}`)
         .then(r => r.json())
         .then(data => setScanData(data))
         .catch(() => setScanData([]))
         .finally(() => setScanLoading(false))
     }
-  }, [strategy, viewMode])
+  }, [strategy, viewMode, exchange])
 
   async function confirm(rec) {
     const positionSize = amounts[rec.ticker]
@@ -238,6 +239,7 @@ function RecommendationPanel({ strategy }) {
 const IS_STAGING = window.location.hostname !== 'gpw-analyzer.vercel.app'
 
 export default function Strategies() {
+  const { exchange } = useExchange()
   const [active, setActive] = useState(
     () => localStorage.getItem('gpw_strategy') ?? 'swing'
   )
@@ -302,7 +304,7 @@ export default function Strategies() {
           </button>
         </div>
 
-        {showRecs && <RecommendationPanel key={active} strategy={active} />}
+        {showRecs && <RecommendationPanel key={`${active}-${exchange}`} strategy={active} exchange={exchange} />}
 
         {!showRecs && (
           <p className="text-sm text-gray-400">

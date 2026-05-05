@@ -5,7 +5,7 @@ export const SWING_DEFAULTS = {
   targetPct: 15,
   stopLossPct: 5,
   maxAlertsPerDay: 1,
-  universe: ['ccc.pl', 'dnp.pl', 'kru.pl', 'acp.pl', 'bdx.pl', 'cps.pl', 'kty.pl', 'lvc.pl', 'mab.pl'],
+  universe: ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl'],
 }
 
 export function swingSignal(candles, thresholds = {}) {

@@ -1,0 +1,154 @@
+import { createClient } from '@vercel/kv'
+import { fetchCandles, fetchCurrent } from '../src/lib/yahoo.js'
+import { detectSignal, calcIndicators } from '../src/lib/signals.js'
+
+const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
+
+const kv = createClient({
+  url:   process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+})
+
+const MEM_CACHE_TTL = 25 * 60 * 1000
+const memCache = new Map()
+
+function memGet(key) {
+  const hit = memCache.get(key)
+  return hit && Date.now() - hit.ts < MEM_CACHE_TTL ? hit.data : null
+}
+function memSet(key, data) { memCache.set(key, { data, ts: Date.now() }) }
+
+const UNIVERSES = {
+  GPW: {
+    scalping:   ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl'],
+    swing:      ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl'],
+    aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
+  },
+  NYSE: {
+    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG'],
+    swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG'],
+    aggressive: ['TSLA','AMD','CRM','SNOW','PLTR','COIN','RBLX','ROKU','SQ','SHOP'],
+  },
+}
+
+const STRATEGY_CONFIG = {
+  scalping:   { target: 5,  stopLoss: 3,  label: '⚡ Scalping' },
+  swing:      { target: 15, stopLoss: 5,  label: '📈 Swing' },
+  aggressive: { target: 35, stopLoss: 8,  label: '🚀 Agresywna' },
+}
+
+function tickerDisplay(ticker, exchange) {
+  if (exchange === 'NYSE') return ticker.toUpperCase()
+  return ticker.replace('.pl', '').toUpperCase()
+}
+
+async function fetchWithTimeout(fn, ms = 5000) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ])
+}
+
+async function getCachedCandles(ticker, exchange) {
+  const kvKey = `${ENV}:candles:${exchange}:${ticker}`
+  const memKey = `candles:${exchange}:${ticker}`
+  const fromMem = memGet(memKey)
+  if (fromMem) return fromMem
+  const fromKv = await kv.get(kvKey).catch(() => null)
+  if (fromKv) { memSet(memKey, fromKv); return fromKv }
+  const candles = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
+  if (candles) {
+    memSet(memKey, candles)
+    await kv.set(kvKey, candles, { ex: 25 * 60 }).catch(() => {})
+  }
+  return candles
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).end()
+
+  const { mode = 'daily', ticker, strategy, exchange = 'GPW' } = req.query
+
+  if (!['GPW', 'NYSE'].includes(exchange)) {
+    return res.status(400).json({ error: 'exchange must be GPW or NYSE' })
+  }
+
+  // ── Single ticker modes ──────────────────────────────────────────────
+  if (mode === 'daily') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const cacheKey = `daily:${exchange}:${ticker}`
+    const cached = memGet(cacheKey)
+    if (cached) return res.json(cached)
+    const candles = await fetchCandles(ticker, exchange)
+    if (!candles) return res.status(404).json({ error: 'no data' })
+    memSet(cacheKey, candles)
+    return res.json(candles)
+  }
+
+  if (mode === 'current' || mode === 'index') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const cacheKey = `current:${exchange}:${ticker}`
+    const cached = memGet(cacheKey)
+    if (cached) return res.json(cached)
+    const data = await fetchCurrent(ticker, exchange)
+    if (!data) return res.status(404).json({ error: 'no data' })
+    memSet(cacheKey, data)
+    return res.json(data)
+  }
+
+  // ── Strategy modes ───────────────────────────────────────────────────
+  if (mode !== 'signals' && mode !== 'scan') {
+    return res.status(400).json({ error: 'mode must be daily|current|index|signals|scan' })
+  }
+
+  if (!strategy || !STRATEGY_CONFIG[strategy]) {
+    return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+  }
+
+  const universe = UNIVERSES[exchange]?.[strategy]
+  if (!universe) return res.status(400).json({ error: 'unsupported exchange/strategy' })
+
+  const cacheKey = `${mode}:${exchange}:${strategy}`
+  const cached = memGet(cacheKey)
+  if (cached) return res.json(cached)
+
+  const thresholds = await kv.get(`${ENV}:thresholds`).catch(() => null) ?? {}
+  const config = STRATEGY_CONFIG[strategy]
+  const results = []
+
+  // Batch fetch: groups of 10 in parallel
+  const batchSize = 10
+  for (let i = 0; i < universe.length; i += batchSize) {
+    const batch = universe.slice(i, i + batchSize)
+    const settled = await Promise.allSettled(
+      batch.map(async t => {
+        const candles = await getCachedCandles(t, exchange)
+        if (!candles || candles.length < 25) return null
+        const display = tickerDisplay(t, exchange)
+        if (mode === 'scan') {
+          const ind = calcIndicators(candles, strategy, thresholds)
+          if (!ind) return null
+          return { ticker: t, tickerDisplay: display, exchange, strategy,
+            target: config.target, stopLoss: config.stopLoss,
+            timestamp: new Date().toISOString(), ...ind }
+        } else {
+          const sig = detectSignal(candles, strategy, thresholds)
+          if (!sig) return null
+          return { ticker: t, tickerDisplay: display, exchange, strategy,
+            label: config.label, target: config.target, stopLoss: config.stopLoss,
+            timestamp: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            ...sig }
+        }
+      })
+    )
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value) results.push(r.value)
+    }
+  }
+
+  if (mode === 'scan') results.sort((a, b) => (b.hasSignal ? 1 : 0) - (a.hasSignal ? 1 : 0))
+
+  memSet(cacheKey, results)
+  res.json(results)
+}
