@@ -30,7 +30,7 @@ jobs:
       - name: Deploy to Vercel (staging)
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | grep -E "^https://" | tail -1)
+          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -1)
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
