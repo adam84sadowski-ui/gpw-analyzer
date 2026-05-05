@@ -235,11 +235,33 @@ function RecommendationPanel({ strategy }) {
   )
 }
 
+const IS_STAGING = import.meta.env.VITE_ENV === 'staging'
+
 export default function Strategies() {
   const [active, setActive] = useState(
     () => localStorage.getItem('gpw_strategy') ?? 'swing'
   )
-  const [showRecs, setShowRecs] = useState(false)
+  const [showRecs, setShowRecs]       = useState(false)
+  const [triggering, setTriggering]   = useState(false)
+  const [triggerMsg, setTriggerMsg]   = useState('')
+
+  async function triggerCron(force) {
+    setTriggering(true)
+    setTriggerMsg('')
+    try {
+      const r = await fetch('/api/cron/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy: active, force }),
+      })
+      const d = await r.json()
+      setTriggerMsg(d.sent > 0 ? `✅ Alert wysłany (${d.ticker ?? 'TEST'})` : d.message)
+    } catch {
+      setTriggerMsg('❌ Błąd połączenia')
+    } finally {
+      setTriggering(false)
+    }
+  }
 
   useEffect(() => {
     localStorage.setItem('gpw_strategy', active)
@@ -286,6 +308,29 @@ export default function Strategies() {
           <p className="text-sm text-gray-400">
             Kliknij &bdquo;Sprawdź sygnały&rdquo; aby przeskanować spółki z universum strategii {STRATEGY_META[active]?.label}.
           </p>
+        )}
+
+        {IS_STAGING && (
+          <div className="mt-4 pt-4 border-t border-gpw-border space-y-2">
+            <p className="text-xs text-gray-500">🧪 Tryb testowy (staging)</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => triggerCron(false)}
+                disabled={triggering}
+                className="flex-1 text-xs border border-gpw-border hover:border-gray-400 text-gray-300 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {triggering ? '…' : 'Wyślij real alert'}
+              </button>
+              <button
+                onClick={() => triggerCron(true)}
+                disabled={triggering}
+                className="flex-1 text-xs border border-yellow-700 hover:border-yellow-500 text-yellow-400 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {triggering ? '…' : 'Wyślij TEST alert'}
+              </button>
+            </div>
+            {triggerMsg && <p className="text-xs text-center text-gray-400">{triggerMsg}</p>}
+          </div>
         )}
       </div>
     </div>
