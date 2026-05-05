@@ -27,10 +27,17 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      - name: Set VITE_ENV=staging in Vercel Preview env
+        run: |
+          echo "staging" | vercel env add VITE_ENV preview --token=${{ secrets.VERCEL_TOKEN }} --yes --force 2>/dev/null || true
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy to Vercel (staging)
         id: deploy
         run: |
-          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes --build-env VITE_ENV=staging 2>&1 | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -1)
+          DEPLOY_URL=$(vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -1)
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
