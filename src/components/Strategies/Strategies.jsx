@@ -103,7 +103,7 @@ function RecommendationPanel({ strategy }) {
           if (visible.length === 0 && recs.length === 0) {
             return (
               <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
-                Brak sygnałów dla tej strategii. Sprawdź widok „Wszystkie spółki" aby zobaczyć aktualne wskaźniki.
+                Brak sygnałów dla tej strategii. Sprawdź widok &bdquo;Wszystkie spółki&rdquo; aby zobaczyć aktualne wskaźniki.
               </div>
             )
           }
@@ -284,7 +284,7 @@ export default function Strategies() {
 
         {!showRecs && (
           <p className="text-sm text-gray-400">
-            Kliknij „Sprawdź sygnały" aby przeskanować spółki z universum strategii {STRATEGY_META[active]?.label}.
+            Kliknij &bdquo;Sprawdź sygnały&rdquo; aby przeskanować spółki z universum strategii {STRATEGY_META[active]?.label}.
           </p>
         )}
       </div>
