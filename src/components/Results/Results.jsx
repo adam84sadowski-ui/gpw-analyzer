@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useExchange } from '../../context/ExchangeContext.jsx'
 
 function pct(v) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function pln(v) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} PLN` }
@@ -41,6 +42,7 @@ function CloseModal({ position, onClose, onConfirm }) {
 }
 
 export default function Results() {
+  const { exchange } = useExchange()
   const [tab, setTab]               = useState('open')
   const [positions, setPositions]   = useState([])
   const [loading, setLoading]       = useState(true)
@@ -59,7 +61,7 @@ export default function Results() {
           const priceMap = {}
           await Promise.all(uniqueTickers.map(async ticker => {
             try {
-              const r = await fetch(`/api/stooq?ticker=${ticker}&type=current`)
+              const r = await fetch(`/api/market?mode=current&ticker=${ticker}&exchange=${exchange}`)
               const d = await r.json()
               if (d?.close) priceMap[ticker] = d.close
             } catch {}
@@ -69,14 +71,14 @@ export default function Results() {
       })
       .catch(() => setPositions([]))
       .finally(() => setLoading(false))
-  }, [tab])
+  }, [tab, exchange])
 
   useEffect(() => { load() }, [load])
 
   async function addTestPosition() {
     setAddingTest(true)
     try {
-      const r = await fetch('/api/stooq?ticker=pkn.pl&type=current')
+      const r = await fetch('/api/market?mode=current&ticker=pkn.pl&exchange=GPW')
       const d = await r.json()
       const price = d?.close ?? 48.50
       await fetch('/api/positions', {
@@ -108,8 +110,7 @@ export default function Results() {
     load()
   }
 
-  const openPositions  = positions.filter(p => p.status === 'open')
-  const closedPositions = positions.filter(p => p.status === 'closed')
+  const openPositions = positions.filter(p => p.status === 'open')
 
   const totalInvested  = openPositions.reduce((s, p) => s + p.positionSize, 0)
   const totalPnL       = openPositions.reduce((s, p) => {
@@ -247,11 +248,11 @@ export default function Results() {
                   <div className="flex gap-2 text-xs">
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🎯 Cel: <span className="text-gpw-green">+{pos.target}%</span>
-                      {cur && <span className="text-gray-400 ml-1">({((pos.entryPrice * (1 + pos.target / 100))).toFixed(2)} PLN)</span>}
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} PLN)</span>
                     </div>
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🛑 Stop: <span className="text-gpw-red">-{pos.stopLoss}%</span>
-                      {cur && <span className="text-gray-400 ml-1">({((pos.entryPrice * (1 - pos.stopLoss / 100))).toFixed(2)} PLN)</span>}
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} PLN)</span>
                     </div>
                   </div>
                 )}

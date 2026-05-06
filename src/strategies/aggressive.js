@@ -4,11 +4,11 @@ import { isBreakout, nearATH } from '../indicators/breakout.js'
 
 export const AGGRESSIVE_DEFAULTS = {
   rsiMin: 60,
-  volumeMultiplierMin: 3,
+  volumeMultiplierMin: 2.0,
   targetPct: 35,
   stopLossPct: 8,
   maxAlertsPerDay: 2,
-  universe: ['ans.pl', 'apr.pl', 'cal.pl', 'xtp.pl', 'slv.pl', 'vrc.pl', 'wpl.pl'],
+  universe: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
 }
 
 export function aggressiveSignal(candles, thresholds = {}) {

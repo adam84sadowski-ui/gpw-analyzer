@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { SCALPING_DEFAULTS } from '../../strategies/scalping.js'
 import { SWING_DEFAULTS } from '../../strategies/swing.js'
 import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
+import { useExchange } from '../../context/ExchangeContext.jsx'
 
 const STRATEGY_META = {
   scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni' },
@@ -9,7 +10,7 @@ const STRATEGY_META = {
   aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A' },
 }
 
-function RecommendationPanel({ strategy }) {
+function RecommendationPanel({ strategy, exchange }) {
   const [viewMode, setViewMode]   = useState('signals')
   const [recs, setRecs]           = useState([])
   const [scanData, setScanData]   = useState([])
@@ -33,7 +34,7 @@ function RecommendationPanel({ strategy }) {
       setLoading(true)
       setRecs([])
       setDone({})
-      fetch(`/api/recommendations?strategy=${strategy}&mode=signals`)
+      fetch(`/api/market?mode=signals&strategy=${strategy}&exchange=${exchange}`)
         .then(r => r.json())
         .then(data => {
           setRecs(data)
@@ -46,13 +47,13 @@ function RecommendationPanel({ strategy }) {
     } else {
       setScanLoading(true)
       setScanData([])
-      fetch(`/api/recommendations?strategy=${strategy}&mode=scan`)
+      fetch(`/api/market?mode=scan&strategy=${strategy}&exchange=${exchange}`)
         .then(r => r.json())
         .then(data => setScanData(data))
         .catch(() => setScanData([]))
         .finally(() => setScanLoading(false))
     }
-  }, [strategy, viewMode])
+  }, [strategy, viewMode, exchange])
 
   async function confirm(rec) {
     const positionSize = amounts[rec.ticker]
@@ -118,17 +119,24 @@ function RecommendationPanel({ strategy }) {
             )
           }
           return visible.map(rec => {
-            const amt    = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
-            const shares = Math.floor(amt / rec.price)
+            const amt       = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
+            const shares    = Math.floor(amt / rec.price)
+            const targetPLN = (rec.price * (1 + rec.target / 100)).toFixed(2)
+            const stopPLN   = (rec.price * (1 - rec.stopLoss / 100)).toFixed(2)
+            const horizon   = STRATEGY_META[rec.strategy ?? strategy]?.time
+            const currency  = rec.exchange === 'NYSE' ? 'USD' : 'PLN'
             return (
               <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="font-bold text-lg">{rec.tickerDisplay}</span>
+                    {rec.companyName && (
+                      <span className="ml-1.5 text-xs text-gray-500">({rec.companyName})</span>
+                    )}
                     <span className="ml-2 text-xs text-gray-400">{rec.signal}</span>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">{rec.price} PLN</div>
+                    <div className="font-semibold">{rec.price} {currency}</div>
                     <div className="text-xs text-gray-400">{new Date(rec.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
                 </div>
@@ -136,8 +144,9 @@ function RecommendationPanel({ strategy }) {
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
                   {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
-                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Cel</div><div className="font-bold text-gpw-green">+{rec.target}%</div></div>
-                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Stop loss</div><div className="font-bold text-gpw-red">-{rec.stopLoss}%</div></div>
+                  {horizon && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Horyzont</div><div className="font-bold">⏱ {horizon}</div></div>}
+                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🎯 Cel</div><div className="font-bold text-gpw-green">+{rec.target}% <span className="text-gray-400 font-normal">({targetPLN})</span></div></div>
+                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🛑 Stop</div><div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div></div>
                   {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
                   {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
                 </div>
@@ -235,11 +244,34 @@ function RecommendationPanel({ strategy }) {
   )
 }
 
+const IS_STAGING = window.location.hostname !== 'gpw-analyzer.vercel.app'
+
 export default function Strategies() {
+  const { exchange } = useExchange()
   const [active, setActive] = useState(
     () => localStorage.getItem('gpw_strategy') ?? 'swing'
   )
-  const [showRecs, setShowRecs] = useState(false)
+  const [showRecs, setShowRecs]       = useState(false)
+  const [triggering, setTriggering]   = useState(false)
+  const [triggerMsg, setTriggerMsg]   = useState('')
+
+  async function triggerCron(force) {
+    setTriggering(true)
+    setTriggerMsg('')
+    try {
+      const r = await fetch('/api/cron/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy: active, force }),
+      })
+      const d = await r.json()
+      setTriggerMsg(d.sent > 0 ? `✅ Alert wysłany (${d.ticker ?? 'TEST'})` : d.message)
+    } catch {
+      setTriggerMsg('❌ Błąd połączenia')
+    } finally {
+      setTriggering(false)
+    }
+  }
 
   useEffect(() => {
     localStorage.setItem('gpw_strategy', active)
@@ -280,12 +312,35 @@ export default function Strategies() {
           </button>
         </div>
 
-        {showRecs && <RecommendationPanel key={active} strategy={active} />}
+        {showRecs && <RecommendationPanel key={`${active}-${exchange}`} strategy={active} exchange={exchange} />}
 
         {!showRecs && (
           <p className="text-sm text-gray-400">
             Kliknij &bdquo;Sprawdź sygnały&rdquo; aby przeskanować spółki z universum strategii {STRATEGY_META[active]?.label}.
           </p>
+        )}
+
+        {IS_STAGING && (
+          <div className="mt-4 pt-4 border-t border-gpw-border space-y-2">
+            <p className="text-xs text-gray-500">🧪 Tryb testowy (staging)</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => triggerCron(false)}
+                disabled={triggering}
+                className="flex-1 text-xs border border-gpw-border hover:border-gray-400 text-gray-300 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {triggering ? '…' : 'Wyślij real alert'}
+              </button>
+              <button
+                onClick={() => triggerCron(true)}
+                disabled={triggering}
+                className="flex-1 text-xs border border-yellow-700 hover:border-yellow-500 text-yellow-400 py-1.5 rounded transition-colors disabled:opacity-50"
+              >
+                {triggering ? '…' : 'Wyślij TEST alert'}
+              </button>
+            </div>
+            {triggerMsg && <p className="text-xs text-center text-gray-400">{triggerMsg}</p>}
+          </div>
         )}
       </div>
     </div>

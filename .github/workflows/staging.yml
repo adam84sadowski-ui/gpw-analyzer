@@ -27,6 +27,13 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      - name: Set VITE_ENV=staging in Vercel Preview env
+        run: |
+          echo "staging" | vercel env add VITE_ENV preview --token=${{ secrets.VERCEL_TOKEN }} --yes --force 2>/dev/null || true
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy to Vercel (staging)
         id: deploy
         run: |
@@ -37,7 +44,12 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Re-point staging alias
-        run: vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }}
+        run: |
+          for i in 1 2 3 4 5; do
+            vercel alias set "${{ steps.deploy.outputs.url }}" gpw-analyzer-staging.vercel.app --token=${{ secrets.VERCEL_TOKEN }} && break
+            echo "Deployment not ready yet, retrying in 15s ($i/5)..."
+            sleep 15
+          done
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
