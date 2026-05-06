@@ -15,6 +15,7 @@ const STRATEGY_CONFIG = {
   scalping: {
     label:     '⚡ Scalping',
     maxAlerts: 3,
+    horizon:   '2-5 dni',
     universe:  ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl'],
     describe:  s => `RSI = ${s.rsi} (wyprzedany), wolumen ${s.volMult}x powyżej średniej. Potencjalne odbicie krótkoterminowe.`,
     kvExtra:   s => ({ rsi: s.rsi }),
@@ -22,6 +23,7 @@ const STRATEGY_CONFIG = {
   swing: {
     label:     '📈 Swing',
     maxAlerts: 1,
+    horizon:   '4-8 tyg.',
     universe:  ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl'],
     describe:  s => `Cena przebiła SMA50 od dołu przy wolumenie ${s.volMult}x. Sygnał swing wzrostowy.`,
     kvExtra:   () => ({}),
@@ -29,6 +31,7 @@ const STRATEGY_CONFIG = {
   aggressive: {
     label:     '🚀 Agresywna',
     maxAlerts: 2,
+    horizon:   'brak (wysoki risk)',
     universe:  ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
     describe:  s => `Breakout powyżej max 20 dni, RSI ${s.rsi}, wolumen ${s.volMult}x. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
     kvExtra:   s => ({ rsi: s.rsi }),
@@ -81,6 +84,10 @@ export default async function handler(req, res) {
       description:  config.describe(signal),
       history:      'Dane historyczne w trakcie zbierania.',
       learning:     'Pierwsza analiza — brak wcześniejszych danych dla tej spółki.',
+      exchange,
+      currency:     exchange === 'NYSE' ? 'USD' : 'PLN',
+      companyName:  null,
+      horizon:      config.horizon,
     })
 
     await sendTelegram(msg, IS_STAGING)

@@ -20,6 +20,7 @@ const UNIVERSES = {
 const STRATEGY_LABEL  = { scalping: '⚡ Scalping', swing: '📈 Swing', aggressive: '🚀 Agresywna' }
 const STRATEGY_TARGET = { scalping: 5, swing: 15, aggressive: 35 }
 const STRATEGY_STOP   = { scalping: 3, swing: 5,  aggressive: 8 }
+const HORIZONS        = { scalping: '2-5 dni', swing: '4-8 tyg.', aggressive: 'brak (wysoki risk)' }
 
 export default async function handler(req, res) {
   if (!IS_STAGING) return res.status(403).json({ error: 'Only available on staging' })
@@ -72,6 +73,10 @@ export default async function handler(req, res) {
     description: force && signals.length === 0 ? 'Alert testowy — weryfikacja integracji Telegram.' : `Sygnał ${signal.signal} wykryty.`,
     history:     '',
     learning:    '',
+    exchange:    'GPW',
+    currency:    'PLN',
+    companyName: null,
+    horizon:     HORIZONS[strategy],
   })
 
   await sendTelegram(msg, true)

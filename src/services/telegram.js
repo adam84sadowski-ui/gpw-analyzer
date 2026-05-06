@@ -22,25 +22,25 @@ export async function sendTelegram(message, isStaging = false) {
   return res.json()
 }
 
-export function formatAlert({ ticker, strategy, price, signal, target, stopLoss, portfolio, positionSize, shares, description, history, learning }) {
-  return `📊 <b>SYGNAŁ: ${ticker} | ${strategy}</b>
-🕐 ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })} | Cena: ${price} PLN
+export function formatAlert({ ticker, strategy, price, signal, target, stopLoss, portfolio, positionSize, shares, description, history, learning, exchange, currency, companyName, horizon }) {
+  const cur          = currency ?? 'PLN'
+  const exchangeFlag = exchange === 'NYSE' ? '🇺🇸' : '🇵🇱'
+  const targetPLN    = (price * (1 + target / 100)).toFixed(2)
+  const stopPLN      = (price * (1 - stopLoss / 100)).toFixed(2)
+  const time         = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+
+  return `📊 <b>SYGNAŁ: ${ticker}${companyName ? ` (${companyName})` : ''} | ${strategy} ${exchangeFlag}</b>
+🕐 ${time} | Cena: ${price} ${cur}
 
 💡 <b>CO SIĘ DZIEJE:</b>
 ${description}
 
-📅 <b>HISTORIA (ostatnie 12 mies.):</b>
-${history}
+🎯 Cel: +${target}% (${targetPLN} ${cur}) | 🛑 Stop: -${stopLoss}% (${stopPLN} ${cur})
+${horizon ? `⏱ Horyzont: ${horizon}\n` : ''}
+💰 Portfel: ${portfolio} ${cur}
+📌 Pozycja: ${positionSize} ${cur} = ~${shares} akcji po ${price} ${cur}
 
-🧠 <b>CZEGO NAUCZYŁEM SIĘ:</b>
-${learning}
-
-🎯 CEL: +${target}% | ⚠️ STOP LOSS: -${stopLoss}%
-
-💰 PORTFEL: ${portfolio} PLN
-📌 Pozycja: ${positionSize} PLN = ~${shares} akcji po ${price} PLN
-
-📱 Zaloguj się do iPKO → Dom Maklerski
+📱 <a href="https://gpw-analyzer.vercel.app">Otwórz GPW Analyzer → Moje wyniki</a>
 
 ⚠️ <i>Analiza edukacyjna. Decyzja należy do Ciebie.</i>`
 }
