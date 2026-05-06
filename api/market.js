@@ -128,13 +128,13 @@ export default async function handler(req, res) {
         const display = tickerDisplay(t, exchange)
         const companyName = data?.shortName ?? null
         if (mode === 'scan') {
-          const ind = calcIndicators(candles, strategy, thresholds)
+          const ind = calcIndicators(candles, strategy, thresholds, exchange)
           if (!ind) return null
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             target: config.target, stopLoss: config.stopLoss,
             timestamp: new Date().toISOString(), ...ind }
         } else {
-          const sig = detectSignal(candles, strategy, thresholds)
+          const sig = detectSignal(candles, strategy, thresholds, exchange)
           if (!sig) return null
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             label: config.label, target: config.target, stopLoss: config.stopLoss,

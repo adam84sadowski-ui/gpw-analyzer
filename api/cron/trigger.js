@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       const data = await fetchCandles(ticker, 'GPW')
       const candles = data?.candles
       if (!candles || candles.length < 25) continue
-      const sig = detectSignal(candles, strategy, thresholds)
+      const sig = detectSignal(candles, strategy, thresholds, 'GPW')
       if (sig) signals.push({ ...sig, ticker })
     } catch (e) {
       console.error(`trigger: error scanning ${ticker}:`, e.message)

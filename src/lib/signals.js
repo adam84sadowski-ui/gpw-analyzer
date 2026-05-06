@@ -3,23 +3,33 @@ import { calcSMA, calcSMASeries, goldenCross } from '../indicators/sma.js'
 import { volumeMultiplier } from '../indicators/volume.js'
 import { isBreakout } from '../indicators/breakout.js'
 
-// Single source of truth for signal thresholds — calibrated May 2026
+// Thresholds calibrated per exchange — May 2026
+// NYSE: lower volume multipliers because mega-caps have less relative volume volatility
 export const SIGNAL_DEFAULTS = {
-  scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.5 },
-  swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3 },
-  aggressive: { rsiMin: 60, volumeMultiplierMin: 2.0 },
+  GPW: {
+    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.5 },
+    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3 },
+    aggressive: { rsiMin: 60, volumeMultiplierMin: 2.0 },
+  },
+  NYSE: {
+    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.15 },
+    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 3 },
+    aggressive: { rsiMin: 60, volumeMultiplierMin: 1.5 },
+  },
 }
 
-export function detectSignal(candles, strategy, thresholds = {}) {
+export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW') {
   if (!candles || candles.length < 25) return null
   const closes  = candles.map(c => c.close)
   const volumes = candles.map(c => c.volume)
   const price   = closes[closes.length - 1]
   const volMult = volumeMultiplier(volumes)
 
+  const defaults = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
+
   if (strategy === 'scalping') {
-    const rsiThr = thresholds.rsi_threshold ?? SIGNAL_DEFAULTS.scalping.rsiThreshold
-    const volThr = thresholds.volume_multiplier ?? SIGNAL_DEFAULTS.scalping.volumeMultiplierMin
+    const rsiThr = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
+    const volThr = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
       return { signal: 'RSI_OVERSOLD', price, rsi, volMult,
@@ -29,8 +39,8 @@ export function detectSignal(candles, strategy, thresholds = {}) {
 
   if (strategy === 'swing') {
     if (candles.length < 55) return null
-    const volThr = thresholds.swing_volume_multiplier ?? SIGNAL_DEFAULTS.swing.volumeMultiplierMin
-    const window = SIGNAL_DEFAULTS.swing.crossoverWindowDays
+    const volThr = thresholds.swing_volume_multiplier ?? defaults.swing.volumeMultiplierMin
+    const window = defaults.swing.crossoverWindowDays
     let crossed = false
     for (let i = 1; i <= Math.min(window, closes.length - 2); i++) {
       const dayClose  = closes[closes.length - i]
@@ -52,8 +62,8 @@ export function detectSignal(candles, strategy, thresholds = {}) {
   }
 
   if (strategy === 'aggressive') {
-    const rsiMin = thresholds.rsi_min ?? SIGNAL_DEFAULTS.aggressive.rsiMin
-    const volThr = thresholds.aggressive_volume_multiplier ?? SIGNAL_DEFAULTS.aggressive.volumeMultiplierMin
+    const rsiMin = thresholds.rsi_min ?? defaults.aggressive.rsiMin
+    const volThr = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (isBreakout(candles) && rsi && rsi > rsiMin && volMult && volMult >= volThr) {
       return { signal: 'BREAKOUT', price, rsi, volMult,
@@ -64,11 +74,11 @@ export function detectSignal(candles, strategy, thresholds = {}) {
   return null
 }
 
-export function calcIndicators(candles, strategy, thresholds = {}) {
+export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'GPW') {
   if (!candles || candles.length < 25) return null
   const closes  = candles.map(c => c.close)
   const volumes = candles.map(c => c.volume)
-  const sig = detectSignal(candles, strategy, thresholds)
+  const sig = detectSignal(candles, strategy, thresholds, exchange)
   return {
     rsi:      calcRSI(closes),
     sma20:    calcSMA(closes, 20),

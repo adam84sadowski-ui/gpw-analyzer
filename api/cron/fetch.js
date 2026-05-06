@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       const data = await fetchCandles(ticker, exchange)
       const candles = data?.candles
       if (!candles || candles.length < 25) continue
-      const sig = detectSignal(candles, strategy, thresholds)
+      const sig = detectSignal(candles, strategy, thresholds, exchange)
       if (sig) signals.push({ ...sig, ticker })
     } catch (e) {
       console.error(`cron ${strategy}: error scanning ${ticker}:`, e.message)
