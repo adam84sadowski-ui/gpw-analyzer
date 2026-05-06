@@ -38,7 +38,7 @@ async function handlePomocy() {
 
 async function handleStatus() {
   await sendTelegram(`✅ <b>GPW Analyzer — status</b>
-Środowisko: ${process.env.VITE_ENV ?? 'unknown'}
+Środowisko: ${process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'}
 Czas serwera: ${new Date().toLocaleString('pl-PL')}
 API: aktywne`)
 }

@@ -55,8 +55,9 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     }
     if (!crossed) crossed = goldenCross(closes)
     if (crossed && volMult && volMult >= volThr) {
+      const rsi  = calcRSI(closes)
       const sma50s = calcSMASeries(closes, 50)
-      return { signal: 'SMA50_CROSSOVER', price, volMult,
+      return { signal: 'SMA50_CROSSOVER', price, rsi, volMult,
         sma20: calcSMA(closes, 20), sma50: sma50s[sma50s.length - 1] }
     }
   }
