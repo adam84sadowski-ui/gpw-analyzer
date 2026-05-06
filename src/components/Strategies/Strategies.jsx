@@ -18,6 +18,7 @@ function RecommendationPanel({ strategy, exchange }) {
   const [scanLoading, setScanLoading] = useState(false)
   const [amounts, setAmounts]     = useState({})
   const [done, setDone]           = useState({})
+  const [eodhd, setEodhd]         = useState({})
 
   const portfolio = (() => {
     try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
@@ -41,6 +42,14 @@ function RecommendationPanel({ strategy, exchange }) {
           const init = {}
           data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
           setAmounts(init)
+          if (exchange === 'GPW') {
+            data.forEach(r => {
+              fetch(`/api/eodhd?ticker=${r.ticker}`)
+                .then(res => res.json())
+                .then(d => setEodhd(prev => ({ ...prev, [r.ticker]: d })))
+                .catch(() => {})
+            })
+          }
         })
         .catch(() => setRecs([]))
         .finally(() => setLoading(false))
@@ -149,6 +158,18 @@ function RecommendationPanel({ strategy, exchange }) {
                   <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🛑 Stop</div><div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div></div>
                   {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
                   {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
+                  {eodhd[rec.ticker]?.pe && (
+                    <div className="bg-gpw-card rounded p-1.5 text-xs text-center">
+                      <div className="text-gray-400">P/E</div>
+                      <div className="font-bold">{eodhd[rec.ticker].pe}</div>
+                    </div>
+                  )}
+                  {eodhd[rec.ticker]?.dividendYield && (
+                    <div className="bg-gpw-card rounded p-1.5 text-xs text-center">
+                      <div className="text-gray-400">Dywidenda</div>
+                      <div className="font-bold text-gpw-green">{eodhd[rec.ticker].dividendYield}%</div>
+                    </div>
+                  )}
                 </div>
 
                 <div>

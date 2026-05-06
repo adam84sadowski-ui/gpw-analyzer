@@ -1,9 +1,15 @@
 {
   "crons": [
-    { "path": "/api/cron/fetch?strategy=scalping",   "schedule": "5 9 * * 1-5" },
-    { "path": "/api/cron/fetch?strategy=swing",      "schedule": "35 15 * * 1-5" },
-    { "path": "/api/cron/fetch?strategy=aggressive", "schedule": "40 15 * * 1-5" },
-    { "path": "/api/cron/learning-weekly",           "schedule": "0 18 * * 0" }
+    { "path": "/api/cron/fetch?strategy=scalping",           "schedule": "5 9 * * 1-5"  },
+    { "path": "/api/cron/fetch?strategy=scalping&slot=mid",  "schedule": "0 12 * * 1-5"  },
+    { "path": "/api/cron/fetch?strategy=scalping&slot=pre",  "schedule": "45 14 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=swing",              "schedule": "35 15 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=aggressive",         "schedule": "40 15 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=scalping&exchange=NYSE", "schedule": "35 19 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=swing&exchange=NYSE",    "schedule": "10 20 * * 1-5" },
+    { "path": "/api/cron/fetch?strategy=aggressive&exchange=NYSE","schedule": "15 20 * * 1-5" },
+    { "path": "/api/cron/positions-monitor",                 "schedule": "50 15 * * 1-5" },
+    { "path": "/api/cron/learning-weekly",                   "schedule": "0 18 * * 0"    }
   ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
