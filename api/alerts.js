@@ -17,11 +17,13 @@ export default async function handler(req, res) {
   try {
     let cursor = 0
     const keys = []
+    let iterations = 0
     do {
       const [next, batch] = await kv.scan(cursor, { match: `${ENV}:alert:*`, count: 100 })
       keys.push(...batch)
-      cursor = next
-    } while (cursor !== 0)
+      cursor = Number(next)
+      iterations++
+    } while (cursor !== 0 && iterations < 50)
 
     const records = await Promise.all(keys.map(k => kv.get(k).catch(() => null)))
 
