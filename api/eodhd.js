@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     const [divRes, eodRes] = await Promise.all([
       fetch(`https://eodhd.com/api/div/${symbol}?api_token=${key}&fmt=json&from=${from12m}`),
-      fetch(`https://eodhd.com/api/eod/${symbol}?api_token=${key}&fmt=json&limit=1`),
+      fetch(`https://eodhd.com/api/eod/${symbol}?api_token=${key}&fmt=json&limit=1&order=d`),
     ])
 
     const [divData, eodData] = await Promise.all([
