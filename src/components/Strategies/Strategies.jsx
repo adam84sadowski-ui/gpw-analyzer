@@ -175,7 +175,7 @@ function RecommendationPanel({ strategy, exchange }) {
                 <div>
                   <div className="flex justify-between text-xs text-gray-400 mb-1">
                     <span>Kwota pozycji</span>
-                    <span className="text-white font-semibold">{amt.toLocaleString('pl-PL')} PLN ≈ {shares} akcji</span>
+                    <span className="text-white font-semibold">{amt.toLocaleString('pl-PL')} {currency} ≈ {shares} akcji</span>
                   </div>
                   <input
                     type="range"
@@ -244,7 +244,7 @@ function RecommendationPanel({ strategy, exchange }) {
                         : <span className="text-xs text-gray-500">brak sygnału</span>
                       }
                     </div>
-                    <span className="font-semibold text-sm">{row.price} PLN</span>
+                    <span className="font-semibold text-sm">{row.price} {row.exchange === 'NYSE' ? 'USD' : 'PLN'}</span>
                   </div>
                   <div className="flex gap-3 mt-2 text-xs">
                     <span className="text-gray-400">RSI: <span className={rsiColor}>{row.rsi ?? '—'}</span></span>
