@@ -13,8 +13,8 @@ export default async function handler(req, res) {
   const { ticker } = req.query
   if (!ticker) return res.status(400).json({ error: 'ticker required' })
 
-  const symbol = ticker.toLowerCase().replace(/\.pl$/, '').toUpperCase() + '.WA'
-  const kvKey  = `${ENV}:eodhd:v2:${symbol}`
+  const symbol = ticker.toLowerCase().replace(/\.pl$/, '').toUpperCase() + '.WAR'
+  const kvKey  = `${ENV}:eodhd:v3:${symbol}`
 
   const cached = await kv.get(kvKey).catch(() => null)
   if (cached) return res.json(cached)
