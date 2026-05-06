@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { SCALPING_DEFAULTS } from '../../strategies/scalping.js'
 import { SWING_DEFAULTS } from '../../strategies/swing.js'
 import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
@@ -11,58 +11,75 @@ const STRATEGY_META = {
 }
 
 function RecommendationPanel({ strategy, exchange }) {
-  const [viewMode, setViewMode]   = useState('signals')
-  const [recs, setRecs]           = useState([])
-  const [scanData, setScanData]   = useState([])
-  const [loading, setLoading]     = useState(false)
+  const [viewMode, setViewMode]       = useState('signals')
+  const [recs, setRecs]               = useState([])
+  const [scanData, setScanData]       = useState([])
+  const [sigsLoading, setSigsLoading] = useState(false)
   const [scanLoading, setScanLoading] = useState(false)
-  const [amounts, setAmounts]     = useState({})
-  const [done, setDone]           = useState({})
-  const [eodhd, setEodhd]         = useState({})
+  const [amounts, setAmounts]         = useState({})
+  const [done, setDone]               = useState({})
+  const [eodhd, setEodhd]             = useState({})
+  const scanStartedRef                = useRef(false)
 
   const portfolio = (() => {
     try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
     catch { return 10000 }
   })()
-
   const maxPct = (() => {
     try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').maxPositionPct ?? 15 }
     catch { return 15 }
   })()
 
+  function startScanFetch() {
+    if (scanStartedRef.current) return
+    scanStartedRef.current = true
+    setScanLoading(true)
+    fetch(`/api/market?mode=scan&strategy=${strategy}&exchange=${exchange}`)
+      .then(r => r.json())
+      .then(data => setScanData(Array.isArray(data) ? data : []))
+      .catch(() => setScanData([]))
+      .finally(() => setScanLoading(false))
+  }
+
+  // Load signals; after completion kick off scan in background for Top RSI
   useEffect(() => {
-    if (viewMode === 'signals') {
-      setLoading(true)
-      setRecs([])
-      setDone({})
-      fetch(`/api/market?mode=signals&strategy=${strategy}&exchange=${exchange}`)
-        .then(r => r.json())
-        .then(data => {
-          setRecs(data)
-          const init = {}
-          data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
-          setAmounts(init)
-          if (exchange === 'GPW') {
-            data.forEach(r => {
-              fetch(`/api/eodhd?ticker=${r.ticker}`)
-                .then(res => res.json())
-                .then(d => setEodhd(prev => ({ ...prev, [r.ticker]: d })))
-                .catch(() => {})
-            })
-          }
-        })
-        .catch(() => setRecs([]))
-        .finally(() => setLoading(false))
-    } else {
-      setScanLoading(true)
-      setScanData([])
-      fetch(`/api/market?mode=scan&strategy=${strategy}&exchange=${exchange}`)
-        .then(r => r.json())
-        .then(data => setScanData(data))
-        .catch(() => setScanData([]))
-        .finally(() => setScanLoading(false))
-    }
-  }, [strategy, viewMode, exchange])
+    setSigsLoading(true)
+    setRecs([])
+    setDone({})
+    scanStartedRef.current = false
+    setScanData([])
+    fetch(`/api/market?mode=signals&strategy=${strategy}&exchange=${exchange}`)
+      .then(r => r.json())
+      .then(data => {
+        setRecs(data)
+        const init = {}
+        data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
+        setAmounts(init)
+        if (exchange === 'GPW') {
+          data.forEach(r => {
+            fetch(`/api/eodhd?ticker=${r.ticker}`)
+              .then(res => res.json())
+              .then(d => setEodhd(prev => ({ ...prev, [r.ticker]: d })))
+              .catch(() => {})
+          })
+        }
+      })
+      .catch(() => setRecs([]))
+      .finally(() => {
+        setSigsLoading(false)
+        startScanFetch() // background load for Top RSI
+      })
+  }, [strategy, exchange]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When switching to scan tab, ensure scan data is loaded
+  useEffect(() => {
+    if (viewMode === 'scan') startScanFetch()
+  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const topRsi = [...scanData]
+    .filter(r => r.rsi !== null)
+    .sort((a, b) => a.rsi - b.rsi)
+    .slice(0, 5)
 
   async function confirm(rec) {
     const positionSize = amounts[rec.ticker]
@@ -88,6 +105,39 @@ function RecommendationPanel({ strategy, exchange }) {
 
   return (
     <div className="space-y-3">
+
+      {/* Top 5 RSI Oversold — zawsze widoczne */}
+      <div className="bg-gpw-dark rounded-lg p-3 space-y-2">
+        <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">📊 Top 5 — RSI Wyprzedane</div>
+        {scanLoading ? (
+          <div className="text-xs text-gray-500 animate-pulse">Ładowanie wskaźników…</div>
+        ) : topRsi.length === 0 ? (
+          <div className="text-xs text-gray-500">Brak danych (załaduje się po zakończeniu skanowania)</div>
+        ) : (
+          <div className="space-y-1.5">
+            {topRsi.map(r => {
+              const rsiVal = r.rsi?.toFixed(1)
+              const badge  = r.rsi < 30 ? 'bg-gpw-green text-white'
+                : r.rsi < 40 ? 'bg-yellow-600 text-white'
+                : 'bg-gpw-card text-gray-400'
+              const cur = r.exchange === 'NYSE' ? 'USD' : 'PLN'
+              return (
+                <div key={r.ticker} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold w-12">{r.tickerDisplay}</span>
+                    {r.companyName && <span className="text-gray-500 truncate max-w-[90px]">({r.companyName})</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${badge}`}>RSI {rsiVal}</span>
+                    <span className="text-gray-400 w-20 text-right">{r.price} {cur}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* View toggle */}
       <div className="flex border border-gpw-border rounded-lg overflow-hidden text-sm">
         <button
@@ -106,14 +156,14 @@ function RecommendationPanel({ strategy, exchange }) {
 
       {/* Signals view */}
       {viewMode === 'signals' && (
-        loading ? (
+        sigsLoading ? (
           <div className="text-gray-400 text-sm py-4 text-center">Szukam sygnałów… (może potrwać 30s)</div>
         ) : (() => {
           const visible = recs.filter(r => !done[r.ticker])
           if (visible.length === 0 && recs.length === 0) {
             return (
               <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
-                Brak sygnałów dla tej strategii. Sprawdź widok &bdquo;Wszystkie spółki&rdquo; aby zobaczyć aktualne wskaźniki.
+                Brak sygnałów dla tej strategii. Sprawdź widok &bdquo;Wszystkie spółki&rdquo; lub Top RSI powyżej.
               </div>
             )
           }
@@ -139,9 +189,7 @@ function RecommendationPanel({ strategy, exchange }) {
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="font-bold text-lg">{rec.tickerDisplay}</span>
-                    {rec.companyName && (
-                      <span className="ml-1.5 text-xs text-gray-500">({rec.companyName})</span>
-                    )}
+                    {rec.companyName && <span className="ml-1.5 text-xs text-gray-500">({rec.companyName})</span>}
                     <span className="ml-2 text-xs text-gray-400">{rec.signal}</span>
                   </div>
                   <div className="text-right">
@@ -237,8 +285,9 @@ function RecommendationPanel({ strategy, exchange }) {
                   className={`bg-gpw-dark border rounded-lg p-3 ${row.hasSignal ? 'border-gpw-green' : 'border-gpw-border'}`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold">{row.tickerDisplay}</span>
+                      {row.companyName && <span className="text-xs text-gray-500">({row.companyName})</span>}
                       {row.hasSignal
                         ? <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded">⚡ {row.signal}</span>
                         : <span className="text-xs text-gray-500">brak sygnału</span>
@@ -272,9 +321,9 @@ export default function Strategies() {
   const [active, setActive] = useState(
     () => localStorage.getItem('gpw_strategy') ?? 'swing'
   )
-  const [showRecs, setShowRecs]       = useState(false)
-  const [triggering, setTriggering]   = useState(false)
-  const [triggerMsg, setTriggerMsg]   = useState('')
+  const [showRecs, setShowRecs]     = useState(false)
+  const [triggering, setTriggering] = useState(false)
+  const [triggerMsg, setTriggerMsg] = useState('')
 
   async function triggerCron(force) {
     setTriggering(true)
@@ -337,7 +386,7 @@ export default function Strategies() {
 
         {!showRecs && (
           <p className="text-sm text-gray-400">
-            Kliknij &bdquo;Sprawdź sygnały&rdquo; aby przeskanować spółki z universum strategii {STRATEGY_META[active]?.label}.
+            Kliknij &bdquo;Sprawdź sygnały&rdquo; aby przeskanować spółki i zobaczyć Top RSI oraz sygnały dla strategii {STRATEGY_META[active]?.label}.
           </p>
         )}
 
