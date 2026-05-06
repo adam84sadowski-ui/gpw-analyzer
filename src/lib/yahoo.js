@@ -22,9 +22,10 @@ export async function fetchCandles(ticker, exchange = 'GPW') {
   const json = await yahooFetch(symbol, '1y')
   const result = json?.chart?.result?.[0]
   if (!result) return null
+  const shortName = result.meta?.shortName ?? null
   const ts = result.timestamp ?? []
   const q  = result.indicators.quote[0]
-  return ts
+  const candles = ts
     .map((t, i) => ({
       date:   new Date(t * 1000).toISOString().slice(0, 10),
       open:   q.open[i]   ? Math.round(q.open[i]   * 100) / 100 : null,
@@ -34,21 +35,24 @@ export async function fetchCandles(ticker, exchange = 'GPW') {
       volume: q.volume[i] ?? null,
     }))
     .filter(c => c.close !== null)
+  return { candles, shortName }
 }
 
 export async function fetchCurrent(ticker, exchange = 'GPW') {
   const symbol = toYahooSymbol(ticker, exchange)
   const json = await yahooFetch(symbol, '5d')
-  const meta = json?.chart?.result?.[0]?.meta
+  const result = json?.chart?.result?.[0]
+  const meta = result?.meta
   if (!meta) return null
   return {
-    close:  meta.regularMarketPrice ?? null,
-    open:   meta.regularMarketOpen  ?? null,
-    high:   meta.regularMarketDayHigh  ?? null,
-    low:    meta.regularMarketDayLow   ?? null,
-    volume: meta.regularMarketVolume   ?? null,
-    date:   new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10),
-    Close:  String(meta.regularMarketPrice  ?? 'N/D'),
-    Open:   String(meta.regularMarketOpen   ?? 'N/D'),
+    close:     meta.regularMarketPrice ?? null,
+    open:      meta.regularMarketOpen  ?? null,
+    high:      meta.regularMarketDayHigh  ?? null,
+    low:       meta.regularMarketDayLow   ?? null,
+    volume:    meta.regularMarketVolume   ?? null,
+    date:      new Date(meta.regularMarketTime * 1000).toISOString().slice(0, 10),
+    Close:     String(meta.regularMarketPrice ?? 'N/D'),
+    Open:      String(meta.regularMarketOpen  ?? 'N/D'),
+    shortName: result.meta?.shortName ?? null,
   }
 }

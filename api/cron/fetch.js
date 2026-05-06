@@ -52,7 +52,8 @@ export default async function handler(req, res) {
 
   for (const ticker of config.universe) {
     try {
-      const candles = await fetchCandles(ticker, exchange)
+      const data = await fetchCandles(ticker, exchange)
+      const candles = data?.candles
       if (!candles || candles.length < 25) continue
       const sig = detectSignal(candles, strategy, thresholds)
       if (sig) signals.push({ ...sig, ticker })

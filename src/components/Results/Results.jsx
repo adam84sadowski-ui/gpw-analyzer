@@ -110,8 +110,7 @@ export default function Results() {
     load()
   }
 
-  const openPositions  = positions.filter(p => p.status === 'open')
-  const closedPositions = positions.filter(p => p.status === 'closed')
+  const openPositions = positions.filter(p => p.status === 'open')
 
   const totalInvested  = openPositions.reduce((s, p) => s + p.positionSize, 0)
   const totalPnL       = openPositions.reduce((s, p) => {
@@ -249,11 +248,11 @@ export default function Results() {
                   <div className="flex gap-2 text-xs">
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🎯 Cel: <span className="text-gpw-green">+{pos.target}%</span>
-                      {cur && <span className="text-gray-400 ml-1">({((pos.entryPrice * (1 + pos.target / 100))).toFixed(2)} PLN)</span>}
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} PLN)</span>
                     </div>
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🛑 Stop: <span className="text-gpw-red">-{pos.stopLoss}%</span>
-                      {cur && <span className="text-gray-400 ml-1">({((pos.entryPrice * (1 - pos.stopLoss / 100))).toFixed(2)} PLN)</span>}
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} PLN)</span>
                     </div>
                   </div>
                 )}

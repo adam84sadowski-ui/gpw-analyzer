@@ -49,19 +49,19 @@ async function fetchWithTimeout(fn, ms = 5000) {
   ])
 }
 
-async function getCachedCandles(ticker, exchange) {
+async function getCachedData(ticker, exchange) {
   const kvKey = `${ENV}:candles:${exchange}:${ticker}`
   const memKey = `candles:${exchange}:${ticker}`
   const fromMem = memGet(memKey)
   if (fromMem) return fromMem
   const fromKv = await kv.get(kvKey).catch(() => null)
   if (fromKv) { memSet(memKey, fromKv); return fromKv }
-  const candles = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
-  if (candles) {
-    memSet(memKey, candles)
-    await kv.set(kvKey, candles, { ex: 25 * 60 }).catch(() => {})
+  const data = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
+  if (data) {
+    memSet(memKey, data)
+    await kv.set(kvKey, data, { ex: 25 * 60 }).catch(() => {})
   }
-  return candles
+  return data  // { candles, shortName }
 }
 
 export default async function handler(req, res) {
@@ -79,10 +79,10 @@ export default async function handler(req, res) {
     const cacheKey = `daily:${exchange}:${ticker}`
     const cached = memGet(cacheKey)
     if (cached) return res.json(cached)
-    const candles = await fetchCandles(ticker, exchange)
-    if (!candles) return res.status(404).json({ error: 'no data' })
-    memSet(cacheKey, candles)
-    return res.json(candles)
+    const data = await fetchCandles(ticker, exchange)
+    if (!data) return res.status(404).json({ error: 'no data' })
+    memSet(cacheKey, data.candles)
+    return res.json(data.candles)
   }
 
   if (mode === 'current' || mode === 'index') {
@@ -122,19 +122,21 @@ export default async function handler(req, res) {
     const batch = universe.slice(i, i + batchSize)
     const settled = await Promise.allSettled(
       batch.map(async t => {
-        const candles = await getCachedCandles(t, exchange)
+        const data = await getCachedData(t, exchange)
+        const candles = data?.candles
         if (!candles || candles.length < 25) return null
         const display = tickerDisplay(t, exchange)
+        const companyName = data?.shortName ?? null
         if (mode === 'scan') {
           const ind = calcIndicators(candles, strategy, thresholds)
           if (!ind) return null
-          return { ticker: t, tickerDisplay: display, exchange, strategy,
+          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             target: config.target, stopLoss: config.stopLoss,
             timestamp: new Date().toISOString(), ...ind }
         } else {
           const sig = detectSignal(candles, strategy, thresholds)
           if (!sig) return null
-          return { ticker: t, tickerDisplay: display, exchange, strategy,
+          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             label: config.label, target: config.target, stopLoss: config.stopLoss,
             timestamp: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
