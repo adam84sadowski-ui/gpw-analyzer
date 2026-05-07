@@ -22,19 +22,27 @@ export async function sendTelegram(message, isStaging = false) {
   return res.json()
 }
 
-export function formatAlert({ ticker, strategy, price, signal, target, stopLoss, portfolio, positionSize, shares, description, history, learning, exchange, currency, companyName, horizon }) {
+export function formatAlert({ ticker, strategy, price, signal, target, stopLoss, portfolio, positionSize, shares, description, exchange, currency, companyName, horizon, interpretation }) {
   const cur          = currency ?? 'PLN'
   const exchangeFlag = exchange === 'NYSE' ? '🇺🇸' : '🇵🇱'
   const targetPLN    = (price * (1 + target / 100)).toFixed(2)
   const stopPLN      = (price * (1 - stopLoss / 100)).toFixed(2)
   const time         = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
 
+  let interpretBlock = ''
+  if (interpretation) {
+    const lines = [interpretation.text]
+    interpretation.positives?.forEach(p => lines.push(p))
+    interpretation.warnings?.forEach(w  => lines.push(w))
+    interpretBlock = `\n📖 <b>CO ROBIĆ:</b>\n${lines.join('\n')}\n`
+  }
+
   return `📊 <b>SYGNAŁ: ${ticker}${companyName ? ` (${companyName})` : ''} | ${strategy} ${exchangeFlag}</b>
 🕐 ${time} | Cena: ${price} ${cur}
 
 💡 <b>CO SIĘ DZIEJE:</b>
 ${description}
-
+${interpretBlock}
 🎯 Cel: +${target}% (${targetPLN} ${cur}) | 🛑 Stop: -${stopLoss}% (${stopPLN} ${cur})
 ${horizon ? `⏱ Horyzont: ${horizon}\n` : ''}
 💰 Portfel: ${portfolio} ${cur}
