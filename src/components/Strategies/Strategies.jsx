@@ -69,12 +69,12 @@ function RecommendationPanel({ strategy, exchange }) {
         setSigsLoading(false)
         startScanFetch() // background load for Top RSI
       })
-  }, [strategy, exchange]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [strategy, exchange])
 
   // When switching to scan tab, ensure scan data is loaded
   useEffect(() => {
     if (viewMode === 'scan') startScanFetch()
-  }, [viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewMode])
 
   const topRsi = [...scanData]
     .filter(r => r.rsi !== null)
