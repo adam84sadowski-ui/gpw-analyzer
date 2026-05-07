@@ -16,15 +16,21 @@ const STRATEGY_CONFIG = {
     label:     '⚡ Scalping',
     maxAlerts: 3,
     horizon:   '2-5 dni',
-    universe:  ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl'],
-    describe:  s => `RSI = ${s.rsi} (wyprzedany), wolumen ${s.volMult}x powyżej średniej. Potencjalne odbicie krótkoterminowe.`,
+    universe: {
+      GPW:  ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl'],
+      NYSE: ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','TSLA','AMD','CRM','SNOW','PLTR'],
+    },
+    describe:  s => `RSI = ${s.rsi?.toFixed(1)} (wyprzedany), wolumen ${s.volMult}x powyżej średniej. Potencjalne odbicie krótkoterminowe.`,
     kvExtra:   s => ({ rsi: s.rsi }),
   },
   swing: {
     label:     '📈 Swing',
     maxAlerts: 1,
     horizon:   '4-8 tyg.',
-    universe:  ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl'],
+    universe: {
+      GPW:  ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl'],
+      NYSE: ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','V','MA','HD','UNH','WMT'],
+    },
     describe:  s => `Cena przebiła SMA50 od dołu przy wolumenie ${s.volMult}x. Sygnał swing wzrostowy.`,
     kvExtra:   () => ({}),
   },
@@ -32,8 +38,11 @@ const STRATEGY_CONFIG = {
     label:     '🚀 Agresywna',
     maxAlerts: 2,
     horizon:   'brak (wysoki risk)',
-    universe:  ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
-    describe:  s => `Breakout powyżej max 20 dni, RSI ${s.rsi}, wolumen ${s.volMult}x. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
+    universe: {
+      GPW:  ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
+      NYSE: ['TSLA','AMD','CRM','SNOW','PLTR','COIN','RBLX','ROKU','SQ','SHOP'],
+    },
+    describe:  s => `Breakout powyżej max 20 dni, RSI ${s.rsi?.toFixed(1)}, wolumen ${s.volMult}x. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
     kvExtra:   s => ({ rsi: s.rsi }),
   },
 }
@@ -52,8 +61,9 @@ export default async function handler(req, res) {
 
   const thresholds = await kv.get(`${ENV}:thresholds`).catch(() => null) ?? {}
   const signals = []
+  const universe = config.universe[exchange] ?? config.universe.GPW
 
-  for (const ticker of config.universe) {
+  for (const ticker of universe) {
     try {
       const data = await fetchCandles(ticker, exchange)
       const candles = data?.candles

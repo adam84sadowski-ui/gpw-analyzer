@@ -3,6 +3,7 @@ import { SCALPING_DEFAULTS } from '../../strategies/scalping.js'
 import { SWING_DEFAULTS } from '../../strategies/swing.js'
 import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
+import { interpretSignal } from '../../lib/interpretSignal.js'
 
 const STRATEGY_META = {
   scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni' },
@@ -19,6 +20,7 @@ function RecommendationPanel({ strategy, exchange }) {
   const [amounts, setAmounts]         = useState({})
   const [done, setDone]               = useState({})
   const [eodhd, setEodhd]             = useState({})
+  const [interpretOpen, setInterpretOpen] = useState({})
   const scanStartedRef                = useRef(false)
 
   const portfolio = (() => {
@@ -252,6 +254,32 @@ function RecommendationPanel({ strategy, exchange }) {
                   >
                     Pomijam
                   </button>
+                </div>
+
+                {/* Interpretacja sygnału */}
+                <div className="border-t border-gpw-border pt-2">
+                  <button
+                    onClick={() => setInterpretOpen(s => ({ ...s, [rec.ticker]: !s[rec.ticker] }))}
+                    className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+                  >
+                    <span>📖 Co robić z tym sygnałem?</span>
+                    <span>{interpretOpen[rec.ticker] ? '▲' : '▼'}</span>
+                  </button>
+                  {interpretOpen[rec.ticker] && (() => {
+                    const interp = interpretSignal(
+                      rec.signal,
+                      { rsi: rec.rsi, volMult: rec.volMult, price: rec.price, sma20: rec.sma20, sma50: rec.sma50 },
+                      rec.strategy ?? strategy,
+                    )
+                    return (
+                      <div className="mt-2 space-y-2 text-xs bg-gpw-card rounded-lg p-3">
+                        <p className="text-gray-300 leading-relaxed">{interp.text}</p>
+                        {interp.positives.map((p, i) => <p key={i} className="text-gpw-green">{p}</p>)}
+                        {interp.warnings.map((w, i)  => <p key={i} className="text-yellow-400">{w}</p>)}
+                        <p className="text-gray-500 pt-1">⏱ Sugerowany horyzont: <span className="text-white">{interp.horizon.label}</span></p>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <p className="text-xs text-gray-500 text-center">

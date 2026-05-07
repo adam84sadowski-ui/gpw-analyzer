@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useExchange } from '../../context/ExchangeContext.jsx'
+import { HORIZON } from '../../lib/interpretSignal.js'
 
 function pct(v)          { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` }
@@ -256,6 +257,31 @@ export default function Results() {
                     </div>
                   </div>
                 )}
+
+                {pos.status === 'open' && (() => {
+                  const maxDays  = HORIZON[pos.strategy]?.maxDays ?? 30
+                  const daysHeld = Math.floor((Date.now() - new Date(pos.entryDate)) / 86400000)
+                  const daysLeft = maxDays - daysHeld
+                  const pct      = Math.min(100, Math.round(daysHeld / maxDays * 100))
+                  const barColor = pct >= 100 ? 'bg-gpw-red' : pct >= 80 ? 'bg-yellow-400' : 'bg-gpw-blue'
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">⏱ Czas pozycji</span>
+                        <span className={daysLeft < 0 ? 'text-gpw-red' : daysLeft <= 1 ? 'text-yellow-400' : 'text-gray-300'}>
+                          {daysHeld} {daysHeld === 1 ? 'dzień' : 'dni'}
+                          {daysLeft >= 0
+                            ? <> / pozostało <span className="font-semibold">{daysLeft} dni</span></>
+                            : <> / <span className="font-semibold">⏰ przekroczono o {Math.abs(daysLeft)} dni</span></>
+                          }
+                        </span>
+                      </div>
+                      <div className="w-full bg-gpw-dark rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {pos.status === 'open' && (
                   <button

@@ -76,8 +76,13 @@ export default async function handler(req, res) {
 
       if (daysHeld > maxDays) {
         if (!(await dedup('horizon'))) {
+          const strategyRec = {
+            scalping:   `Strategia scalping zakłada zamknięcie pozycji w 2-5 dni. Pozycja jest otwarta już ${daysHeld} dni — oceń czy nadal jest uzasadniona.`,
+            swing:      `Strategia swing zakłada horyzont 4-8 tygodni. Pozycja przekroczyła ${maxDays} dni — sprawdź czy trend wzrostowy nadal obowiązuje.`,
+            aggressive: `Strategia agresywna nie ma stałego horyzontu, ale pozycja jest otwarta ${daysHeld} dni. Oceń ryzyko i rozważ realizację wyniku.`,
+          }[pos.strategy] ?? `Pozycja otwarta ${daysHeld} dni (max ${maxDays}). Rozważ zamknięcie.`
           await sendTelegram(
-            `⏰ <b>HORYZONT PRZEKROCZONY — ${ticker}</b>\n\nPozycja otwarta ${daysHeld} dni (max ${maxDays} dla ${pos.strategy}).\nP&L: ${(pnlPct*100).toFixed(1)}%\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>\n\n<i>Rozważ zamknięcie pozycji.</i>`,
+            `⏰ <b>HORYZONT PRZEKROCZONY — ${ticker}</b>\n\nP&L: ${(pnlPct*100).toFixed(1)}%  |  Cena: ${price} ${currency}\n\n💡 ${strategyRec}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
             IS_STAGING
           )
           alertsSent++
