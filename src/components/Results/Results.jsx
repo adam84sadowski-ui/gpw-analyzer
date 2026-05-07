@@ -42,8 +42,12 @@ function CloseModal({ position, onClose, onConfirm, currency }) {
   )
 }
 
+function posCurrency(pos) {
+  return (pos.exchange ?? 'GPW') === 'NYSE' ? 'USD' : 'PLN'
+}
+
 export default function Results() {
-  const { exchange, currency } = useExchange()
+  const { exchange } = useExchange()
   const [tab, setTab]               = useState('open')
   const [positions, setPositions]   = useState([])
   const [loading, setLoading]       = useState(true)
@@ -58,13 +62,14 @@ export default function Results() {
       .then(async data => {
         setPositions(data)
         if (tab === 'open' && data.length > 0) {
-          const uniqueTickers = [...new Set(data.map(p => p.ticker))]
           const priceMap = {}
-          await Promise.all(uniqueTickers.map(async ticker => {
+          await Promise.all(data.map(async pos => {
+            if (priceMap[pos.ticker] !== undefined) return
             try {
-              const r = await fetch(`/api/market?mode=current&ticker=${ticker}&exchange=${exchange}`)
+              const posEx = pos.exchange ?? 'GPW'
+              const r = await fetch(`/api/market?mode=current&ticker=${pos.ticker}&exchange=${posEx}`)
               const d = await r.json()
-              if (d?.close) priceMap[ticker] = d.close
+              if (d?.close) priceMap[pos.ticker] = d.close
             } catch {}
           }))
           setPrices(priceMap)
@@ -72,7 +77,7 @@ export default function Results() {
       })
       .catch(() => setPositions([]))
       .finally(() => setLoading(false))
-  }, [tab, exchange])
+  }, [tab])
 
   useEffect(() => { load() }, [load])
 
@@ -113,36 +118,39 @@ export default function Results() {
 
   const openPositions = positions.filter(p => p.status === 'open')
 
-  const totalInvested = openPositions.reduce((s, p) => s + p.positionSize, 0)
-  const totalPnL      = openPositions.reduce((s, p) => {
-    const cp = prices[p.ticker]
-    if (!cp) return s
-    return s + (cp - p.entryPrice) * p.shares
-  }, 0)
-
   const portfolio = (() => {
     try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
     catch { return 10000 }
   })()
 
+  // Summary totals for current exchange's open positions only
+  const exchangeCurrency = exchange === 'NYSE' ? 'USD' : 'PLN'
+  const openForExchange  = openPositions.filter(p => (p.exchange ?? 'GPW') === exchange)
+  const totalInvested    = openForExchange.reduce((s, p) => s + p.positionSize, 0)
+  const totalPnL         = openForExchange.reduce((s, p) => {
+    const cp = prices[p.ticker]
+    if (!cp) return s
+    return s + (cp - p.entryPrice) * p.shares
+  }, 0)
+
   return (
     <div className="space-y-4">
-      {closing && <CloseModal position={closing} onClose={() => setClosing(null)} onConfirm={closePosition} currency={currency} />}
+      {closing && <CloseModal position={closing} onClose={() => setClosing(null)} onConfirm={closePosition} currency={posCurrency(closing)} />}
 
       {/* Podsumowanie */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
           <div className="text-xs text-gray-400 mb-1">Portfel</div>
-          <div className="font-bold">{portfolio.toLocaleString('pl-PL')} {currency}</div>
+          <div className="font-bold">{portfolio.toLocaleString('pl-PL')} PLN</div>
         </div>
         <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
           <div className="text-xs text-gray-400 mb-1">Zainwestowane</div>
-          <div className="font-bold">{totalInvested.toLocaleString('pl-PL')} {currency}</div>
+          <div className="font-bold">{totalInvested.toLocaleString('pl-PL')} {exchangeCurrency}</div>
         </div>
         <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
           <div className="text-xs text-gray-400 mb-1">P&L (otwarte)</div>
           <div className={`font-bold ${totalPnL >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
-            {fmtCur(totalPnL, currency)}
+            {fmtCur(totalPnL, exchangeCurrency)}
           </div>
         </div>
       </div>
@@ -198,6 +206,7 @@ export default function Results() {
       ) : (
         <div className="space-y-3">
           {positions.map(pos => {
+            const cur    = posCurrency(pos)
             const cp     = prices[pos.ticker]
             const pnlPct = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100) : null
             const pnlAmt = cp ? ((cp - pos.entryPrice) * pos.shares) : null
@@ -208,6 +217,7 @@ export default function Results() {
                   <div>
                     <span className="font-bold text-lg">{pos.tickerDisplay}</span>
                     <span className="ml-2 text-xs text-gray-400">{pos.strategy}</span>
+                    <span className="ml-1 text-xs text-gray-500">{cur}</span>
                   </div>
                   <div className="text-right">
                     {pos.status === 'open' && cp && (
@@ -226,22 +236,22 @@ export default function Results() {
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wejście</div>
-                    <div className="font-bold">{pos.entryPrice} {currency}</div>
+                    <div className="font-bold">{pos.entryPrice} {cur}</div>
                   </div>
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">{pos.status === 'open' ? 'Teraz' : 'Wyjście'}</div>
-                    <div className="font-bold">{pos.status === 'open' ? (cp ?? '…') : pos.exitPrice} {currency}</div>
+                    <div className="font-bold">{pos.status === 'open' ? (cp ?? '…') : pos.exitPrice} {cur}</div>
                   </div>
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wartość P&L</div>
                     <div className={`font-bold ${(pnlAmt ?? pos.pnlAmt ?? 0) >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
-                      {fmtCur(pnlAmt ?? pos.pnlAmt ?? 0, currency)}
+                      {fmtCur(pnlAmt ?? pos.pnlAmt ?? 0, cur)}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Akcji: {pos.shares} × {pos.entryPrice} {currency} = {pos.positionSize.toLocaleString('pl-PL')} {currency}</span>
+                  <span>Akcji: {pos.shares} × {pos.entryPrice} {cur} = {pos.positionSize.toLocaleString('pl-PL')} {cur}</span>
                   <span>{new Date(pos.entryDate).toLocaleDateString('pl-PL')}</span>
                 </div>
 
@@ -255,11 +265,11 @@ export default function Results() {
                   <div className="flex gap-2 text-xs">
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🎯 Cel: <span className="text-gpw-green">+{pos.target}%</span>
-                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} {currency})</span>
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} {cur})</span>
                     </div>
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🛑 Stop: <span className="text-gpw-red">-{pos.stopLoss}%</span>
-                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {currency})</span>
+                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span>
                     </div>
                   </div>
                 )}
