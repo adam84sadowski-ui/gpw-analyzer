@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { fetchIndex, fetchDaily } from '../../services/stooq.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
+import { allTickers } from '../../lib/universes.js'
 import {
   ResponsiveContainer, ComposedChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -11,13 +12,11 @@ const EXCHANGE_CONFIG = {
     indices:     ['wig20.pl', 'mwig40.pl', 'swig80.pl'],
     indexLabels: { 'wig20.pl': 'WIG20', 'mwig40.pl': 'mWIG40', 'swig80.pl': 'sWIG80' },
     defaults:    ['pkn.pl', 'kghm.pl', 'cdr.pl'],
-    universe:    ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl','kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl','apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl'],
   },
   NYSE: {
     indices:     ['^gspc', '^ixic', '^dji'],
     indexLabels: { '^gspc': 'S&P 500', '^ixic': 'NASDAQ', '^dji': 'Dow Jones' },
     defaults:    ['AAPL', 'MSFT', 'NVDA'],
-    universe:    ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','TSLA','AMD','CRM','SNOW','PLTR','COIN','RBLX','ROKU','SQ','SHOP'],
   },
 }
 
@@ -134,7 +133,7 @@ export default function Dashboard() {
     })
   }
 
-  const filtered = config.universe.filter(t =>
+  const filtered = allTickers(exchange).filter(t =>
     tickerLabel(t).includes(search.toUpperCase()) || search === ''
   )
 

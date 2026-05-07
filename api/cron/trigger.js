@@ -3,6 +3,7 @@ import { fetchCandles } from '../../src/lib/yahoo.js'
 import { detectSignal } from '../../src/lib/signals.js'
 import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
+import { UNIVERSES } from '../../src/lib/universes.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV_PREFIX = IS_STAGING ? 'staging' : 'prod'
@@ -12,20 +13,6 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const UNIVERSES = {
-  scalping: {
-    GPW:  ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl','opl.pl','kru.pl','bdx.pl','acp.pl','ing.pl'],
-    NYSE: ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','TSLA','AMD','CRM','SNOW','PLTR','ACN','IBM','INFY','CTSH','EPAM'],
-  },
-  swing: {
-    GPW:  ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl','pkn.pl','kghm.pl','lpp.pl','pko.pl','cdr.pl'],
-    NYSE: ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','V','MA','HD','UNH','WMT','ACN','EPAM','ORCL','SAP','CDNS'],
-  },
-  aggressive: {
-    GPW:  ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl'],
-    NYSE: ['TSLA','AMD','CRM','SNOW','PLTR','COIN','RBLX','ROKU','SQ','SHOP','MSTR','ARM','CRWD','NET','DDOG'],
-  },
-}
 
 const FORCE_TICKER  = { GPW: 'pkn.pl',  NYSE: 'AMD'   }
 const FORCE_PRICE   = { GPW: 48.50,     NYSE: 200.00  }
@@ -39,7 +26,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
   const { strategy = 'swing', force = false, exchange = 'GPW' } = req.body ?? {}
-  const universe = UNIVERSES[strategy]?.[exchange] ?? UNIVERSES[strategy]?.GPW
+  const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
   if (!universe) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
 
   const thresholds = await kv.get(`${ENV_PREFIX}:thresholds`).catch(() => null) ?? {}

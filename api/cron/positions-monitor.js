@@ -1,6 +1,9 @@
 import { createClient } from '@vercel/kv'
-import { fetchCurrent } from '../../src/lib/yahoo.js'
+import { fetchCurrent, fetchCandles } from '../../src/lib/yahoo.js'
 import { sendTelegram } from '../../src/services/telegram.js'
+import { calcRSI } from '../../src/indicators/rsi.js'
+import { calcSMA } from '../../src/indicators/sma.js'
+import { isBreakout } from '../../src/indicators/breakout.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -11,8 +14,44 @@ const kv = createClient({
 })
 
 const MAX_DAYS = { scalping: 5, swing: 40, aggressive: 30 }
-const TARGET_ALERT_THRESHOLD = 0.8   // alert at 80% of target
-const STOP_ALERT_THRESHOLD   = 0.8   // alert at 80% of stop loss
+const TARGET_ALERT_THRESHOLD = 0.8
+const STOP_ALERT_THRESHOLD   = 0.8
+
+function checkSignalStillValid(signal, candles) {
+  if (!candles || candles.length < 25) return true
+  const closes = candles.map(c => c.close)
+  const price  = closes[closes.length - 1]
+  if (signal === 'RSI_OVERSOLD') {
+    const rsi = calcRSI(closes)
+    return rsi === null || rsi <= 55
+  }
+  if (signal === 'SMA50_CROSSOVER') {
+    const sma50 = calcSMA(closes, 50)
+    return !sma50 || price >= sma50 * 0.98
+  }
+  if (signal === 'BREAKOUT') {
+    return isBreakout(candles)
+  }
+  return true
+}
+
+function signalExpiredText(signal, candles) {
+  if (!candles) return ''
+  const closes = candles.map(c => c.close)
+  if (signal === 'RSI_OVERSOLD') {
+    const rsi = calcRSI(closes)
+    return `RSI: ${rsi?.toFixed(1) ?? '—'} (przestał być wyprzedany — powyżej 55)`
+  }
+  if (signal === 'SMA50_CROSSOVER') {
+    const sma50 = calcSMA(closes, 50)
+    const price = closes[closes.length - 1]
+    return `Cena: ${price?.toFixed(2)} | SMA50: ${sma50?.toFixed(2)} (cena spadła poniżej SMA50)`
+  }
+  if (signal === 'BREAKOUT') {
+    return 'Cena nie utrzymuje wybicia powyżej max 20 dni'
+  }
+  return ''
+}
 
 export default async function handler(req, res) {
   if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -41,12 +80,11 @@ export default async function handler(req, res) {
       const daysHeld   = Math.floor((Date.now() - new Date(pos.entryDate)) / 86400000)
       const maxDays    = MAX_DAYS[pos.strategy] ?? 30
 
-      // Dedup keys — skip if already alerted today
-      const dedup = async (type) => {
+      const dedup = async (type, ttlHours = 23) => {
         const key = `${ENV}:pos-alert:${pos.id}:${type}`
         const exists = await kv.get(key).catch(() => null)
         if (exists) return true
-        await kv.set(key, 1, { ex: 23 * 60 * 60 }).catch(() => {})
+        await kv.set(key, 1, { ex: ttlHours * 60 * 60 }).catch(() => {})
         return false
       }
 
@@ -55,9 +93,8 @@ export default async function handler(req, res) {
       if (pnlPct >= targetFrac * TARGET_ALERT_THRESHOLD) {
         if (!(await dedup('target'))) {
           const pct = (pnlPct * 100).toFixed(1)
-          const targetPct = pos.target
           await sendTelegram(
-            `🎯 <b>CEL BLISKO — ${ticker}</b>\n\nP&L: +${pct}% z celem +${targetPct}%\nCena: ${price} ${currency}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>\n\n<i>Rozważ realizację zysku.</i>`,
+            `🎯 <b>CEL BLISKO — ${ticker}</b>\n\nP&L: +${pct}% z celem +${pos.target}%\nCena: ${price} ${currency}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>\n\n<i>Rozważ realizację zysku.</i>`,
             IS_STAGING
           )
           alertsSent++
@@ -65,9 +102,8 @@ export default async function handler(req, res) {
       } else if (pnlPct <= -(stopFrac * STOP_ALERT_THRESHOLD)) {
         if (!(await dedup('stop'))) {
           const pct = (pnlPct * 100).toFixed(1)
-          const stopPct = pos.stopLoss
           await sendTelegram(
-            `🛑 <b>STOP LOSS BLISKO — ${ticker}</b>\n\nP&L: ${pct}% przy stop -${stopPct}%\nCena: ${price} ${currency}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>\n\n<i>Rozważ zamknięcie pozycji.</i>`,
+            `🛑 <b>STOP LOSS BLISKO — ${ticker}</b>\n\nP&L: ${pct}% przy stop -${pos.stopLoss}%\nCena: ${price} ${currency}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>\n\n<i>Rozważ zamknięcie pozycji.</i>`,
             IS_STAGING
           )
           alertsSent++
@@ -86,6 +122,24 @@ export default async function handler(req, res) {
             IS_STAGING
           )
           alertsSent++
+        }
+      }
+
+      // Signal reversal check — skip if near target or stop (those alerts take priority)
+      if (pos.signal && pos.signal !== 'TEST'
+          && pnlPct < targetFrac * 0.9
+          && pnlPct > -(stopFrac * 0.8)) {
+        const candleData = await fetchCandles(pos.ticker, exchange).catch(() => null)
+        const candles = candleData?.candles
+        if (candles && !checkSignalStillValid(pos.signal, candles)) {
+          if (!(await dedup('signal-change', 48))) {
+            const detail = signalExpiredText(pos.signal, candles)
+            await sendTelegram(
+              `🔄 <b>ZMIANA SYGNAŁU — ${ticker}</b>\n\nSygnał <b>${pos.signal}</b> który otworzył pozycję wygasł.\n${detail}\n\nP&L teraz: ${(pnlPct*100).toFixed(1)}%\nCel: +${pos.target}% | Stop: -${pos.stopLoss}%\n\n💡 Rozważ realizację wyniku — sygnał do wejścia już nie działa. Trzymasz ${daysHeld} z ${maxDays} dni horyzontu.\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
+              IS_STAGING
+            )
+            alertsSent++
+          }
         }
       }
     } catch (e) {
