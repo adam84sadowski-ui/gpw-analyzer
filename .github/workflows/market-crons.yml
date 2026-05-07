@@ -1,0 +1,97 @@
+name: Market Crons
+
+on:
+  schedule:
+    - cron: '5 9 * * 1-5'    # GPW scalping — otwarcie (11:05 CET)
+    - cron: '0 12 * * 1-5'   # GPW scalping — południe (14:00 CET)
+    - cron: '45 14 * * 1-5'  # GPW scalping — przed zamknięciem (16:45 CET)
+    - cron: '35 15 * * 1-5'  # GPW swing (17:35 CET)
+    - cron: '40 15 * * 1-5'  # GPW aggressive (17:40 CET)
+    - cron: '35 19 * * 1-5'  # NYSE scalping (1:35 PM ET)
+    - cron: '10 20 * * 1-5'  # NYSE swing (2:10 PM ET)
+    - cron: '15 20 * * 1-5'  # NYSE aggressive (2:15 PM ET)
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Strategia (scalping / swing / aggressive)'
+        required: true
+        default: 'scalping'
+        type: choice
+        options: [scalping, swing, aggressive]
+      exchange:
+        description: 'Giełda (GPW / NYSE)'
+        required: true
+        default: 'GPW'
+        type: choice
+        options: [GPW, NYSE]
+
+env:
+  API_BASE: https://gpw-analyzer.vercel.app
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Manual trigger
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=${{ inputs.strategy }}&exchange=${{ inputs.exchange }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: GPW Scalping — otwarcie (09:05 UTC)
+        if: github.event.schedule == '5 9 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=scalping" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: GPW Scalping — południe (12:00 UTC)
+        if: github.event.schedule == '0 12 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=scalping&slot=mid" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: GPW Scalping — przed zamknięciem (14:45 UTC)
+        if: github.event.schedule == '45 14 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=scalping&slot=pre" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: GPW Swing (15:35 UTC)
+        if: github.event.schedule == '35 15 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=swing" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: GPW Aggressive (15:40 UTC)
+        if: github.event.schedule == '40 15 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=aggressive" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: NYSE Scalping (19:35 UTC / 1:35 PM ET)
+        if: github.event.schedule == '35 19 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=scalping&exchange=NYSE" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: NYSE Swing (20:10 UTC / 2:10 PM ET)
+        if: github.event.schedule == '10 20 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=swing&exchange=NYSE" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: NYSE Aggressive (20:15 UTC / 2:15 PM ET)
+        if: github.event.schedule == '15 20 * * 1-5'
+        run: |
+          curl -sf --max-time 30 \
+            "$API_BASE/api/cron/fetch?strategy=aggressive&exchange=NYSE" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
