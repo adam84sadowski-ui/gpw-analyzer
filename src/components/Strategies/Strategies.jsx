@@ -360,7 +360,7 @@ export default function Strategies() {
       const r = await fetch('/api/cron/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy: active, force }),
+        body: JSON.stringify({ strategy: active, force, exchange }),
       })
       const d = await r.json()
       setTriggerMsg(d.sent > 0 ? `✅ Alert wysłany (${d.ticker ?? 'TEST'})` : d.message)
