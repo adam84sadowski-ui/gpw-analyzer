@@ -1,6 +1,7 @@
 import { createClient } from '@vercel/kv'
 import { fetchCandles } from '../../src/lib/yahoo.js'
 import { detectSignal } from '../../src/lib/signals.js'
+import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
@@ -81,23 +82,30 @@ export default async function handler(req, res) {
     const portfolio    = 10000
     const positionSize = Math.round(portfolio * 0.15)
 
+    const target   = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
+    const stopLoss = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
+    const interp   = interpretSignal(
+      signal.signal,
+      { rsi: signal.rsi, volMult: signal.volMult, price: signal.price, sma20: signal.sma20, sma50: signal.sma50 },
+      strategy,
+    )
+
     const msg = formatAlert({
-      ticker:       signal.ticker.replace('.pl', '').toUpperCase(),
-      strategy:     config.label,
-      price:        signal.price,
-      signal:       signal.signal,
-      target:       signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35,
-      stopLoss:     signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8,
+      ticker:         signal.ticker.replace('.pl', '').toUpperCase(),
+      strategy:       config.label,
+      price:          signal.price,
+      signal:         signal.signal,
+      target,
+      stopLoss,
       portfolio,
       positionSize,
-      shares:       Math.floor(positionSize / signal.price),
-      description:  config.describe(signal),
-      history:      'Dane historyczne w trakcie zbierania.',
-      learning:     'Pierwsza analiza — brak wcześniejszych danych dla tej spółki.',
+      shares:         Math.floor(positionSize / signal.price),
+      description:    config.describe(signal),
       exchange,
-      currency:     exchange === 'NYSE' ? 'USD' : 'PLN',
-      companyName:  null,
-      horizon:      config.horizon,
+      currency:       exchange === 'NYSE' ? 'USD' : 'PLN',
+      companyName:    null,
+      horizon:        config.horizon,
+      interpretation: interp,
     })
 
     await sendTelegram(msg, IS_STAGING)
