@@ -91,11 +91,13 @@ function RecommendationPanel({ strategy, exchange }) {
       body: JSON.stringify({
         ticker:       rec.ticker,
         strategy:     rec.strategy,
+        exchange:     rec.exchange ?? exchange,
         entryPrice:   rec.price,
         positionSize,
         target:       rec.target,
         stopLoss:     rec.stopLoss,
         signal:       rec.signal,
+        entryRsi:     rec.rsi ?? null,
       }),
     })
     setDone(d => ({ ...d, [rec.ticker]: 'confirmed' }))

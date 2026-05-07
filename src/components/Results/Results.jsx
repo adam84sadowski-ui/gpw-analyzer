@@ -245,6 +245,12 @@ export default function Results() {
                   <span>{new Date(pos.entryDate).toLocaleDateString('pl-PL')}</span>
                 </div>
 
+                {pos.entryRsi != null && (
+                  <div className="text-xs text-gray-500">
+                    RSI przy wejściu: <span className={`font-semibold ${pos.entryRsi < 30 ? 'text-gpw-green' : pos.entryRsi > 70 ? 'text-gpw-red' : 'text-gray-300'}`}>{pos.entryRsi.toFixed(1)}</span>
+                  </div>
+                )}
+
                 {pos.status === 'open' && (
                   <div className="flex gap-2 text-xs">
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">

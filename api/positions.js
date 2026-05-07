@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   if (method === 'POST') {
     // Otwórz pozycję
-    const { ticker, strategy, entryPrice, positionSize, target, stopLoss, signal } = req.body
+    const { ticker, strategy, exchange, entryPrice, positionSize, target, stopLoss, signal, entryRsi } = req.body
     if (!ticker || !entryPrice || !positionSize) {
       return res.status(400).json({ error: 'ticker, entryPrice, positionSize required' })
     }
@@ -20,10 +20,12 @@ export default async function handler(req, res) {
     const position = {
       id,
       ticker,
-      tickerDisplay: ticker.replace('.pl', '').toUpperCase(),
+      tickerDisplay: exchange === 'NYSE' ? ticker.toUpperCase() : ticker.replace('.pl', '').toUpperCase(),
       strategy,
+      exchange:  exchange ?? 'GPW',
       signal,
       entryPrice,
+      entryRsi:  entryRsi ?? null,
       positionSize,
       shares: Math.floor(positionSize / entryPrice),
       target,
