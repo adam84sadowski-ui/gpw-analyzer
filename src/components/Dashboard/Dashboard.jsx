@@ -60,7 +60,7 @@ export default function Dashboard() {
         setSelectedTickers(posTickers.length > 0 ? posTickers : config.defaults)
       })
       .catch(() => setSelectedTickers(config.defaults))
-  }, [exchange]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [exchange])
 
   // Fetch candles for any newly selected ticker
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function Dashboard() {
         return next
       })
     }).finally(() => setLoading(false))
-  }, [selectedTickers, exchange]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedTickers, exchange])
 
   // Load index cards
   useEffect(() => {
@@ -91,7 +91,7 @@ export default function Dashboard() {
       results.forEach(({ ticker, data }) => { m[ticker] = data })
       setIndexData(m)
     })
-  }, [exchange]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [exchange])
 
   // Load recent alerts
   useEffect(() => {
