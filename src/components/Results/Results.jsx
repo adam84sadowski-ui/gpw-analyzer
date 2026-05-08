@@ -274,9 +274,11 @@ export default function Results() {
                   </div>
                 )}
 
-                {pos.status === 'open' && (() => {
-                  const maxDays  = HORIZON[pos.strategy]?.maxDays ?? 30
-                  const daysHeld = Math.floor((Date.now() - new Date(pos.entryDate)) / 86400000)
+                {pos.status === 'open' && pos.strategy !== 'aggressive' && (() => {
+                  const maxDays  = HORIZON[pos.strategy]?.maxDays ?? 5
+                  const entryDay = new Date(pos.entryDate.slice(0, 10))
+                  const today    = new Date(new Date().toISOString().slice(0, 10))
+                  const daysHeld = Math.round((today - entryDay) / 86400000)
                   const daysLeft = maxDays - daysHeld
                   const pct      = Math.min(100, Math.round(daysHeld / maxDays * 100))
                   const barColor = pct >= 100 ? 'bg-gpw-red' : pct >= 80 ? 'bg-yellow-400' : 'bg-gpw-blue'
