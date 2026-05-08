@@ -4,6 +4,7 @@ import { detectSignal, calcIndicators } from '../src/lib/signals.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
+import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -98,9 +99,25 @@ export default async function handler(req, res) {
     return res.json(data)
   }
 
+  // ── Macro mode ───────────────────────────────────────────────────────
+  if (mode === 'macro') {
+    const memKey = `macro:${exchange}`
+    const fromMem = memGet(memKey)
+    if (fromMem) return res.json(fromMem)
+    const kvKey = `${ENV}:macro:${exchange}`
+    let macro = await kv.get(kvKey).catch(() => null)
+    if (!macro) {
+      macro = await getMacroEnvironment(exchange).catch(() => null)
+      if (macro) await kv.set(kvKey, macro, { ex: 24 * 60 * 60 }).catch(() => {})
+    }
+    if (!macro) return res.status(503).json({ error: 'macro unavailable' })
+    memSet(memKey, macro)
+    return res.json(macro)
+  }
+
   // ── Strategy modes ───────────────────────────────────────────────────
   if (mode !== 'signals' && mode !== 'scan') {
-    return res.status(400).json({ error: 'mode must be daily|current|index|signals|scan' })
+    return res.status(400).json({ error: 'mode must be daily|current|index|macro|signals|scan' })
   }
 
   if (!strategy || !STRATEGY_CONFIG[strategy]) {
