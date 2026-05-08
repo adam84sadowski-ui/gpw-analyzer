@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { version as APP_VERSION } from '../package.json'
 import Dashboard from './components/Dashboard/Dashboard.jsx'
 import Strategies from './components/Strategies/Strategies.jsx'
 import Alerts from './components/Alerts/Alerts.jsx'
@@ -25,7 +26,7 @@ export default function App() {
         <header className="bg-gpw-card border-b border-gpw-border px-4 py-3 flex items-center gap-3">
           <span className="text-xl font-bold">GPW Analyzer</span>
           <span className="text-xs text-gray-500 bg-gpw-dark px-2 py-0.5 rounded">
-            {window.location.hostname !== 'gpw-analyzer.vercel.app' ? '🟣 STAGING' : '🔵 PROD'}
+            {window.location.hostname !== 'gpw-analyzer.vercel.app' ? `🟣 STAGING v${APP_VERSION}` : `🔵 PROD v${APP_VERSION}`}
           </span>
           <div className="ml-auto">
             <ExchangeSwitcher />
