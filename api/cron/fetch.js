@@ -4,6 +4,7 @@ import { detectSignal } from '../../src/lib/signals.js'
 import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
 import { UNIVERSES } from '../../src/lib/universes.js'
+import { fetchIndexTrend } from '../../src/lib/indextrend.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -12,6 +13,8 @@ const kv = createClient({
   url:   process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
 })
+
+const SCORE_THRESHOLD = 60
 
 const STRATEGY_CONFIG = {
   scalping: {
@@ -49,7 +52,11 @@ export default async function handler(req, res) {
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
 
-  const thresholds = await kv.get(`${ENV}:thresholds`).catch(() => null) ?? {}
+  const [thresholds, indexTrend] = await Promise.all([
+    kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
+    fetchIndexTrend(exchange).catch(() => 'neutral'),
+  ])
+
   const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
 
   const settled = await Promise.allSettled(
@@ -60,7 +67,7 @@ export default async function handler(req, res) {
       ])
       const candles = data?.candles
       if (!candles || candles.length < 25) return null
-      const sig = detectSignal(candles, strategy, thresholds, exchange)
+      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
       return sig ? { ...sig, ticker } : null
     })
   )
@@ -68,6 +75,8 @@ export default async function handler(req, res) {
   const signals = settled
     .filter(r => r.status === 'fulfilled' && r.value !== null)
     .map(r => r.value)
+    .filter(s => s.score >= SCORE_THRESHOLD)
+    .sort((a, b) => b.score - a.score)
 
   let sent = 0
   for (const signal of signals.slice(0, config.maxAlerts)) {
@@ -83,6 +92,24 @@ export default async function handler(req, res) {
       strategy,
     )
 
+    const indexLine = indexTrend === 'up'
+      ? `📈 Indeks: trend wzrostowy`
+      : indexTrend === 'down'
+        ? `⚠️ Indeks: trend spadkowy`
+        : `➡️ Indeks: neutralny`
+
+    const supportLine = signal.nearSupport
+      ? `🔵 Blisko wsparcia: ${signal.nearSupport}`
+      : ''
+
+    const sma150Line = signal.sma150trend === 'above'
+      ? `✅ SMA150: cena powyżej (trend wzrostowy)`
+      : signal.sma150trend === 'below'
+        ? `⚠️ SMA150: cena poniżej`
+        : ''
+
+    const extraLines = [indexLine, supportLine, sma150Line].filter(Boolean).join('\n')
+
     const msg = formatAlert({
       ticker:         signal.ticker.replace('.pl', '').toUpperCase(),
       strategy:       config.label,
@@ -93,7 +120,7 @@ export default async function handler(req, res) {
       portfolio,
       positionSize,
       shares:         Math.floor(positionSize / signal.price),
-      description:    config.describe(signal),
+      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100`,
       exchange,
       currency:       exchange === 'NYSE' ? 'USD' : 'PLN',
       companyName:    null,
@@ -106,6 +133,7 @@ export default async function handler(req, res) {
     await kv.set(alertId, {
       id: alertId, ticker: signal.ticker, strategy, exchange,
       signal: signal.signal, price: signal.price,
+      score: signal.score, indexTrend,
       timestamp: now.toISOString(), targetAchieved: null,
       thresholdsAtSignal: thresholds,
       ...config.kvExtra(signal),
@@ -114,5 +142,5 @@ export default async function handler(req, res) {
     sent++
   }
 
-  res.json({ signals: signals.length, sent, exchange, strategy })
+  res.json({ signals: signals.length, sent, exchange, strategy, indexTrend })
 }
