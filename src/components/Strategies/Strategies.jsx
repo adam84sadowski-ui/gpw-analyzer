@@ -280,6 +280,15 @@ function RecommendationPanel({ strategy, exchange }) {
                     <span className="text-xs text-gray-400">{rec.signal}</span>
                     {rec.divergence === 'bullish'  && <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. bycza</span>}
                     {rec.divergence === 'bearish'  && <span className="text-xs bg-gpw-red   text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. niedźwiedzia</span>}
+                    {rec.macd?.trend === 'bullish' && <span className="text-xs bg-blue-700 text-white px-1.5 py-0.5 rounded font-bold">📊 MACD byczo</span>}
+                    {rec.macd?.trend === 'bearish' && <span className="text-xs bg-orange-700 text-white px-1.5 py-0.5 rounded font-bold">📊 MACD niedźwiedzio</span>}
+                    {rec.bollinger?.status === 'below_lower'  && <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded font-bold">📉 BB dolna wstęga</span>}
+                    {rec.bollinger?.status === 'consolidation' && <span className="text-xs bg-yellow-700 text-white px-1.5 py-0.5 rounded font-bold">⚡ BB konsolidacja</span>}
+                    {rec.seasonality?.avgReturn != null && Math.abs(rec.seasonality.avgReturn) > 0.5 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${rec.seasonality.avgReturn > 0 ? 'bg-gpw-green text-white' : 'bg-gpw-red text-white'}`}>
+                        📅 {rec.seasonality.avgReturn > 0 ? '+' : ''}{rec.seasonality.avgReturn}% hist.
+                      </span>
+                    )}
                     {rec.score != null && (
                       <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${
                         rec.score >= 80 ? 'bg-gpw-green text-white'

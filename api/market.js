@@ -103,10 +103,16 @@ export default async function handler(req, res) {
   const cached = memGet(cacheKey)
   if (cached) return res.json(cached)
 
-  const [thresholds, indexTrend] = await Promise.all([
+  const seasonalityKeys = universe.map(t => `${ENV}:seasonality:${exchange}:${t}`)
+  const [thresholds, indexTrend, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
+    ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
+  const seasonalityMap = {}
+  universe.forEach((t, i) => {
+    if (seasonalityValues[i]) seasonalityMap[t] = seasonalityValues[i].monthlyReturns
+  })
 
   const config = STRATEGY_CONFIG[strategy]
   const results = []
@@ -123,13 +129,13 @@ export default async function handler(req, res) {
         const display = tickerDisplay(t, exchange)
         const companyName = data?.shortName ?? null
         if (mode === 'scan') {
-          const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend)
+          const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
           if (!ind) return null
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             target: config.target, stopLoss: config.stopLoss,
             timestamp: new Date().toISOString(), ...ind }
         } else {
-          const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
+          const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
           if (!sig) return null
           const [dynTarget, dynHorizon] = await Promise.all([
             calcDynamicTarget(kv, t, strategy, ENV),

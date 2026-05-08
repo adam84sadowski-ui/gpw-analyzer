@@ -15,7 +15,7 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const SCORE_THRESHOLD = 60
+const SCORE_THRESHOLD = 55
 
 const STRATEGY_CONFIG = {
   scalping: {
@@ -53,10 +53,16 @@ export default async function handler(req, res) {
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
 
-  const [thresholds, indexTrend] = await Promise.all([
+  const seasonalityKeys = universe.map(t => `${ENV}:seasonality:${exchange}:${t}`)
+  const [thresholds, indexTrend, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
+    ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
+  const seasonalityMap = {}
+  universe.forEach((t, i) => {
+    if (seasonalityValues[i]) seasonalityMap[t] = seasonalityValues[i].monthlyReturns
+  })
 
   const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
 
@@ -68,7 +74,7 @@ export default async function handler(req, res) {
       ])
       const candles = data?.candles
       if (!candles || candles.length < 25) return null
-      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
+      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[ticker])
       return sig ? { ...sig, ticker } : null
     })
   )

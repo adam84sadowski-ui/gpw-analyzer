@@ -1,0 +1,35 @@
+name: Seasonality Cron
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # co poniedziałek 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      exchange:
+        description: 'Giełda (GPW / NYSE)'
+        required: true
+        default: 'GPW'
+        type: choice
+        options: [GPW, NYSE]
+
+env:
+  API_BASE: https://gpw-analyzer.vercel.app
+
+jobs:
+  seasonality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: GPW Seasonality
+        if: github.event_name == 'schedule' || inputs.exchange == 'GPW'
+        run: |
+          curl -sf --max-time 120 \
+            "$API_BASE/api/cron/seasonality?exchange=GPW" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+      - name: NYSE Seasonality
+        if: github.event_name == 'schedule' || inputs.exchange == 'NYSE'
+        run: |
+          curl -sf --max-time 120 \
+            "$API_BASE/api/cron/seasonality?exchange=NYSE" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
