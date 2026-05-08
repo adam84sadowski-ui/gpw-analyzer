@@ -41,6 +41,27 @@ async function fetchCandlesYahoo(ticker, exchange) {
   return { candles, shortName }
 }
 
+export async function fetchCandlesExtended(ticker, exchange = 'GPW', range = '5y') {
+  const symbol = toYahooSymbol(ticker, exchange)
+  const json   = await yahooFetch(symbol, range)
+  const result = json?.chart?.result?.[0]
+  if (!result) return null
+  const shortName = result.meta?.shortName ?? null
+  const ts = result.timestamp ?? []
+  const q  = result.indicators.quote[0]
+  const candles = ts
+    .map((t, i) => ({
+      date:   new Date(t * 1000).toISOString().slice(0, 10),
+      open:   q.open[i]   ? Math.round(q.open[i]   * 100) / 100 : null,
+      high:   q.high[i]   ? Math.round(q.high[i]   * 100) / 100 : null,
+      low:    q.low[i]    ? Math.round(q.low[i]    * 100) / 100 : null,
+      close:  q.close[i]  ? Math.round(q.close[i]  * 100) / 100 : null,
+      volume: q.volume[i] ?? null,
+    }))
+    .filter(c => c.close !== null)
+  return { candles, shortName }
+}
+
 export async function fetchCandles(ticker, exchange = 'GPW') {
   if (exchange === 'GPW') {
     const data = await fetchCandlesStooq(ticker).catch(() => null)
