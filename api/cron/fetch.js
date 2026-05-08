@@ -5,6 +5,7 @@ import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
 import { UNIVERSES } from '../../src/lib/universes.js'
 import { fetchIndexTrend } from '../../src/lib/indextrend.js'
+import { calcDynamicTarget, calcDynamicHorizon } from '../../src/lib/kvHistory.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -84,9 +85,16 @@ export default async function handler(req, res) {
     const portfolio    = 10000
     const positionSize = Math.round(portfolio * 0.15)
 
-    const target        = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
+    const defaultTarget = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
     const defaultStop   = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
     const stopLoss      = signal.dynamicStopLoss ?? defaultStop
+
+    const [dynTarget, dynHorizon] = await Promise.all([
+      calcDynamicTarget(kv, signal.ticker, strategy, ENV),
+      calcDynamicHorizon(kv, signal.ticker, strategy, ENV),
+    ])
+    const target  = dynTarget.target
+    const horizon = dynHorizon.horizon
     const interp   = interpretSignal(
       signal.signal,
       { rsi: signal.rsi, volMult: signal.volMult, price: signal.price, sma20: signal.sma20, sma50: signal.sma50 },
@@ -121,11 +129,11 @@ export default async function handler(req, res) {
       portfolio,
       positionSize,
       shares:         Math.floor(positionSize / signal.price),
-      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100${signal.dynamicStopLoss ? ` | 🛑 Stop ATR: ${signal.dynamicStopLoss}%` : ''}`,
+      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100${signal.dynamicStopLoss ? ` | 🛑 Stop ATR: ${signal.dynamicStopLoss}%` : ''}\n🎯 Cel: ${target}% ${dynTarget.source === 'historical' ? `(hist. ${dynTarget.samples} sygn.)` : '(domyślny)'}`,
       exchange,
       currency:       exchange === 'NYSE' ? 'USD' : 'PLN',
       companyName:    null,
-      horizon:        config.horizon,
+      horizon:        `${horizon}${dynHorizon.source === 'historical' ? ` (hist. ${dynHorizon.samples} sygn.)` : ''}`,
       interpretation: interp,
     })
 
