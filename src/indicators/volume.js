@@ -1,6 +1,6 @@
 export function avgVolume(volumes, period = 20) {
-  if (volumes.length < period) return null
-  const slice = volumes.slice(-period)
+  if (volumes.length < period + 1) return null
+  const slice = volumes.slice(-period - 1, -1)  // exclude today's partial candle
   return slice.reduce((a, b) => a + b, 0) / period
 }
 
