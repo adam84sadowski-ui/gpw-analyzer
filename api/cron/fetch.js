@@ -84,8 +84,9 @@ export default async function handler(req, res) {
     const portfolio    = 10000
     const positionSize = Math.round(portfolio * 0.15)
 
-    const target   = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
-    const stopLoss = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
+    const target        = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
+    const defaultStop   = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
+    const stopLoss      = signal.dynamicStopLoss ?? defaultStop
     const interp   = interpretSignal(
       signal.signal,
       { rsi: signal.rsi, volMult: signal.volMult, price: signal.price, sma20: signal.sma20, sma50: signal.sma50 },
@@ -102,10 +103,10 @@ export default async function handler(req, res) {
       ? `🔵 Blisko wsparcia: ${signal.nearSupport}`
       : ''
 
-    const sma150Line = signal.sma150trend === 'above'
-      ? `✅ SMA150: cena powyżej (trend wzrostowy)`
-      : signal.sma150trend === 'below'
-        ? `⚠️ SMA150: cena poniżej`
+    const sma150Line = signal.sma150Warning
+      ? `⚠️ SMA150: cena poniżej długoterminowego trendu — podwyższone ryzyko`
+      : signal.sma150trend === 'above'
+        ? `✅ SMA150: cena powyżej (trend wzrostowy)`
         : ''
 
     const extraLines = [indexLine, supportLine, sma150Line].filter(Boolean).join('\n')
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
       portfolio,
       positionSize,
       shares:         Math.floor(positionSize / signal.price),
-      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100`,
+      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100${signal.dynamicStopLoss ? ` | 🛑 Stop ATR: ${signal.dynamicStopLoss}%` : ''}`,
       exchange,
       currency:       exchange === 'NYSE' ? 'USD' : 'PLN',
       companyName:    null,

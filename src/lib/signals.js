@@ -21,6 +21,19 @@ export const SIGNAL_DEFAULTS = {
   },
 }
 
+const ATR_STOP_CONFIG = {
+  scalping:   { multiplier: 1.0, min: 1.5, max: 5.0 },
+  swing:      { multiplier: 1.5, min: 3.0, max: 8.0 },
+  aggressive: { multiplier: 2.0, min: 5.0, max: 15.0 },
+}
+
+function calcDynamicStopLoss(atr, price, strategy) {
+  const cfg = ATR_STOP_CONFIG[strategy]
+  if (!cfg || !atr || !price) return null
+  const rawPct = (atr * cfg.multiplier / price) * 100
+  return Math.round(Math.min(cfg.max, Math.max(cfg.min, rawPct)) * 10) / 10
+}
+
 function calcScore(strategy, { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend }) {
   let score = 0
 
@@ -95,21 +108,23 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   const nearSupport = detectSupportProximity(candles, price)
 
   if (strategy === 'scalping') {
-    // Hard filter: price must be above SMA150 (long-term uptrend)
     if (sma150 != null && price <= sma150) return null
 
     const rsiThr = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
     const volThr = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
-      const score = calcScore('scalping', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const score          = calcScore('scalping', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const dynamicStopLoss = calcDynamicStopLoss(atr, price, 'scalping')
       return { signal: 'RSI_OVERSOLD', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50), sma150,
-        atr, atrPct, nearSupport, sma150trend, score, indexTrend }
+        atr, atrPct, nearSupport, sma150trend, score, indexTrend, dynamicStopLoss }
     }
   }
 
   if (strategy === 'swing') {
+    if (sma150 != null && price <= sma150) return null
+
     if (candles.length < 55) return null
     const volThr = thresholds.swing_volume_multiplier ?? defaults.swing.volumeMultiplierMin
     const window = defaults.swing.crossoverWindowDays
@@ -127,12 +142,13 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     }
     if (!crossed) crossed = goldenCross(closes)
     if (crossed && volMult && volMult >= volThr) {
-      const rsi    = calcRSI(closes)
-      const sma50s = calcSMASeries(closes, 50)
-      const score  = calcScore('swing', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const rsi             = calcRSI(closes)
+      const sma50s          = calcSMASeries(closes, 50)
+      const score           = calcScore('swing', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const dynamicStopLoss = calcDynamicStopLoss(atr, price, 'swing')
       return { signal: 'SMA50_CROSSOVER', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: sma50s[sma50s.length - 1], sma150,
-        atr, atrPct, nearSupport, sma150trend, score, indexTrend }
+        atr, atrPct, nearSupport, sma150trend, score, indexTrend, dynamicStopLoss }
     }
   }
 
@@ -141,10 +157,12 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const volThr = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (isBreakout(candles) && rsi && rsi > rsiMin && volMult && volMult >= volThr) {
-      const score = calcScore('aggressive', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const score           = calcScore('aggressive', { rsi, volMult, sma150trend, nearSupport, divergence, indexTrend })
+      const dynamicStopLoss = calcDynamicStopLoss(atr, price, 'aggressive')
+      const sma150Warning   = sma150 != null && price <= sma150
       return { signal: 'BREAKOUT', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50), sma150,
-        atr, atrPct, nearSupport, sma150trend, score, indexTrend }
+        atr, atrPct, nearSupport, sma150trend, score, indexTrend, dynamicStopLoss, sma150Warning }
     }
   }
 
@@ -158,21 +176,24 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
   const price   = closes[closes.length - 1]
   const sig     = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
   const sma150  = calcSMA(closes, 150)
+  const atr     = calcATR(candles)
   return {
-    rsi:          calcRSI(closes),
-    sma20:        calcSMA(closes, 20),
-    sma50:        calcSMA(closes, 50),
+    rsi:              calcRSI(closes),
+    sma20:            calcSMA(closes, 20),
+    sma50:            calcSMA(closes, 50),
     sma150,
-    sma150trend:  sma150 != null ? (price > sma150 ? 'above' : 'below') : null,
-    volMult:      volumeMultiplier(volumes),
+    sma150trend:      sma150 != null ? (price > sma150 ? 'above' : 'below') : null,
+    volMult:          volumeMultiplier(volumes),
     price,
-    atr:          calcATR(candles),
-    atrPct:       (() => { const a = calcATR(candles); return a != null ? Math.round(a / price * 10000) / 100 : null })(),
-    nearSupport:  detectSupportProximity(candles, price),
-    signal:       sig?.signal ?? null,
-    hasSignal:    sig !== null,
-    score:        sig?.score ?? null,
-    divergence:   detectRSIDivergence(closes),
+    atr,
+    atrPct:           atr != null ? Math.round(atr / price * 10000) / 100 : null,
+    nearSupport:      detectSupportProximity(candles, price),
+    signal:           sig?.signal ?? null,
+    hasSignal:        sig !== null,
+    score:            sig?.score ?? null,
+    dynamicStopLoss:  sig?.dynamicStopLoss ?? null,
+    sma150Warning:    sig?.sma150Warning ?? false,
+    divergence:       detectRSIDivergence(closes),
     indexTrend,
   }
 }
