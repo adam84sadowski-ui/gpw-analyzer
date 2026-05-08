@@ -280,6 +280,15 @@ function RecommendationPanel({ strategy, exchange }) {
                     <span className="text-xs text-gray-400">{rec.signal}</span>
                     {rec.divergence === 'bullish'  && <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. bycza</span>}
                     {rec.divergence === 'bearish'  && <span className="text-xs bg-gpw-red   text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. niedźwiedzia</span>}
+                    {rec.score != null && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${
+                        rec.score >= 80 ? 'bg-gpw-green text-white'
+                        : rec.score >= 60 ? 'bg-yellow-600 text-white'
+                        : 'bg-gpw-card text-gray-400'
+                      }`}>
+                        ⭐ {rec.score}/100
+                      </span>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">{rec.price} {currency}</div>
@@ -295,6 +304,8 @@ function RecommendationPanel({ strategy, exchange }) {
                   <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🛑 Stop</div><div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div></div>
                   {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
                   {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
+                  {rec.sma150 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA150</div><div className={`font-bold text-xs ${rec.sma150trend === 'above' ? 'text-gpw-green' : 'text-gpw-red'}`}>{rec.sma150?.toFixed(2)} {rec.sma150trend === 'above' ? '✅' : '⚠️'}</div></div>}
+                  {rec.atrPct != null && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">ATR</div><div className="font-bold">{rec.atrPct}%</div></div>}
                   {eodhd[rec.ticker]?.pe && (
                     <div className="bg-gpw-card rounded p-1.5 text-xs text-center">
                       <div className="text-gray-400">P/E</div>
@@ -327,6 +338,31 @@ function RecommendationPanel({ strategy, exchange }) {
                     <span>5%</span><span>{maxPct}%</span>
                   </div>
                 </div>
+
+                {(rec.nearSupport != null || rec.indexTrend) && (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {rec.nearSupport != null && (
+                      <span className="bg-gpw-card text-gpw-green px-2 py-1 rounded">
+                        🔵 Wsparcie: {rec.nearSupport} {currency}
+                      </span>
+                    )}
+                    {rec.indexTrend === 'up' && (
+                      <span className="bg-gpw-card text-gpw-green px-2 py-1 rounded">
+                        📈 Indeks wzrostowy
+                      </span>
+                    )}
+                    {rec.indexTrend === 'down' && (
+                      <span className="bg-gpw-card text-gpw-red px-2 py-1 rounded">
+                        ⚠️ Indeks spadkowy
+                      </span>
+                    )}
+                    {rec.indexTrend === 'neutral' && (
+                      <span className="bg-gpw-card text-gray-400 px-2 py-1 rounded">
+                        ➡️ Indeks neutralny
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex gap-2">
                   <button
@@ -414,7 +450,10 @@ function RecommendationPanel({ strategy, exchange }) {
                     <span className="text-gray-400">RSI: <span className={rsiColor}>{row.rsi ?? '—'}</span></span>
                     <span className="text-gray-400">Vol: <span className={volColor}>{row.volMult ? `${row.volMult}x` : '—'}</span></span>
                     {row.sma50 && <span className="text-gray-400">SMA50: <span className="text-white">{row.sma50.toFixed(2)}</span></span>}
-                    {row.sma20 && <span className="text-gray-400">SMA20: <span className="text-white">{row.sma20.toFixed(2)}</span></span>}
+                    {row.sma150trend && <span className="text-gray-400">SMA150: <span className={row.sma150trend === 'above' ? 'text-gpw-green' : 'text-gpw-red'}>{row.sma150trend === 'above' ? '✅ powyżej' : '⚠️ poniżej'}</span></span>}
+                    {row.atrPct != null && <span className="text-gray-400">ATR: <span className="text-white">{row.atrPct}%</span></span>}
+                    {row.nearSupport != null && <span className="text-gpw-green">🔵 Wsp. {row.nearSupport}</span>}
+                    {row.score != null && row.hasSignal && <span className={`font-bold ${row.score >= 80 ? 'text-gpw-green' : row.score >= 60 ? 'text-yellow-400' : 'text-gray-400'}`}>⭐ {row.score}/100</span>}
                     {row.divergence === 'bullish'  && <span className="text-gpw-green font-bold">🔀 Dyw. bycza</span>}
                     {row.divergence === 'bearish'  && <span className="text-gpw-red font-bold">🔀 Dyw. niedźwiedzia</span>}
                   </div>

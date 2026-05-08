@@ -2,6 +2,7 @@ import { createClient } from '@vercel/kv'
 import { fetchCandles, fetchCurrent } from '../src/lib/yahoo.js'
 import { detectSignal, calcIndicators } from '../src/lib/signals.js'
 import { UNIVERSES } from '../src/lib/universes.js'
+import { fetchIndexTrend } from '../src/lib/indextrend.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -101,7 +102,11 @@ export default async function handler(req, res) {
   const cached = memGet(cacheKey)
   if (cached) return res.json(cached)
 
-  const thresholds = await kv.get(`${ENV}:thresholds`).catch(() => null) ?? {}
+  const [thresholds, indexTrend] = await Promise.all([
+    kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
+    fetchIndexTrend(exchange).catch(() => 'neutral'),
+  ])
+
   const config = STRATEGY_CONFIG[strategy]
   const results = []
 
@@ -117,13 +122,13 @@ export default async function handler(req, res) {
         const display = tickerDisplay(t, exchange)
         const companyName = data?.shortName ?? null
         if (mode === 'scan') {
-          const ind = calcIndicators(candles, strategy, thresholds, exchange)
+          const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend)
           if (!ind) return null
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             target: config.target, stopLoss: config.stopLoss,
             timestamp: new Date().toISOString(), ...ind }
         } else {
-          const sig = detectSignal(candles, strategy, thresholds, exchange)
+          const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
           if (!sig) return null
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
             label: config.label, target: config.target, stopLoss: config.stopLoss,
@@ -138,7 +143,10 @@ export default async function handler(req, res) {
     }
   }
 
-  if (mode === 'scan') results.sort((a, b) => (b.hasSignal ? 1 : 0) - (a.hasSignal ? 1 : 0))
+  if (mode === 'scan') results.sort((a, b) => {
+    if (b.hasSignal !== a.hasSignal) return (b.hasSignal ? 1 : 0) - (a.hasSignal ? 1 : 0)
+    return (b.score ?? 0) - (a.score ?? 0)
+  })
 
   memSet(cacheKey, results)
   res.json(results)
