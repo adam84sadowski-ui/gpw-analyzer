@@ -1,8 +1,8 @@
 export const UNIVERSES = {
   GPW: {
-    scalping:   ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl','opl.pl','kru.pl','bdx.pl','acp.pl','ing.pl','tpe.pl','alr.pl','pco.pl','krk.pl','amr.pl','ccc.pl','xtb.pl','bst.pl','stl.pl','cch.pl','pli.pl','unt.pl','pmx.pl','erd.pl','mls.pl'],
-    swing:      ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl','pkn.pl','kghm.pl','lpp.pl','pko.pl','cdr.pl','tpe.pl','alr.pl','pco.pl','cmr.pl','fmo.pl','ccc.pl','xtb.pl','bst.pl','pge.pl','pzu.pl','jsw.pl','kty.pl','mbk.pl','spl.pl','stl.pl'],
-    aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl','mls.pl','grn.pl','mrc.pl','ten.pl','pcc.pl'],
+    scalping:   ['pkn.pl','kghm.pl','pko.pl','pzu.pl','cdr.pl','ale.pl','mbk.pl','lpp.pl','pge.pl','jsw.pl','dnp.pl','kty.pl','cps.pl','peo.pl','spl.pl','opl.pl','kru.pl','bdx.pl','acp.pl','ing.pl','tpe.pl','alr.pl','pco.pl','krk.pl','amr.pl','xtb.pl','pli.pl','unt.pl','mls.pl'],
+    swing:      ['kru.pl','acp.pl','bdx.pl','car.pl','cln.pl','dom.pl','eat.pl','gpw.pl','ing.pl','ker.pl','opl.pl','vrg.pl','pcf.pl','brs.pl','mlp.pl','pkn.pl','kghm.pl','lpp.pl','pko.pl','cdr.pl','tpe.pl','alr.pl','pco.pl','cmr.pl','fmo.pl','xtb.pl','pge.pl','pzu.pl','jsw.pl','kty.pl','mbk.pl','spl.pl'],
+    aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl','mls.pl','grn.pl','mrc.pl','ten.pl'],
   },
   NYSE: {
     scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','TSLA','AMD','CRM','SNOW','PLTR','ACN','IBM','INFY','CTSH','EPAM','NFLX','AVGO','GS','MS','INTC','UBER','LYFT','ABNB','BKNG','SPOT','ZM','DOCU','PATH','MDB','DDOG','CRWD','NET','ZS','PANW','OKTA','HOOD','SOFI','AFRM','UPST','RIVN','LCID','NOW','GTLB','ORCL','ADBE'],
