@@ -3,9 +3,10 @@ import { fetchCandles } from '../../src/lib/yahoo.js'
 import { detectSignal } from '../../src/lib/signals.js'
 import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
-import { UNIVERSES } from '../../src/lib/universes.js'
+import { UNIVERSES, allTickers } from '../../src/lib/universes.js'
 import { fetchIndexTrend } from '../../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../../src/lib/kvHistory.js'
+import { fetchSeasonalityData, calculateMonthlyReturns } from '../../src/indicators/seasonality.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -15,7 +16,7 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const SCORE_THRESHOLD = 60
+const SCORE_THRESHOLD = 55
 
 const STRATEGY_CONFIG = {
   scalping: {
@@ -47,18 +48,46 @@ export default async function handler(req, res) {
   }
 
   const { strategy, exchange = 'GPW' } = req.query
+
+  // ── Seasonality pre-population branch ──────────────────────────────────
+  if (strategy === 'seasonality') {
+    const tickers = allTickers(exchange)
+    const TTL = 30 * 24 * 60 * 60
+    let saved = 0, failed = 0
+
+    for (const ticker of tickers) {
+      await new Promise(r => setTimeout(r, 200))
+      try {
+        const prices = await fetchSeasonalityData(ticker, exchange)
+        if (!prices || prices.length < 60) { failed++; continue }
+        const monthlyReturns = calculateMonthlyReturns(prices)
+        await kv.set(`${ENV}:seasonality:${exchange}:${ticker}`, { monthlyReturns, updatedAt: new Date().toISOString() }, { ex: TTL })
+        saved++
+      } catch { failed++ }
+    }
+
+    return res.json({ exchange, total: tickers.length, saved, failed })
+  }
+
+  // ── Signal detection branch ─────────────────────────────────────────────
   const config = STRATEGY_CONFIG[strategy]
-  if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+  if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|seasonality' })
 
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
 
-  const [thresholds, indexTrend] = await Promise.all([
+  const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
+
+  const seasonalityKeys = universe.map(t => `${ENV}:seasonality:${exchange}:${t}`)
+  const [thresholds, indexTrend, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
+    ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
-
-  const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
+  const seasonalityMap = {}
+  universe.forEach((t, i) => {
+    if (seasonalityValues[i]) seasonalityMap[t] = seasonalityValues[i].monthlyReturns
+  })
 
   const settled = await Promise.allSettled(
     universe.map(async ticker => {
@@ -68,7 +97,7 @@ export default async function handler(req, res) {
       ])
       const candles = data?.candles
       if (!candles || candles.length < 25) return null
-      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
+      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[ticker])
       return sig ? { ...sig, ticker } : null
     })
   )
