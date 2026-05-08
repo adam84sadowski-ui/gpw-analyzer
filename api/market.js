@@ -130,8 +130,9 @@ export default async function handler(req, res) {
         } else {
           const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
           if (!sig) return null
+          const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            label: config.label, target: config.target, stopLoss: config.stopLoss,
+            label: config.label, target: config.target, stopLoss,
             timestamp: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             ...sig }

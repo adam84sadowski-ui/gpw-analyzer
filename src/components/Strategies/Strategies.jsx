@@ -5,7 +5,7 @@ import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { interpretSignal } from '../../lib/interpretSignal.js'
 
-function ConfirmTradeModal({ rec, strategy, exchange, portfolio, maxPct, onConfirm, onCancel }) {
+function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCancel }) {
   const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
   const defaultAmt  = Math.round(portfolio * maxPct / 100)
   const [price,  setPrice]  = useState(String(rec.price))
@@ -301,7 +301,10 @@ function RecommendationPanel({ strategy, exchange }) {
                   {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
                   {horizon && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Horyzont</div><div className="font-bold">⏱ {horizon}</div></div>}
                   <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🎯 Cel</div><div className="font-bold text-gpw-green">+{rec.target}% <span className="text-gray-400 font-normal">({targetPLN})</span></div></div>
-                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🛑 Stop</div><div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div></div>
+                  <div className="bg-gpw-card rounded p-1.5">
+                    <div className="text-gray-400">🛑 Stop {rec.dynamicStopLoss ? <span className="text-xs text-yellow-500">ATR</span> : ''}</div>
+                    <div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div>
+                  </div>
                   {rec.sma20 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA20</div><div className="font-bold">{rec.sma20?.toFixed(2)}</div></div>}
                   {rec.sma50 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA50</div><div className="font-bold">{rec.sma50?.toFixed(2)}</div></div>}
                   {rec.sma150 && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">SMA150</div><div className={`font-bold text-xs ${rec.sma150trend === 'above' ? 'text-gpw-green' : 'text-gpw-red'}`}>{rec.sma150?.toFixed(2)} {rec.sma150trend === 'above' ? '✅' : '⚠️'}</div></div>}
