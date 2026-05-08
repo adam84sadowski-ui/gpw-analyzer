@@ -24,12 +24,12 @@ jobs:
         if: github.event_name == 'schedule' || inputs.exchange == 'GPW'
         run: |
           curl -sf --max-time 120 \
-            "$API_BASE/api/cron/seasonality?exchange=GPW" \
+            "$API_BASE/api/cron/fetch?strategy=seasonality&exchange=GPW" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
       - name: NYSE Seasonality
         if: github.event_name == 'schedule' || inputs.exchange == 'NYSE'
         run: |
           curl -sf --max-time 120 \
-            "$API_BASE/api/cron/seasonality?exchange=NYSE" \
+            "$API_BASE/api/cron/fetch?strategy=seasonality&exchange=NYSE" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
