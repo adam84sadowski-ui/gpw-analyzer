@@ -2,6 +2,7 @@ import { calcRSI } from '../indicators/rsi.js'
 import { calcSMA, calcSMASeries, goldenCross } from '../indicators/sma.js'
 import { volumeMultiplier } from '../indicators/volume.js'
 import { isBreakout } from '../indicators/breakout.js'
+import { detectRSIDivergence } from '../indicators/divergence.js'
 
 // Thresholds calibrated per exchange — May 2026
 // NYSE: lower volume multipliers because mega-caps have less relative volume volatility
@@ -27,12 +28,14 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
 
   const defaults = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
 
+  const divergence = detectRSIDivergence(closes)
+
   if (strategy === 'scalping') {
     const rsiThr = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
     const volThr = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
-      return { signal: 'RSI_OVERSOLD', price, rsi, volMult,
+      return { signal: 'RSI_OVERSOLD', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50) }
     }
   }
@@ -57,7 +60,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     if (crossed && volMult && volMult >= volThr) {
       const rsi  = calcRSI(closes)
       const sma50s = calcSMASeries(closes, 50)
-      return { signal: 'SMA50_CROSSOVER', price, rsi, volMult,
+      return { signal: 'SMA50_CROSSOVER', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: sma50s[sma50s.length - 1] }
     }
   }
@@ -67,7 +70,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const volThr = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
     const rsi = calcRSI(closes)
     if (isBreakout(candles) && rsi && rsi > rsiMin && volMult && volMult >= volThr) {
-      return { signal: 'BREAKOUT', price, rsi, volMult,
+      return { signal: 'BREAKOUT', price, rsi, volMult, divergence,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50) }
     }
   }
@@ -81,12 +84,13 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
   const volumes = candles.map(c => c.volume)
   const sig = detectSignal(candles, strategy, thresholds, exchange)
   return {
-    rsi:      calcRSI(closes),
-    sma20:    calcSMA(closes, 20),
-    sma50:    calcSMA(closes, 50),
-    volMult:  volumeMultiplier(volumes),
-    price:    closes[closes.length - 1],
-    signal:   sig?.signal ?? null,
+    rsi:       calcRSI(closes),
+    sma20:     calcSMA(closes, 20),
+    sma50:     calcSMA(closes, 50),
+    volMult:   volumeMultiplier(volumes),
+    price:     closes[closes.length - 1],
+    signal:    sig?.signal ?? null,
     hasSignal: sig !== null,
+    divergence: detectRSIDivergence(closes),
   }
 }

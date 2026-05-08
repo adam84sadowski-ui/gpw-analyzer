@@ -5,6 +5,77 @@ import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { interpretSignal } from '../../lib/interpretSignal.js'
 
+function ConfirmTradeModal({ rec, strategy, exchange, portfolio, maxPct, onConfirm, onCancel }) {
+  const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
+  const defaultAmt  = Math.round(portfolio * maxPct / 100)
+  const [price,  setPrice]  = useState(String(rec.price))
+  const [shares, setShares] = useState(String(Math.floor(defaultAmt / rec.price)))
+
+  const p        = parseFloat(price)  || 0
+  const s        = parseInt(shares)   || 0
+  const posValue = p * s
+  const targetPx = p > 0 ? (p * (1 + rec.target   / 100)).toFixed(2) : '—'
+  const stopPx   = p > 0 ? (p * (1 - rec.stopLoss  / 100)).toFixed(2) : '—'
+
+  function handlePriceChange(v) {
+    setPrice(v)
+    const newP = parseFloat(v) || 0
+    if (newP > 0) setShares(String(Math.floor(defaultAmt / newP)))
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-gpw-card border border-gpw-border rounded-xl p-6 w-full max-w-sm space-y-4">
+        <h3 className="font-semibold text-lg">Potwierdź zakup — {rec.tickerDisplay}</h3>
+        <p className="text-xs text-gray-400">Skoryguj cenę i wolumen jeśli zlecenie zostało zrealizowane po innych warunkach.</p>
+
+        <label className="block">
+          <span className="text-sm text-gray-400">Cena zakupu ({currency})</span>
+          <input
+            type="number" step="0.01" value={price}
+            onChange={e => handlePriceChange(e.target.value)}
+            className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm text-gray-400">Liczba akcji</span>
+          <input
+            type="number" step="1" min="1" value={shares}
+            onChange={e => setShares(e.target.value)}
+            className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
+          />
+        </label>
+
+        <div className="bg-gpw-dark rounded-lg p-3 text-xs space-y-1">
+          <div className="flex justify-between">
+            <span className="text-gray-400">Wartość pozycji</span>
+            <span className="font-bold">{posValue.toLocaleString('pl-PL', { maximumFractionDigits: 2 })} {currency}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">🎯 Cel +{rec.target}%</span>
+            <span className="text-gpw-green font-bold">{targetPx} {currency}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-400">🛑 Stop -{rec.stopLoss}%</span>
+            <span className="text-gpw-red font-bold">{stopPx} {currency}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 bg-gpw-dark border border-gpw-border py-2 rounded-lg text-sm">Anuluj</button>
+          <button
+            onClick={() => onConfirm({ price: p, shares: s, positionSize: posValue })}
+            disabled={p <= 0 || s <= 0}
+            className="flex-1 bg-gpw-green hover:bg-green-600 disabled:opacity-40 text-white py-2 rounded-lg text-sm font-semibold"
+          >
+            Potwierdź zakup
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const STRATEGY_META = {
   scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni' },
   swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.' },
@@ -21,6 +92,7 @@ function RecommendationPanel({ strategy, exchange }) {
   const [done, setDone]               = useState({})
   const [eodhd, setEodhd]             = useState({})
   const [interpretOpen, setInterpretOpen] = useState({})
+  const [confirming, setConfirming]   = useState(null)
   const scanStartedRef                = useRef(false)
 
   const portfolio = (() => {
@@ -83,8 +155,7 @@ function RecommendationPanel({ strategy, exchange }) {
     .sort((a, b) => a.rsi - b.rsi)
     .slice(0, 5)
 
-  async function confirm(rec) {
-    const positionSize = amounts[rec.ticker]
+  async function confirmTrade(rec, { price, shares, positionSize }) {
     await fetch('/api/positions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,14 +163,16 @@ function RecommendationPanel({ strategy, exchange }) {
         ticker:       rec.ticker,
         strategy:     rec.strategy,
         exchange:     rec.exchange ?? exchange,
-        entryPrice:   rec.price,
+        entryPrice:   price,
         positionSize,
+        shares,
         target:       rec.target,
         stopLoss:     rec.stopLoss,
         signal:       rec.signal,
         entryRsi:     rec.rsi ?? null,
       }),
     })
+    setConfirming(null)
     setDone(d => ({ ...d, [rec.ticker]: 'confirmed' }))
   }
 
@@ -181,7 +254,17 @@ function RecommendationPanel({ strategy, exchange }) {
               </div>
             )
           }
-          return visible.map(rec => {
+          return (<>{confirming && (
+                <ConfirmTradeModal
+                  rec={confirming}
+                  strategy={strategy}
+                  exchange={exchange}
+                  portfolio={portfolio}
+                  maxPct={maxPct}
+                  onConfirm={vals => confirmTrade(confirming, vals)}
+                  onCancel={() => setConfirming(null)}
+                />
+              )}{visible.map(rec => {
             const amt       = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
             const shares    = Math.floor(amt / rec.price)
             const targetPLN = (rec.price * (1 + rec.target / 100)).toFixed(2)
@@ -191,10 +274,12 @@ function RecommendationPanel({ strategy, exchange }) {
             return (
               <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-bold text-lg">{rec.tickerDisplay}</span>
-                    {rec.companyName && <span className="ml-1.5 text-xs text-gray-500">({rec.companyName})</span>}
-                    <span className="ml-2 text-xs text-gray-400">{rec.signal}</span>
+                    {rec.companyName && <span className="text-xs text-gray-500">({rec.companyName})</span>}
+                    <span className="text-xs text-gray-400">{rec.signal}</span>
+                    {rec.divergence === 'bullish'  && <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. bycza</span>}
+                    {rec.divergence === 'bearish'  && <span className="text-xs bg-gpw-red   text-white px-1.5 py-0.5 rounded font-bold">🔀 Dyw. niedźwiedzia</span>}
                   </div>
                   <div className="text-right">
                     <div className="font-semibold">{rec.price} {currency}</div>
@@ -245,7 +330,7 @@ function RecommendationPanel({ strategy, exchange }) {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => confirm(rec)}
+                    onClick={() => setConfirming(rec)}
                     className="flex-1 bg-gpw-green hover:bg-green-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
                   >
                     ✅ Realizuję
@@ -289,7 +374,7 @@ function RecommendationPanel({ strategy, exchange }) {
                 </p>
               </div>
             )
-          })
+          })}</>)
         })()
       )}
 
@@ -325,11 +410,13 @@ function RecommendationPanel({ strategy, exchange }) {
                     </div>
                     <span className="font-semibold text-sm">{row.price} {row.exchange === 'NYSE' ? 'USD' : 'PLN'}</span>
                   </div>
-                  <div className="flex gap-3 mt-2 text-xs">
+                  <div className="flex gap-3 mt-2 text-xs flex-wrap">
                     <span className="text-gray-400">RSI: <span className={rsiColor}>{row.rsi ?? '—'}</span></span>
                     <span className="text-gray-400">Vol: <span className={volColor}>{row.volMult ? `${row.volMult}x` : '—'}</span></span>
                     {row.sma50 && <span className="text-gray-400">SMA50: <span className="text-white">{row.sma50.toFixed(2)}</span></span>}
                     {row.sma20 && <span className="text-gray-400">SMA20: <span className="text-white">{row.sma20.toFixed(2)}</span></span>}
+                    {row.divergence === 'bullish'  && <span className="text-gpw-green font-bold">🔀 Dyw. bycza</span>}
+                    {row.divergence === 'bearish'  && <span className="text-gpw-red font-bold">🔀 Dyw. niedźwiedzia</span>}
                   </div>
                 </div>
               )
