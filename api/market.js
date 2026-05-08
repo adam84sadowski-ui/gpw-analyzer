@@ -81,8 +81,19 @@ export default async function handler(req, res) {
     const cacheKey = `current:${exchange}:${ticker}`
     const cached = memGet(cacheKey)
     if (cached) return res.json(cached)
-    const data = await fetchCurrent(ticker, exchange)
-    if (!data) return res.status(404).json({ error: 'no data' })
+    let data = await fetchCurrent(ticker, exchange).catch(() => null)
+    if (!data?.close) {
+      const candleData = await fetchCandles(ticker, exchange).catch(() => null)
+      const candles = candleData?.candles
+      if (candles?.length) {
+        const last = candles[candles.length - 1]
+        data = { close: last.close, open: last.open, high: last.high, low: last.low,
+          volume: last.volume, date: last.date,
+          Close: String(last.close), Open: String(last.open),
+          shortName: candleData.shortName ?? null }
+      }
+    }
+    if (!data?.close) return res.status(404).json({ error: 'no data' })
     memSet(cacheKey, data)
     return res.json(data)
   }

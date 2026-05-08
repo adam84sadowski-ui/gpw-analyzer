@@ -175,7 +175,7 @@ export default async function handler(req, res) {
       timestamp: now.toISOString(), targetAchieved: null,
       thresholdsAtSignal: thresholds,
       ...config.kvExtra(signal),
-    }, { ex: 90 * 24 * 60 * 60 })
+    }, { ex: 365 * 24 * 60 * 60 })
 
     sent++
   }
