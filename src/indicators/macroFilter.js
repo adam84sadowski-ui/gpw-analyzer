@@ -1,3 +1,5 @@
+// ── NYSE: FRED live data ──────────────────────────────────────────────────
+
 async function fetchFredValue(seriesId) {
   const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`
   const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
@@ -8,8 +10,8 @@ async function fetchFredValue(seriesId) {
   return vals.length ? vals[vals.length - 1] : null
 }
 
-async function fetchFredCpiYoY(seriesId) {
-  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${seriesId}`
+async function fetchFredCpiYoY() {
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL`
   const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
   if (!res.ok) return null
   const csv  = await res.text()
@@ -21,6 +23,35 @@ async function fetchFredCpiYoY(seriesId) {
   return Math.round((current / yearAgo - 1) * 1000) / 10
 }
 
+// ── GPW: NBP XML + Eurostat ───────────────────────────────────────────────
+
+async function fetchNbpRefRate() {
+  const url = 'https://static.nbp.pl/dane/stopy/stopy_procentowe_archiwum.xml'
+  const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (!res.ok) return null
+  const xml  = await res.text()
+  // Find all <pozycje> blocks, take the last one (most recent)
+  const blocks = xml.match(/<pozycje[\s\S]*?<\/pozycje>/g)
+  if (!blocks?.length) return null
+  const last   = blocks[blocks.length - 1]
+  const match  = last.match(/id="ref"[^/]*oprocentowanie="([^"]+)"/)
+  if (!match) return null
+  return parseFloat(match[1].replace(',', '.'))
+}
+
+async function fetchEurostatCpiYoY() {
+  const url = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_manr?geo=PL&coicop=CP00&format=JSON&lang=EN'
+  const res  = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (!res.ok) return null
+  const data  = await res.json()
+  const vals  = Object.entries(data.value ?? {}).filter(([, v]) => v != null)
+  if (!vals.length) return null
+  vals.sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+  return vals[vals.length - 1][1]
+}
+
+// ── Shared logic ──────────────────────────────────────────────────────────
+
 function calcMacroStatus(rate, cpi) {
   if (rate >= 5 && cpi >= 4) return { status: 'RYZYKOWNE', scoreAdjustment: -25 }
   if (rate >= 4 && cpi >= 3) return { status: 'UWAGA',      scoreAdjustment: -10 }
@@ -28,32 +59,31 @@ function calcMacroStatus(rate, cpi) {
 }
 
 export async function getMacroEnvironment(exchange = 'GPW') {
-  // NYSE: Fed Funds Rate + US CPI
-  // GPW:  NBP Central Bank Rate (IRSTCB01PLM156N) + Poland CPI (POLCPIALLMINMEI)
-  const [rateSeriesId, cpiSeriesId] = exchange === 'NYSE'
-    ? ['FEDFUNDS',         'CPIAUCSL']
-    : ['IRSTCB01PLM156N',  'POLCPIALLMINMEI']
+  if (exchange === 'NYSE') {
+    try {
+      const [fedRate, cpi] = await Promise.all([
+        fetchFredValue('FEDFUNDS'),
+        fetchFredCpiYoY(),
+      ])
+      if (fedRate == null || cpi == null) throw new Error('FRED fetch failed')
+      const { status, scoreAdjustment } = calcMacroStatus(fedRate, cpi)
+      return { status, fedRate: Math.round(fedRate * 100) / 100, cpi: Math.round(cpi * 10) / 10, scoreAdjustment, source: 'FRED', updatedAt: new Date().toISOString() }
+    } catch {
+      return { status: 'NEUTRALNE', fedRate: null, cpi: null, scoreAdjustment: 0, source: 'fallback', updatedAt: new Date().toISOString() }
+    }
+  }
 
+  // GPW — NBP XML + Eurostat HICP
   try {
-    const [rate, cpi] = await Promise.all([
-      fetchFredValue(rateSeriesId),
-      fetchFredCpiYoY(cpiSeriesId),
+    const [nbpRate, cpi] = await Promise.all([
+      fetchNbpRefRate(),
+      fetchEurostatCpiYoY(),
     ])
-    if (rate == null || cpi == null) throw new Error('FRED fetch failed')
-    const { status, scoreAdjustment } = calcMacroStatus(rate, cpi)
-    return {
-      status,
-      fedRate: Math.round(rate * 100) / 100,
-      cpi:     Math.round(cpi  * 10)  / 10,
-      scoreAdjustment,
-      source:    'FRED',
-      updatedAt: new Date().toISOString(),
-    }
+    if (nbpRate == null || cpi == null) throw new Error('NBP/Eurostat fetch failed')
+    const { status, scoreAdjustment } = calcMacroStatus(nbpRate, cpi)
+    return { status, fedRate: Math.round(nbpRate * 100) / 100, cpi: Math.round(cpi * 10) / 10, scoreAdjustment, source: 'NBP+Eurostat', updatedAt: new Date().toISOString() }
   } catch {
-    return {
-      status: 'NEUTRALNE', fedRate: null, cpi: null,
-      scoreAdjustment: 0, source: 'fallback', updatedAt: new Date().toISOString(),
-    }
+    return { status: 'NEUTRALNE', fedRate: null, cpi: null, scoreAdjustment: 0, source: 'fallback', updatedAt: new Date().toISOString() }
   }
 }
 
