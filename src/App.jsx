@@ -5,6 +5,7 @@ import Strategies from './components/Strategies/Strategies.jsx'
 import Alerts from './components/Alerts/Alerts.jsx'
 import Results from './components/Results/Results.jsx'
 import Settings from './components/Settings/Settings.jsx'
+import Backtesting from './components/Backtesting/Backtesting.jsx'
 import Chat from './components/Chat/Chat.jsx'
 import { ExchangeProvider } from './context/ExchangeContext.jsx'
 import ExchangeSwitcher from './components/ExchangeSwitcher/ExchangeSwitcher.jsx'
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'strategies',  label: '⚡ Strategie' },
   { id: 'alerts',      label: '🔔 Historia alertów' },
   { id: 'results',     label: '📈 Moje wyniki' },
+  { id: 'backtest',    label: '🔬 Backtest' },
   { id: 'settings',    label: '⚙️ Ustawienia' },
 ]
 
@@ -54,6 +56,7 @@ export default function App() {
           {tab === 'strategies' && <Strategies />}
           {tab === 'alerts'     && <Alerts />}
           {tab === 'results'    && <Results />}
+          {tab === 'backtest'   && <Backtesting />}
           {tab === 'settings'   && <Settings />}
         </main>
 

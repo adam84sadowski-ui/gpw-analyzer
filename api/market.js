@@ -99,6 +99,86 @@ export default async function handler(req, res) {
     return res.json(data)
   }
 
+  // ── Backtest mode ────────────────────────────────────────────────────
+  if (mode === 'backtest') {
+    if (!ticker)   return res.status(400).json({ error: 'ticker required' })
+    if (!strategy || !STRATEGY_CONFIG[strategy]) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+
+    const cacheKey = `${ENV}:backtest:${exchange}:${ticker}:${strategy}`
+    const cached   = await kv.get(cacheKey).catch(() => null)
+    if (cached) return res.json(cached)
+
+    const config  = STRATEGY_CONFIG[strategy]
+    const maxDays = { scalping: 5, swing: 40, aggressive: 30 }[strategy]
+
+    const data    = await fetchWithTimeout(() => fetchCandles(ticker, exchange), 8000).catch(() => null)
+    const candles = data?.candles
+    if (!candles || candles.length < 55) return res.status(404).json({ error: 'Za mało danych historycznych' })
+
+    const trades      = []
+    let   inTrade     = null
+    let   equity      = 100
+    const equityCurve = [{ date: candles[55].date, equity: 100 }]
+
+    for (let i = 55; i < candles.length; i++) {
+      const c = candles[i]
+
+      if (inTrade) {
+        const daysSince = i - inTrade.startIdx
+        let exitPrice   = c.close
+        let exitReason  = null
+
+        if (c.low  != null && c.low  <= inTrade.stopPrice)  { exitReason = 'stop';    exitPrice = inTrade.stopPrice   }
+        if (c.high != null && c.high >= inTrade.targetPrice) { exitReason = 'target';  exitPrice = inTrade.targetPrice }
+        if (daysSince >= maxDays && !exitReason)             { exitReason = 'horizon'; exitPrice = c.close             }
+
+        if (exitReason) {
+          const gainPct = Math.round((exitPrice - inTrade.entry) / inTrade.entry * 10000) / 100
+          equity        = Math.round(equity * (1 + gainPct / 100) * 100) / 100
+          trades.push({ entryDate: inTrade.startDate, exitDate: c.date, entry: inTrade.entry, exit: exitPrice, gainPct, exitReason })
+          inTrade = null
+        }
+      }
+
+      if (!inTrade) {
+        const sig = detectSignal(candles.slice(0, i + 1), strategy, {}, exchange, 'neutral', null)
+        if (sig) {
+          const entry = c.close
+          inTrade = {
+            entry, startIdx: i, startDate: c.date,
+            stopPrice:   Math.round(entry * (1 - (sig.dynamicStopLoss ?? config.stopLoss) / 100) * 100) / 100,
+            targetPrice: Math.round(entry * (1 + config.target / 100) * 100) / 100,
+          }
+        }
+      }
+
+      equityCurve.push({ date: c.date, equity })
+    }
+
+    const winners = trades.filter(t => t.gainPct > 0)
+    const winRate = trades.length ? Math.round(winners.length / trades.length * 1000) / 10 : 0
+    const avgGain = trades.length ? Math.round(trades.reduce((s, t) => s + t.gainPct, 0) / trades.length * 100) / 100 : 0
+
+    let peak = 100, maxDrawdown = 0
+    for (const p of equityCurve) {
+      if (p.equity > peak) peak = p.equity
+      const dd = (peak - p.equity) / peak * 100
+      if (dd > maxDrawdown) maxDrawdown = dd
+    }
+    maxDrawdown = Math.round(maxDrawdown * 100) / 100
+
+    const result = {
+      ticker, strategy, exchange,
+      candles: candles.length,
+      period:  `${candles[0].date} → ${candles[candles.length - 1].date}`,
+      trades, winRate, avgGain, maxDrawdown, equityCurve,
+      generatedAt: new Date().toISOString(),
+    }
+
+    await kv.set(cacheKey, result, { ex: 30 * 24 * 60 * 60 }).catch(() => {})
+    return res.json(result)
+  }
+
   // ── Macro mode ───────────────────────────────────────────────────────
   if (mode === 'macro') {
     const memKey = `macro:${exchange}`
@@ -117,7 +197,7 @@ export default async function handler(req, res) {
 
   // ── Strategy modes ───────────────────────────────────────────────────
   if (mode !== 'signals' && mode !== 'scan') {
-    return res.status(400).json({ error: 'mode must be daily|current|index|macro|signals|scan' })
+    return res.status(400).json({ error: 'mode must be daily|current|index|macro|backtest|signals|scan' })
   }
 
   if (!strategy || !STRATEGY_CONFIG[strategy]) {

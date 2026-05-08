@@ -281,8 +281,10 @@ export default function Results() {
                       <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} {cur})</span>
                     </div>
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
-                      🛑 Stop: <span className="text-gpw-red">-{pos.stopLoss}%</span>
-                      <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span>
+                      🛑 Stop: {pos.trailingActive
+                        ? <><span className="text-yellow-400 font-semibold">{pos.trailingStopPrice?.toFixed(2)} {cur}</span><span className="text-yellow-500 ml-1">(trailing)</span></>
+                        : <><span className="text-gpw-red">-{pos.stopLoss}%</span><span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span></>
+                      }
                     </div>
                   </div>
                 )}
