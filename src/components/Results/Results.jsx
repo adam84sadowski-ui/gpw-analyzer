@@ -7,6 +7,17 @@ function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` 
 
 function CloseModal({ position, onClose, onConfirm, currency }) {
   const [exitPrice, setExitPrice] = useState(String(position.entryPrice))
+  const [priceLoading, setPriceLoading] = useState(true)
+
+  useEffect(() => {
+    const exchange = position.exchange ?? 'GPW'
+    fetch(`/api/market?mode=current&ticker=${position.ticker}&exchange=${exchange}`)
+      .then(r => r.json())
+      .then(d => { if (d?.close) setExitPrice(String(d.close)) })
+      .catch(() => {})
+      .finally(() => setPriceLoading(false))
+  }, [])
+
   const pnlPct = ((Number(exitPrice) - position.entryPrice) / position.entryPrice * 100).toFixed(2)
   const pnlAmt = ((Number(exitPrice) - position.entryPrice) * position.shares).toFixed(2)
 
@@ -22,7 +33,9 @@ function CloseModal({ position, onClose, onConfirm, currency }) {
             step="0.01"
             value={exitPrice}
             onChange={e => setExitPrice(e.target.value)}
-            className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
+            disabled={priceLoading}
+            placeholder={priceLoading ? 'Pobieranie ceny…' : ''}
+            className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm disabled:opacity-60"
           />
         </label>
         <div className={`text-center text-lg font-bold ${Number(pnlAmt) >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>

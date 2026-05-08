@@ -358,6 +358,19 @@ function RecommendationPanel({ strategy, exchange }) {
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>5%</span><span>{maxPct}%</span>
                   </div>
+                  {shares > 0 && (
+                    <div className="mt-2 bg-gpw-card rounded-lg p-2 text-xs flex justify-between items-center">
+                      <div>
+                        <div className="text-gray-400">📊 Wielkość pozycji</div>
+                        <div className="font-bold text-white">{shares} × {rec.price} = {(shares * rec.price).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} {currency}</div>
+                        <div className="text-gray-500">({(amt / portfolio * 100).toFixed(1)}% portfela)</div>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <div className="text-gpw-green font-semibold">🎯 +{(shares * rec.price * rec.target / 100).toFixed(0)} {currency}</div>
+                        <div className="text-gpw-red font-semibold">🛑 -{(shares * rec.price * rec.stopLoss / 100).toFixed(0)} {currency}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {(rec.nearSupport != null || rec.indexTrend) && (
@@ -477,6 +490,8 @@ function RecommendationPanel({ strategy, exchange }) {
                     {row.score != null && row.hasSignal && <span className={`font-bold ${row.score >= 80 ? 'text-gpw-green' : row.score >= 60 ? 'text-yellow-400' : 'text-gray-400'}`}>⭐ {row.score}/100</span>}
                     {row.divergence === 'bullish'  && <span className="text-gpw-green font-bold">🔀 Dyw. bycza</span>}
                     {row.divergence === 'bearish'  && <span className="text-gpw-red font-bold">🔀 Dyw. niedźwiedzia</span>}
+                    {row.macd?.trend === 'bullish' && <span className="text-gpw-green font-bold">📊 MACD ↑</span>}
+                    {row.macd?.trend === 'bearish' && <span className="text-gpw-red font-bold">📊 MACD ↓</span>}
                   </div>
                 </div>
               )
