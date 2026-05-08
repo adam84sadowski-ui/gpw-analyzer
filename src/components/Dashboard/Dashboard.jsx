@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [search,          setSearch]          = useState('')
   const [pickerOpen,      setPickerOpen]      = useState(false)
   const [recentAlerts,    setRecentAlerts]    = useState([])
+  const [macro,           setMacro]           = useState(null)
 
   // On exchange change: load initial tickers from positions, fall back to defaults
   useEffect(() => {
@@ -100,6 +101,15 @@ export default function Dashboard() {
       .catch(() => setRecentAlerts([]))
   }, [exchange])
 
+  // Load macro environment
+  useEffect(() => {
+    setMacro(null)
+    fetch(`/api/market?mode=macro&exchange=${exchange}`)
+      .then(r => r.json())
+      .then(data => setMacro(data?.status ? data : null))
+      .catch(() => setMacro(null))
+  }, [exchange])
+
   // Compute normalized % change chart data (all tickers on same Y axis)
   const chartData = useMemo(() => {
     const ready = selectedTickers.filter(t => tickerCandles[t]?.length > 0)
@@ -160,6 +170,29 @@ export default function Dashboard() {
           )
         })}
       </div>
+
+      {/* Macro environment */}
+      {macro && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">
+            <div className="text-xs text-gray-400">{exchange === 'NYSE' ? 'Fed Rate' : 'NBP Rate'}</div>
+            <div className="text-xl font-bold">{macro.fedRate != null ? `${macro.fedRate}%` : '—'}</div>
+            <div className="text-xs text-gray-500">{macro.source === 'FRED' ? 'FRED live' : 'NBP static'}</div>
+          </div>
+          <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">
+            <div className="text-xs text-gray-400">CPI (r/r)</div>
+            <div className="text-xl font-bold">{macro.cpi != null ? `${macro.cpi}%` : '—'}</div>
+            <div className="text-xs text-gray-500">inflacja</div>
+          </div>
+          <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">
+            <div className="text-xs text-gray-400">Makro</div>
+            <div className={`text-xl font-bold ${macro.status === 'RYZYKOWNE' ? 'text-gpw-red' : macro.status === 'UWAGA' ? 'text-yellow-400' : 'text-gpw-green'}`}>
+              {macro.status === 'RYZYKOWNE' ? '🔴' : macro.status === 'UWAGA' ? '🟡' : '🟢'} {macro.status}
+            </div>
+            <div className="text-xs text-gray-500">{macro.scoreAdjustment !== 0 ? `score ${macro.scoreAdjustment > 0 ? '+' : ''}${macro.scoreAdjustment} pkt` : 'brak korekty'}</div>
+          </div>
+        </div>
+      )}
 
       {/* Chart + picker */}
       <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">

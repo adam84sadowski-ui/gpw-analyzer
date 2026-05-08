@@ -7,6 +7,9 @@ import { UNIVERSES, allTickers } from '../../src/lib/universes.js'
 import { fetchIndexTrend } from '../../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../../src/lib/kvHistory.js'
 import { fetchSeasonalityData, calculateMonthlyReturns } from '../../src/indicators/seasonality.js'
+import { calcPositionSize, formatPositionSizingLine } from '../../src/indicators/positionSizing.js'
+import { checkSectorExposure, formatSectorLine } from '../../src/indicators/sectorCorrelation.js'
+import { getMacroEnvironment, formatMacroLine } from '../../src/indicators/macroFilter.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -16,7 +19,7 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const SCORE_THRESHOLD = 55
+const SCORE_THRESHOLD = 60
 
 const STRATEGY_CONFIG = {
   scalping: {
@@ -77,17 +80,38 @@ export default async function handler(req, res) {
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
 
   const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
+  const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const seasonalityKeys = universe.map(t => `${ENV}:seasonality:${exchange}:${t}`)
-  const [thresholds, indexTrend, ...seasonalityValues] = await Promise.all([
+  const [thresholds, indexTrend, settings, positionKeys, macro, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
+    kv.get(`${ENV}:settings`).catch(() => null),
+    kv.keys(`${ENV}:position:*`).catch(() => []),
+    (async () => {
+      const cached = await kv.get(`${ENV}:macro:${exchange}`).catch(() => null)
+      if (cached) return cached
+      const env = await getMacroEnvironment(exchange).catch(() => null)
+      if (env) await kv.set(`${ENV}:macro:${exchange}`, env, { ex: 24 * 60 * 60 }).catch(() => {})
+      return env
+    })(),
     ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
+
   const seasonalityMap = {}
   universe.forEach((t, i) => {
     if (seasonalityValues[i]) seasonalityMap[t] = seasonalityValues[i].monthlyReturns
   })
+
+  // Portfolio metrics
+  const portfolio      = settings?.portfolio ?? 10000
+  const maxPositionPct = settings?.maxPositionPct ?? 15
+
+  const openPositions = positionKeys.length
+    ? (await Promise.all(positionKeys.map(k => kv.get(k).catch(() => null)))).filter(p => p?.status === 'open')
+    : []
+  const totalInvested    = openPositions.reduce((sum, p) => sum + (p.positionSize ?? 0), 0)
+  const totalExposurePct = portfolio > 0 ? totalInvested / portfolio * 100 : 0
 
   const settled = await Promise.allSettled(
     universe.map(async ticker => {
@@ -110,9 +134,24 @@ export default async function handler(req, res) {
 
   let sent = 0
   for (const signal of signals.slice(0, config.maxAlerts)) {
+    // Macro score adjustment
+    const macroAdj      = macro?.scoreAdjustment ?? 0
+    const adjustedScore = signal.score + macroAdj
+    if (adjustedScore < SCORE_THRESHOLD) continue
+
+    // Sector exposure check
+    const sectorCheck = checkSectorExposure(signal.ticker, exchange, openPositions)
+    if (sectorCheck.block) continue
+
+    // Dynamic position sizing
+    const effectiveMaxPct = sectorCheck.reduce ? maxPositionPct * 0.5 : maxPositionPct
+    const posResult       = calcPositionSize(portfolio, effectiveMaxPct, adjustedScore, 0, totalExposurePct)
+    if (posResult.blocked) continue
+
+    const positionSize = posResult.size
+    const shares       = positionSize > 0 && signal.price > 0 ? Math.floor(positionSize / signal.price) : 0
+
     const alertId = `${ENV}:alert:${strategy}:${signal.ticker}:${Date.now()}`
-    const portfolio    = 10000
-    const positionSize = Math.round(portfolio * 0.15)
 
     const defaultTarget = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
     const defaultStop   = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
@@ -124,7 +163,7 @@ export default async function handler(req, res) {
     ])
     const target  = dynTarget.target
     const horizon = dynHorizon.horizon
-    const interp   = interpretSignal(
+    const interp  = interpretSignal(
       signal.signal,
       { rsi: signal.rsi, volMult: signal.volMult, price: signal.price, sma20: signal.sma20, sma50: signal.sma50 },
       strategy,
@@ -146,7 +185,11 @@ export default async function handler(req, res) {
         ? `✅ SMA150: cena powyżej (trend wzrostowy)`
         : ''
 
-    const extraLines = [indexLine, supportLine, sma150Line].filter(Boolean).join('\n')
+    const macroLine  = formatMacroLine(macro, exchange)
+    const sectorLine = formatSectorLine(sectorCheck)
+    const posLine    = formatPositionSizingLine(posResult, signal.price, currency)
+
+    const extraLines = [indexLine, supportLine, sma150Line, macroLine, sectorLine].filter(Boolean).join('\n')
 
     const msg = formatAlert({
       ticker:         signal.ticker.replace('.pl', '').toUpperCase(),
@@ -157,10 +200,10 @@ export default async function handler(req, res) {
       stopLoss,
       portfolio,
       positionSize,
-      shares:         Math.floor(positionSize / signal.price),
-      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${signal.score}/100${signal.dynamicStopLoss ? ` | 🛑 Stop ATR: ${signal.dynamicStopLoss}%` : ''}\n🎯 Cel: ${target}% ${dynTarget.source === 'historical' ? `(hist. ${dynTarget.samples} sygn.)` : '(domyślny)'}`,
+      shares,
+      description:    `${config.describe(signal)}\n${extraLines}\n🎯 Score: ${adjustedScore}/100${macroAdj !== 0 ? ` (${signal.score}${macroAdj > 0 ? '+' : ''}${macroAdj} makro)` : ''}${signal.dynamicStopLoss ? ` | 🛑 Stop ATR: ${signal.dynamicStopLoss}%` : ''}\n🎯 Cel: ${target}% ${dynTarget.source === 'historical' ? `(hist. ${dynTarget.samples} sygn.)` : '(domyślny)'}\n${posLine}`,
       exchange,
-      currency:       exchange === 'NYSE' ? 'USD' : 'PLN',
+      currency,
       companyName:    null,
       horizon:        `${horizon}${dynHorizon.source === 'historical' ? ` (hist. ${dynHorizon.samples} sygn.)` : ''}`,
       interpretation: interp,
@@ -171,9 +214,10 @@ export default async function handler(req, res) {
     await kv.set(alertId, {
       id: alertId, ticker: signal.ticker, strategy, exchange,
       signal: signal.signal, price: signal.price,
-      score: signal.score, indexTrend,
+      score: adjustedScore, indexTrend,
       timestamp: now.toISOString(), targetAchieved: null,
       thresholdsAtSignal: thresholds,
+      positionSize, shares,
       ...config.kvExtra(signal),
     }, { ex: 365 * 24 * 60 * 60 })
 
