@@ -8,13 +8,41 @@ const DEFAULTS = {
 }
 
 export default function Settings() {
-  const [settings, setSettings] = useState(() => {
-    try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('gpw_settings') ?? '{}') } }
-    catch { return DEFAULTS }
-  })
-  const [saved, setSaved] = useState(false)
+  const [settings, setSettings] = useState(DEFAULTS)
+  const [saved, setSaved]       = useState(false)
+  const [loading, setLoading]   = useState(true)
 
-  function save() {
+  useEffect(() => {
+    // Load from KV first, fall back to localStorage
+    fetch('/api/kv?key=settings')
+      .then(r => r.json())
+      .then(({ value }) => {
+        if (value && typeof value === 'object') {
+          setSettings({ ...DEFAULTS, ...value })
+        } else {
+          // Migrate from localStorage
+          try {
+            const local = JSON.parse(localStorage.getItem('gpw_settings') ?? '{}')
+            setSettings({ ...DEFAULTS, ...local })
+          } catch {}
+        }
+      })
+      .catch(() => {
+        try {
+          const local = JSON.parse(localStorage.getItem('gpw_settings') ?? '{}')
+          setSettings({ ...DEFAULTS, ...local })
+        } catch {}
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function save() {
+    await fetch('/api/kv', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ key: 'settings', value: settings }),
+    }).catch(() => {})
+    // Mirror to localStorage so other components (Results etc.) still work
     localStorage.setItem('gpw_settings', JSON.stringify(settings))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -23,6 +51,8 @@ export default function Settings() {
   function set(key, value) {
     setSettings(s => ({ ...s, [key]: value }))
   }
+
+  if (loading) return <div className="text-gray-400 text-sm py-8 text-center">Ładowanie ustawień…</div>
 
   return (
     <div className="max-w-lg space-y-6">
@@ -72,6 +102,9 @@ export default function Settings() {
           Środowisko: <span className="text-white">
             {window.location.hostname !== 'gpw-analyzer.vercel.app' ? '🟣 STAGING' : '🔵 PROD'}
           </span>
+        </div>
+        <div className="text-xs text-gray-500">
+          Ustawienia synchronizowane z chmurą — nie giną przy czyszczeniu przeglądarki.
         </div>
       </div>
 

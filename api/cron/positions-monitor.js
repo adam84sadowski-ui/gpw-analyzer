@@ -145,6 +145,41 @@ export default async function handler(req, res) {
         return false
       }
 
+      // 0. TRAILING STOP — update highWaterMark and recalculate dynamic stop
+      const highWaterMark = pos.highWaterMark ?? pos.entryPrice
+      if (price > highWaterMark) {
+        const newHWM          = price
+        const trailingStop    = Math.round(newHWM * (1 - stopPct) * 100) / 100
+        // Break-even: when P&L ≥ 50% of target → stop at entry price
+        const breakEven       = pnlPct >= targetFrac * 0.5 ? pos.entryPrice : null
+        const effectiveStop   = breakEven != null ? Math.max(trailingStop, breakEven) : trailingStop
+        const prevStop        = pos.dynamicStopLoss != null
+          ? pos.entryPrice * (1 - pos.dynamicStopLoss / 100)
+          : pos.entryPrice * (1 - pos.stopLoss / 100)
+
+        if (effectiveStop > prevStop) {
+          const updatedPos = {
+            ...pos,
+            highWaterMark:  newHWM,
+            trailingActive: true,
+            trailingStopPrice: effectiveStop,
+          }
+          await kv.set(pos.id, updatedPos, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
+
+          if (!(await dedup('trailing', 1))) {
+            const wasBreakEven = breakEven != null && effectiveStop === breakEven
+            await sendTelegram(
+              `🔄 <b>TRAILING STOP — ${ticker}</b>\n\nNowy stop: <b>${effectiveStop} ${currency}</b>${wasBreakEven ? ' (break-even 🟢)' : ''}\nSzczyt ceny: ${newHWM} ${currency} | P&L: +${(pnlPct * 100).toFixed(1)}%\n\n💡 Stop loss przesuwa się za kursem — blokujesz zysk.\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
+              IS_STAGING
+            )
+            alertsSent++
+          }
+        } else {
+          // Just update highWaterMark without alert
+          await kv.set(pos.id, { ...pos, highWaterMark: newHWM }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
+        }
+      }
+
       // 1. CEL BLISKO
       if (pnlPct >= targetFrac * TARGET_ALERT_THRESHOLD) {
         if (!(await dedup('target'))) {
