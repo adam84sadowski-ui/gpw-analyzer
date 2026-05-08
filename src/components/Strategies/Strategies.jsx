@@ -299,8 +299,17 @@ function RecommendationPanel({ strategy, exchange }) {
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
                   {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
-                  {horizon && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Horyzont</div><div className="font-bold">⏱ {horizon}</div></div>}
-                  <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">🎯 Cel</div><div className="font-bold text-gpw-green">+{rec.target}% <span className="text-gray-400 font-normal">({targetPLN})</span></div></div>
+                  {(rec.horizon || horizon) && (
+                    <div className="bg-gpw-card rounded p-1.5">
+                      <div className="text-gray-400">Horyzont {rec.horizonSource === 'historical' && <span className="text-xs text-gpw-green">hist.</span>}</div>
+                      <div className="font-bold">⏱ {rec.horizon ?? horizon}</div>
+                    </div>
+                  )}
+                  <div className="bg-gpw-card rounded p-1.5">
+                    <div className="text-gray-400">🎯 Cel {rec.targetSource === 'historical' && <span className="text-xs text-gpw-green">hist.</span>}</div>
+                    <div className="font-bold text-gpw-green">+{rec.target}% <span className="text-gray-400 font-normal">({targetPLN})</span></div>
+                    {rec.targetSource === 'historical' && <div className="text-xs text-gray-500">{rec.targetSamples} sygn.</div>}
+                  </div>
                   <div className="bg-gpw-card rounded p-1.5">
                     <div className="text-gray-400">🛑 Stop {rec.dynamicStopLoss ? <span className="text-xs text-yellow-500">ATR</span> : ''}</div>
                     <div className="font-bold text-gpw-red">-{rec.stopLoss}% <span className="text-gray-400 font-normal">({stopPLN})</span></div>

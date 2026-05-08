@@ -45,15 +45,35 @@ export default async function handler(req, res) {
     if (!id || !exitPrice) return res.status(400).json({ error: 'id, exitPrice required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
-    const updated = {
-      ...position,
-      exitPrice,
-      exitDate: new Date().toISOString(),
-      status: 'closed',
-      pnlPct: Math.round(((exitPrice - position.entryPrice) / position.entryPrice) * 10000) / 100,
-      pnlPln: Math.round((exitPrice - position.entryPrice) * position.shares * 100) / 100,
-    }
+    const exitDate = new Date().toISOString()
+    const pnlPct   = Math.round(((exitPrice - position.entryPrice) / position.entryPrice) * 10000) / 100
+    const pnlPln   = Math.round((exitPrice - position.entryPrice) * position.shares * 100) / 100
+    const daysHeld = Math.floor((new Date(exitDate) - new Date(position.entryDate)) / 86400000)
+    const updated  = { ...position, exitPrice, exitDate, status: 'closed', pnlPct, pnlPln }
     await kv.set(id, updated)
+
+    // Powiąż wynik z alertem KV → aktualizuj targetAchieved i actualGainPct
+    if (position.strategy && position.ticker) {
+      try {
+        const alertKeys = await kv.keys(`${ENV_PREFIX}:alert:${position.strategy}:${position.ticker}:*`)
+        if (alertKeys.length) {
+          const raw = await Promise.all(alertKeys.map(k => kv.get(k).then(a => a ? { ...a, _key: k } : null)))
+          const related = raw
+            .filter(a => a && new Date(a.timestamp) <= new Date(position.entryDate))
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0]
+          if (related) {
+            const { _key, ...alertData } = related
+            await kv.set(_key, {
+              ...alertData,
+              targetAchieved: pnlPct >= (position.target ?? 0),
+              actualGainPct:  pnlPct,
+              daysHeld,
+            }, { ex: 365 * 24 * 60 * 60 })
+          }
+        }
+      } catch {}
+    }
+
     return res.json(updated)
   }
 

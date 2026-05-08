@@ -3,6 +3,7 @@ import { fetchCandles, fetchCurrent } from '../src/lib/yahoo.js'
 import { detectSignal, calcIndicators } from '../src/lib/signals.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend } from '../src/lib/indextrend.js'
+import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -130,9 +131,16 @@ export default async function handler(req, res) {
         } else {
           const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend)
           if (!sig) return null
+          const [dynTarget, dynHorizon] = await Promise.all([
+            calcDynamicTarget(kv, t, strategy, ENV),
+            calcDynamicHorizon(kv, t, strategy, ENV),
+          ])
           const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
           return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            label: config.label, target: config.target, stopLoss,
+            label: config.label,
+            target: dynTarget.target, targetSource: dynTarget.source, targetSamples: dynTarget.samples,
+            horizon: dynHorizon.horizon, horizonSource: dynHorizon.source,
+            stopLoss,
             timestamp: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             ...sig }
