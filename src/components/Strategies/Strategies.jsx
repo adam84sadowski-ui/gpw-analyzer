@@ -77,12 +77,12 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCanc
 }
 
 const STRATEGY_META = {
-  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni' },
-  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.' },
-  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A' },
+  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni', rsiPeriod: 9  },
+  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.', rsiPeriod: 14 },
+  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A', rsiPeriod: 14 },
 }
 
-function RecommendationPanel({ strategy, exchange }) {
+function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [viewMode, setViewMode]       = useState('signals')
   const [recs, setRecs]               = useState([])
   const [scanData, setScanData]       = useState([])
@@ -483,7 +483,7 @@ function RecommendationPanel({ strategy, exchange }) {
                     <span className="font-semibold text-sm">{row.price} {row.exchange === 'NYSE' ? 'USD' : 'PLN'}</span>
                   </div>
                   <div className="flex gap-3 mt-2 text-xs flex-wrap">
-                    <span className="text-gray-400">RSI: <span className={rsiColor}>{row.rsi ?? '—'}</span></span>
+                    <span className="text-gray-400">RSI({rsiPeriod}): <span className={rsiColor}>{row.rsi != null ? row.rsi.toFixed(1) : '—'}</span></span>
                     <span className="text-gray-400">Vol: <span className={volColor}>{row.volMult ? `${row.volMult}x` : '—'}</span></span>
                     {row.sma50 && <span className="text-gray-400">SMA50: <span className="text-white">{row.sma50.toFixed(2)}</span></span>}
                     {row.sma150trend && <span className="text-gray-400">SMA150: <span className={row.sma150trend === 'above' ? 'text-gpw-green' : 'text-gpw-red'}>{row.sma150trend === 'above' ? '✅ powyżej' : '⚠️ poniżej'}</span></span>}
@@ -576,7 +576,7 @@ export default function Strategies() {
           </button>
         </div>
 
-        {showRecs && <RecommendationPanel key={`${active}-${exchange}`} strategy={active} exchange={exchange} />}
+        {showRecs && <RecommendationPanel key={`${active}-${exchange}`} strategy={active} exchange={exchange} rsiPeriod={STRATEGY_META[active]?.rsiPeriod ?? 14} />}
 
         {!showRecs && (
           <p className="text-sm text-gray-400">

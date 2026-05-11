@@ -12,14 +12,14 @@ import { calcScore } from '../indicators/scoring.js'
 
 export const SIGNAL_DEFAULTS = {
   GPW: {
-    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.5 },
-    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3 },
-    aggressive: { rsiMin: 60, volumeMultiplierMin: 2.0 },
+    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
+    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3, rsiPeriod: 14 },
+    aggressive: { rsiMin: 60, volumeMultiplierMin: 2.0, rsiPeriod: 14 },
   },
   NYSE: {
-    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.15 },
-    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 3 },
-    aggressive: { rsiMin: 60, volumeMultiplierMin: 1.5 },
+    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
+    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 3, rsiPeriod: 14 },
+    aggressive: { rsiMin: 60, volumeMultiplierMin: 1.5, rsiPeriod: 14 },
   },
 }
 
@@ -73,12 +73,13 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
 
   if (strategy === 'scalping') {
     if (sma150 != null && price <= sma150) return null
-    const rsiThr = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
-    const volThr = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
-    const rsi = calcRSI(closes)
+    const rsiThr    = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
+    const volThr    = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
+    const rsiPeriod = thresholds.rsiPeriod ?? defaults.scalping.rsiPeriod ?? 14
+    const rsi = calcRSI(closes, rsiPeriod)
     if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
       const score = calcScore('scalping', { ...scoreInputs, rsi })
-      return { signal: 'RSI_OVERSOLD', price, rsi, volMult,
+      return { signal: 'RSI_OVERSOLD', price, rsi, rsiPeriod, volMult,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
         score, ...extra }
@@ -102,10 +103,11 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     }
     if (!crossed) crossed = goldenCross(closes)
     if (crossed && volMult && volMult >= volThr) {
-      const rsi    = calcRSI(closes)
+      const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
+      const rsi    = calcRSI(closes, rsiPeriod)
       const sma50s = calcSMASeries(closes, 50)
       const score  = calcScore('swing', { ...scoreInputs, rsi })
-      return { signal: 'SMA50_CROSSOVER', price, rsi, volMult,
+      return { signal: 'SMA50_CROSSOVER', price, rsi, rsiPeriod, volMult,
         sma20: calcSMA(closes, 20), sma50: sma50s[sma50s.length - 1],
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
         score, ...extra }
@@ -113,13 +115,14 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   }
 
   if (strategy === 'aggressive') {
-    const rsiMin = thresholds.rsi_min ?? defaults.aggressive.rsiMin
-    const volThr = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
-    const rsi = calcRSI(closes)
+    const rsiMin    = thresholds.rsi_min ?? defaults.aggressive.rsiMin
+    const volThr    = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
+    const rsiPeriod = thresholds.rsiPeriod ?? defaults.aggressive.rsiPeriod ?? 14
+    const rsi = calcRSI(closes, rsiPeriod)
     if (isBreakout(candles) && rsi && rsi > rsiMin && volMult && volMult >= volThr) {
       const sma150Warning = sma150 != null && price <= sma150
       const score = calcScore('aggressive', { ...scoreInputs, rsi })
-      return { signal: 'BREAKOUT', price, rsi, volMult,
+      return { signal: 'BREAKOUT', price, rsi, rsiPeriod, volMult,
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'aggressive'),
         sma150Warning, score, ...extra }
