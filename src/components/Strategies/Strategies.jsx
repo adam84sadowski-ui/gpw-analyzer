@@ -94,15 +94,17 @@ function RecommendationPanel({ strategy, exchange }) {
   const [interpretOpen, setInterpretOpen] = useState({})
   const [confirming, setConfirming]   = useState(null)
   const scanStartedRef                = useRef(false)
+  const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
 
-  const portfolio = (() => {
-    try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
-    catch { return 10000 }
-  })()
-  const maxPct = (() => {
-    try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').maxPositionPct ?? 15 }
-    catch { return 15 }
-  })()
+  useEffect(() => {
+    fetch('/api/kv?key=settings')
+      .then(r => r.json())
+      .then(d => { if (d && typeof d === 'object') setSettings(d) })
+      .catch(() => {})
+  }, [])
+
+  const portfolio = settings.capital ?? 10000
+  const maxPct    = settings.maxPositionPct ?? 15
 
   function startScanFetch() {
     if (scanStartedRef.current) return
