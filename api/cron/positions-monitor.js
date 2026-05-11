@@ -1,11 +1,14 @@
 import { createClient } from '@vercel/kv'
-import { fetchCurrent, fetchCandles } from '../../src/lib/yahoo.js'
+import { fetchCurrent, fetchCandles, fetchFundamentals } from '../../src/lib/yahoo.js'
 import { sendTelegram } from '../../src/services/telegram.js'
+import { DIVIDEND_UNIVERSE, daysToExDividend } from '../../src/strategies/dividend.js'
+import { getDCAReminder } from '../../src/strategies/dca.js'
 import { calcRSI } from '../../src/indicators/rsi.js'
 import { calcSMA } from '../../src/indicators/sma.js'
 import { isBreakout } from '../../src/indicators/breakout.js'
 import { calculateMACD, getMACDSignal } from '../../src/indicators/macd.js'
 import { fetchIndexTrend } from '../../src/lib/indextrend.js'
+import { calcTrailingStop } from '../../src/lib/trailingStop.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -147,13 +150,10 @@ export default async function handler(req, res) {
 
       // 0. TRAILING STOP — update highWaterMark and recalculate dynamic stop
       const highWaterMark = pos.highWaterMark ?? pos.entryPrice
-      if (price > highWaterMark) {
-        const newHWM          = price
-        const trailingStop    = Math.round(newHWM * (1 - stopPct) * 100) / 100
-        // Break-even: when P&L ≥ 50% of target → stop at entry price
-        const breakEven       = pnlPct >= targetFrac * 0.5 ? pos.entryPrice : null
-        const effectiveStop   = breakEven != null ? Math.max(trailingStop, breakEven) : trailingStop
-        const prevStop        = pos.dynamicStopLoss != null
+      const tsResult = calcTrailingStop(pos.entryPrice, price, highWaterMark, stopPct, targetFrac)
+      if (tsResult) {
+        const { newHWM, effectiveStop, breakEven } = tsResult
+        const prevStop = pos.dynamicStopLoss != null
           ? pos.entryPrice * (1 - pos.dynamicStopLoss / 100)
           : pos.entryPrice * (1 - pos.stopLoss / 100)
 
@@ -175,8 +175,7 @@ export default async function handler(req, res) {
             alertsSent++
           }
         } else {
-          // Just update highWaterMark without alert
-          await kv.set(pos.id, { ...pos, highWaterMark: newHWM }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
+          await kv.set(pos.id, { ...pos, highWaterMark: tsResult.newHWM }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
         }
       }
 
@@ -261,6 +260,73 @@ export default async function handler(req, res) {
 
     } catch (e) {
       console.error(`positions-monitor: error for ${pos.ticker}:`, e.message)
+    }
+  }
+
+  // ── DCA REMINDER ─────────────────────────────────────────────────────
+  try {
+    const dcaConfig = await kv.get(`${ENV}:dca:config`).catch(() => null)
+    const today     = new Date()
+    if (dcaConfig?.dayOfMonth && today.getDate() === dcaConfig.dayOfMonth) {
+      const dedupKey      = `${ENV}:dca-reminder:${today.toISOString().slice(0, 10)}`
+      const alreadySent   = await kv.get(dedupKey).catch(() => null)
+      if (!alreadySent) {
+        const currentPrices = {}
+        for (const { ticker } of (dcaConfig.etfs ?? [])) {
+          const data = await fetchCurrent(ticker, 'ETF').catch(() => null)
+          if (data?.close) currentPrices[ticker.toLowerCase()] = data.close
+        }
+        const reminder = getDCAReminder(dcaConfig, currentPrices)
+        if (reminder?.length) {
+          const lines = reminder.map(r =>
+            `🌍 <b>${r.name}</b> — ${r.fullName}\nKup za: <b>${r.amountPLN} PLN</b>${r.units != null ? ` (~${r.units} j.)` : ''}\n${r.price != null ? `Cena: ~${r.price.toFixed(2)}` : ''}`
+          ).join('\n\n')
+          await sendTelegram(
+            `📅 <b>DCA REMINDER</b>\nCzas na miesięczny zakup ETF!\n\n${lines}\n\n💡 Pamiętaj: nie analizuj ceny, po prostu kup. Tak działa DCA.\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz aplikację</a>`,
+            IS_STAGING
+          )
+          await kv.set(dedupKey, 1, { ex: 23 * 60 * 60 }).catch(() => {})
+          alertsSent++
+        }
+      }
+    }
+  } catch (e) {
+    console.error('dca-reminder error:', e.message)
+  }
+
+  // ── DIVIDEND CALENDAR — D-5 ALERTS ───────────────────────────────────
+  const divTickers = [
+    ...DIVIDEND_UNIVERSE.GPW.map(t => ({ ticker: t, exchange: 'GPW' })),
+    ...DIVIDEND_UNIVERSE.NYSE.map(t => ({ ticker: t, exchange: 'NYSE' })),
+  ]
+  for (const { ticker, exchange: ex } of divTickers) {
+    try {
+      let fund = await kv.get(`${ENV}:fundamentals:${ex}:${ticker}`).catch(() => null)
+      if (!fund) {
+        fund = await fetchFundamentals(ticker, ex).catch(() => null)
+        if (fund) await kv.set(`${ENV}:fundamentals:${ex}:${ticker}`, fund, { ex: 24 * 60 * 60 }).catch(() => {})
+      }
+      if (!fund?.exDividendDate) continue
+
+      const days = daysToExDividend(fund.exDividendDate)
+      if (days !== 5) continue
+
+      const dedupKey   = `${ENV}:div-alert:${ticker}:${fund.exDividendDate}`
+      const alreadySent = await kv.get(dedupKey).catch(() => null)
+      if (alreadySent) continue
+
+      const label    = ticker.replace('.pl', '').toUpperCase()
+      const currency = ex === 'NYSE' ? 'USD' : 'PLN'
+      const yieldStr = fund.dividendYield != null ? `${(fund.dividendYield * 100).toFixed(1)}%` : '?'
+
+      await sendTelegram(
+        `📅 <b>DYWIDENDA ZBLIŻA SIĘ: ${label}</b>\n\nEx-dividend date: <b>${fund.exDividendDate}</b>\n💡 Musisz kupić PRZED tą datą żeby otrzymać dywidendę!\n\nYield: ${yieldStr} | ${fund.price != null ? `Kurs: ${fund.price} ${currency}` : ''}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz aplikację</a>`,
+        IS_STAGING
+      )
+      await kv.set(dedupKey, 1, { ex: 7 * 24 * 60 * 60 }).catch(() => {})
+      alertsSent++
+    } catch (e) {
+      console.error(`div-calendar error for ${ticker}:`, e.message)
     }
   }
 
