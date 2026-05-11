@@ -1,5 +1,5 @@
 import { createClient } from '@vercel/kv'
-import { fetchCandles } from '../../src/lib/yahoo.js'
+import { fetchCandles, fetchFundamentals } from '../../src/lib/yahoo.js'
 import { detectSignal } from '../../src/lib/signals.js'
 import { interpretSignal } from '../../src/lib/interpretSignal.js'
 import { sendTelegram, formatAlert } from '../../src/services/telegram.js'
@@ -10,6 +10,7 @@ import { fetchSeasonalityData, calculateMonthlyReturns } from '../../src/indicat
 import { calcPositionSize, formatPositionSizingLine } from '../../src/indicators/positionSizing.js'
 import { checkSectorExposure, formatSectorLine } from '../../src/indicators/sectorCorrelation.js'
 import { getMacroEnvironment, formatMacroLine } from '../../src/indicators/macroFilter.js'
+import { DIVIDEND_UNIVERSE, detectDividendSignal } from '../../src/strategies/dividend.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -51,6 +52,66 @@ export default async function handler(req, res) {
   }
 
   const { strategy, exchange = 'GPW' } = req.query
+
+  // ── Dividend signal scan branch ────────────────────────────────────────
+  if (strategy === 'dividend') {
+    const now = new Date()
+    if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
+
+    const universe = DIVIDEND_UNIVERSE[exchange] ?? []
+    const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
+    const settings = await kv.get(`${ENV}:settings`).catch(() => null)
+    const portfolio = settings?.portfolio ?? 10000
+    let sent = 0
+
+    for (const ticker of universe) {
+      try {
+        let fund = await kv.get(`${ENV}:fundamentals:${exchange}:${ticker}`).catch(() => null)
+        if (!fund) {
+          fund = await fetchFundamentals(ticker, exchange).catch(() => null)
+          if (fund) await kv.set(`${ENV}:fundamentals:${exchange}:${ticker}`, fund, { ex: 24 * 60 * 60 }).catch(() => {})
+        }
+        const sig = detectDividendSignal(ticker, fund)
+        if (!sig) continue
+
+        const dedupKey   = `${ENV}:div-signal:${ticker}:${now.toISOString().slice(0, 10)}`
+        const alreadySent = await kv.get(dedupKey).catch(() => null)
+        if (alreadySent) continue
+
+        const label      = ticker.replace('.pl', '').toUpperCase()
+        const name       = fund.shortName ?? label
+        const posSize    = Math.round(portfolio * 0.15)
+        const shares     = sig.price ? Math.floor(posSize / sig.price) : null
+        const annualDiv  = shares && sig.price && fund.dividendYield
+          ? Math.round(shares * sig.price * fund.dividendYield)
+          : null
+
+        const msg = [
+          `📊 <b>SYGNAŁ DYWIDENDOWY: ${label}</b>`,
+          name !== label ? name : '',
+          '',
+          `💰 Yield: <b>${sig.dividendYieldPct}%</b> | P/E: ${sig.pe ?? '—'} | Payout: ${sig.payoutRatioPct ?? '—'}%`,
+          sig.exDividendDate ? `📅 Ex-dividend: ${sig.exDividendDate}` : '',
+          '',
+          `🎯 Strategia: kup i trzymaj 2–5 lat`,
+          `💰 Portfel: ${portfolio.toLocaleString('pl-PL')} ${currency}`,
+          `📌 Pozycja: ${posSize.toLocaleString('pl-PL')} ${currency}${shares ? ` (~${shares} akcji)` : ''}`,
+          annualDiv ? `💵 Roczna dywidenda z pozycji: ~${annualDiv} ${currency}` : '',
+          '',
+          `⚠️ Analiza edukacyjna. Decyzja należy do Ciebie.`,
+          `📱 <a href="https://gpw-analyzer.vercel.app">Otwórz aplikację</a>`,
+        ].filter(l => l !== '').join('\n')
+
+        await sendTelegram(msg, IS_STAGING)
+        await kv.set(dedupKey, 1, { ex: 24 * 60 * 60 }).catch(() => {})
+        sent++
+      } catch (e) {
+        console.error(`dividend scan error for ${ticker}:`, e.message)
+      }
+    }
+
+    return res.json({ exchange, strategy: 'dividend', scanned: universe.length, sent })
+  }
 
   // ── Seasonality pre-population branch ──────────────────────────────────
   if (strategy === 'seasonality') {

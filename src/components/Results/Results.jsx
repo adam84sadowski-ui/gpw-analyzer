@@ -67,6 +67,14 @@ export default function Results() {
   const [prices, setPrices]         = useState({})
   const [closing, setClosing]       = useState(null)
   const [addingTest, setAddingTest] = useState(false)
+  const [settings, setSettings]     = useState({ capital: 10000 })
+
+  useEffect(() => {
+    fetch('/api/kv?key=settings')
+      .then(r => r.json())
+      .then(d => { if (d && typeof d === 'object') setSettings(d) })
+      .catch(() => {})
+  }, [])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -131,10 +139,7 @@ export default function Results() {
 
   const openPositions = positions.filter(p => p.status === 'open')
 
-  const portfolio = (() => {
-    try { return JSON.parse(localStorage.getItem('gpw_settings') ?? '{}').capital ?? 10000 }
-    catch { return 10000 }
-  })()
+  const portfolio = settings.capital ?? 10000
 
   // Summary totals for current exchange's open positions only
   const exchangeCurrency = exchange === 'NYSE' ? 'USD' : 'PLN'

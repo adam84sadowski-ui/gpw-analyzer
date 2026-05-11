@@ -1,0 +1,81 @@
+name: Market Cron
+
+on:
+  schedule:
+    - cron: '5 9 * * 1-5'    # GPW scalping — otwarcie (11:05 CEST)
+    - cron: '0 12 * * 1-5'   # GPW scalping — południe
+    - cron: '45 14 * * 1-5'  # GPW scalping — przed zamknięciem
+    - cron: '35 15 * * 1-5'  # GPW swing + dividend
+    - cron: '40 15 * * 1-5'  # GPW agresywna
+    - cron: '35 19 * * 1-5'  # NYSE scalping (13:35 ET)
+    - cron: '10 20 * * 1-5'  # NYSE swing + dividend
+    - cron: '15 20 * * 1-5'  # NYSE agresywna
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Strategy (scalping|swing|aggressive|dividend|seasonality)'
+        required: true
+        default: 'scalping'
+      exchange:
+        description: 'Exchange (GPW|NYSE)'
+        required: true
+        default: 'GPW'
+      slot:
+        description: 'Slot (mid|pre — scalping only)'
+        required: false
+        default: ''
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      BASE: https://gpw-analyzer.vercel.app/api/cron/fetch
+      AUTH: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          SLOT="${{ github.event.inputs.slot }}"
+          URL="${BASE}?strategy=${{ github.event.inputs.strategy }}&exchange=${{ github.event.inputs.exchange }}${SLOT:+&slot=$SLOT}"
+          curl -sf "$URL" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW scalping — otwarcie
+        if: github.event.schedule == '5 9 * * 1-5'
+        run: curl -sf "$BASE?strategy=scalping&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW scalping — południe
+        if: github.event.schedule == '0 12 * * 1-5'
+        run: curl -sf "$BASE?strategy=scalping&slot=mid&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW scalping — przed zamknięciem
+        if: github.event.schedule == '45 14 * * 1-5'
+        run: curl -sf "$BASE?strategy=scalping&slot=pre&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW swing
+        if: github.event.schedule == '35 15 * * 1-5'
+        run: curl -sf "$BASE?strategy=swing&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW dividend
+        if: github.event.schedule == '35 15 * * 1-5'
+        run: curl -sf "$BASE?strategy=dividend&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: GPW agresywna
+        if: github.event.schedule == '40 15 * * 1-5'
+        run: curl -sf "$BASE?strategy=aggressive&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE scalping
+        if: github.event.schedule == '35 19 * * 1-5'
+        run: curl -sf "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE swing
+        if: github.event.schedule == '10 20 * * 1-5'
+        run: curl -sf "$BASE?strategy=swing&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE dividend
+        if: github.event.schedule == '10 20 * * 1-5'
+        run: curl -sf "$BASE?strategy=dividend&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE agresywna
+        if: github.event.schedule == '15 20 * * 1-5'
+        run: curl -sf "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"

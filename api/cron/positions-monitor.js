@@ -179,6 +179,17 @@ export default async function handler(req, res) {
         }
       }
 
+      // 0b. TRAILING STOP TRIGGERED — cena poniżej trailingStopPrice
+      if (pos.trailingActive && pos.trailingStopPrice != null && price <= pos.trailingStopPrice) {
+        if (!(await dedup('trailing-hit', 23))) {
+          await sendTelegram(
+            `🔴 <b>TRAILING STOP AKTYWOWANY — ${ticker}</b>\n\nCena: ${price} ${currency} ≤ stop: ${pos.trailingStopPrice.toFixed(2)} ${currency}\nP&L: ${(pnlPct * 100).toFixed(1)}%\n\n💡 Trailing stop osiągnięty. Rozważ zamknięcie pozycji i realizację zysku.\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
+            IS_STAGING
+          )
+          alertsSent++
+        }
+      }
+
       // 1. CEL BLISKO
       if (pnlPct >= targetFrac * TARGET_ALERT_THRESHOLD) {
         if (!(await dedup('target'))) {
