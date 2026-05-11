@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useExchange } from '../../context/ExchangeContext.jsx'
-import { DIVIDEND_UNIVERSE, daysToExDividend } from '../../strategies/dividend.js'
+import { DIVIDEND_UNIVERSE, COMPANY_NAMES, daysToExDividend } from '../../strategies/dividend.js'
 
 function criteriaCheck(fund) {
   if (!fund) return { yieldOk: false, payoutOk: false, peOk: false }
@@ -39,9 +39,13 @@ function FundCard({ ticker, fund }) {
   return (
     <div className={`bg-gpw-card border rounded-lg p-4 space-y-3 ${hasSignal ? 'border-green-600' : 'border-gpw-border'}`}>
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <span className="font-bold text-base">{label}</span>
-          {fund?.shortName && <p className="text-xs text-gray-400">{fund.shortName}</p>}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="font-bold text-base">{label}</span>
+            <span className="text-sm text-gray-400 truncate">
+              {fund?.shortName ?? COMPANY_NAMES[ticker.toLowerCase()] ?? COMPANY_NAMES[ticker] ?? ''}
+            </span>
+          </div>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded shrink-0 ${hasSignal ? 'bg-green-800 text-green-200' : 'bg-gpw-dark text-gray-400'}`}>
           {hasSignal ? '💰 SYGNAŁ' : '👁 OBSERWUJ'}

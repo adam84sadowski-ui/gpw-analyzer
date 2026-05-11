@@ -1,19 +1,58 @@
 export const DIVIDEND_UNIVERSE = {
-  GPW:  ['pko.pl', 'pzu.pl', 'pkn.pl', 'kghm.pl'],
-  NYSE: ['JNJ', 'KO', 'PG', 'XOM', 'ABBV'],
+  GPW:  [
+    'pko.pl', 'pzu.pl', 'pkn.pl', 'kghm.pl',
+    'peo.pl', 'bdx.pl', 'opl.pl', 'gpw.pl', 'kru.pl', 'acp.pl',
+  ],
+  NYSE: [
+    'JNJ', 'KO', 'PG', 'XOM', 'ABBV',
+    'VZ', 'PFE', 'CVX', 'IBM', 'MO',
+  ],
 }
 
-// Rough sector P/E benchmarks for signal filtering
+export const COMPANY_NAMES = {
+  'pko.pl':  'PKO Bank Polski',
+  'pzu.pl':  'PZU',
+  'pkn.pl':  'PKN Orlen',
+  'kghm.pl': 'KGHM',
+  'peo.pl':  'Bank Pekao',
+  'bdx.pl':  'Budimex',
+  'opl.pl':  'Orange Polska',
+  'gpw.pl':  'Giełda Papierów Wartościowych',
+  'kru.pl':  'Kruk',
+  'acp.pl':  'Asseco Poland',
+  'JNJ':     'Johnson & Johnson',
+  'KO':      'Coca-Cola',
+  'PG':      'Procter & Gamble',
+  'XOM':     'ExxonMobil',
+  'ABBV':    'AbbVie',
+  'VZ':      'Verizon',
+  'PFE':     'Pfizer',
+  'CVX':     'Chevron',
+  'IBM':     'IBM',
+  'MO':      'Altria Group',
+}
+
 const SECTOR_PE = {
   'pko.pl':  12,
   'pzu.pl':  13,
   'pkn.pl':  10,
   'kghm.pl':  8,
+  'peo.pl':  11,
+  'bdx.pl':  18,
+  'opl.pl':  12,
+  'gpw.pl':  15,
+  'kru.pl':  10,
+  'acp.pl':  13,
   'JNJ':     18,
   'KO':      24,
   'PG':      24,
   'XOM':     14,
   'ABBV':    16,
+  'VZ':      10,
+  'PFE':     10,
+  'CVX':     12,
+  'IBM':     20,
+  'MO':      10,
 }
 
 export function detectDividendSignal(ticker, fundamentals) {
@@ -41,8 +80,8 @@ export function detectDividendSignal(ticker, fundamentals) {
 }
 
 export function getDividendCalendar(tickerFundamentalsMap) {
-  const now     = new Date()
-  const in30    = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const now  = new Date()
+  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
 
   return Object.entries(tickerFundamentalsMap)
     .filter(([, f]) => {
@@ -57,7 +96,7 @@ export function getDividendCalendar(tickerFundamentalsMap) {
       dividendYieldPct: f.dividendYield != null ? Math.round(f.dividendYield * 1000) / 10 : null,
       price:            f.price,
       currency:         f.currency,
-      shortName:        f.shortName,
+      shortName:        f.shortName ?? COMPANY_NAMES[ticker] ?? null,
     }))
     .sort((a, b) => new Date(a.exDividendDate) - new Date(b.exDividendDate))
 }
@@ -74,7 +113,7 @@ export function calculateAnnualDividendIncome(positions, tickerFundamentalsMap) 
 
 export function daysToExDividend(exDividendDate) {
   if (!exDividendDate) return null
-  const today = new Date(new Date().toISOString().slice(0, 10))
+  const today  = new Date(new Date().toISOString().slice(0, 10))
   const exDate = new Date(exDividendDate)
   return Math.round((exDate - today) / 86400000)
 }

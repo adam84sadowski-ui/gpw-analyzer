@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { DIVIDEND_UNIVERSE, getDividendCalendar, daysToExDividend } from '../../strategies/dividend.js'
+import { DIVIDEND_UNIVERSE, COMPANY_NAMES, getDividendCalendar, daysToExDividend } from '../../strategies/dividend.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 
 export default function DividendCalendar() {
@@ -43,9 +43,11 @@ export default function DividendCalendar() {
         return (
           <div key={ticker} className={`bg-gpw-card border rounded-lg p-3 ${urgent ? 'border-yellow-500' : 'border-gpw-border'}`}>
             <div className="flex items-center justify-between">
-              <div>
+              <div className="flex items-baseline gap-2 flex-wrap">
                 <span className="font-semibold">{label}</span>
-                {shortName && <span className="text-xs text-gray-400 ml-2">{shortName}</span>}
+                <span className="text-xs text-gray-400">
+                  {shortName ?? COMPANY_NAMES[ticker.toLowerCase()] ?? COMPANY_NAMES[ticker] ?? ''}
+                </span>
               </div>
               {urgent && <span className="text-xs bg-yellow-700 text-yellow-200 px-2 py-0.5 rounded">⚠️ WKRÓTCE</span>}
             </div>
