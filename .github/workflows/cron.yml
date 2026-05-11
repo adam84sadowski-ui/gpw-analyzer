@@ -26,7 +26,17 @@ on:
         default: ''
 
 jobs:
+  # Always succeeds — prevents "No jobs were run" on push/validation runs
+  ping:
+    name: Workflow triggered
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "event=${{ github.event_name }} ref=${{ github.ref }}"
+
+  # Only runs on schedule or manual dispatch
   fetch:
+    name: Fetch market data
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       BASE: https://gpw-analyzer.vercel.app/api/cron/fetch
@@ -42,43 +52,50 @@ jobs:
 
       - name: GPW scalping — otwarcie
         if: github.event.schedule == '5 9 * * 1-5'
-        run: curl -sf "$BASE?strategy=scalping&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=scalping&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: GPW scalping — południe
         if: github.event.schedule == '0 12 * * 1-5'
-        run: curl -sf "$BASE?strategy=scalping&slot=mid&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=scalping&slot=mid&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: GPW scalping — przed zamknięciem
         if: github.event.schedule == '45 14 * * 1-5'
-        run: curl -sf "$BASE?strategy=scalping&slot=pre&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=scalping&slot=pre&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: GPW swing
         if: github.event.schedule == '35 15 * * 1-5'
-        run: curl -sf "$BASE?strategy=swing&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=swing&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: GPW dividend
         if: github.event.schedule == '35 15 * * 1-5'
-        run: curl -sf "$BASE?strategy=dividend&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=dividend&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: GPW agresywna
         if: github.event.schedule == '40 15 * * 1-5'
-        run: curl -sf "$BASE?strategy=aggressive&exchange=GPW" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=aggressive&exchange=GPW" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE scalping
         if: github.event.schedule == '35 19 * * 1-5'
-        run: curl -sf "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE swing
         if: github.event.schedule == '10 20 * * 1-5'
-        run: curl -sf "$BASE?strategy=swing&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=swing&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE dividend
         if: github.event.schedule == '10 20 * * 1-5'
-        run: curl -sf "$BASE?strategy=dividend&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+        run: |
+          curl -sf "$BASE?strategy=dividend&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE agresywna
         if: github.event.schedule == '15 20 * * 1-5'
-        run: curl -sf "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
-
-      - name: Done
-        run: echo "Cron cycle complete — event=${{ github.event_name }}"
+        run: |
+          curl -sf "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
