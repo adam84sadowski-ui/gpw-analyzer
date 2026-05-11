@@ -1,5 +1,5 @@
 import { createClient } from '@vercel/kv'
-import { fetchCandles, fetchCurrent, fetchCandlesExtended } from '../src/lib/yahoo.js'
+import { fetchCandles, fetchCurrent, fetchCandlesExtended, fetchFundamentals } from '../src/lib/yahoo.js'
 import { detectSignal, calcIndicators } from '../src/lib/signals.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend } from '../src/lib/indextrend.js'
@@ -97,6 +97,18 @@ export default async function handler(req, res) {
     }
     if (!data?.close) return res.status(404).json({ error: 'no data' })
     memSet(cacheKey, data)
+    return res.json(data)
+  }
+
+  // ── Fundamentals mode ────────────────────────────────────────────────
+  if (mode === 'fundamentals') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const cacheKey = `${ENV}:fundamentals:${exchange}:${ticker}`
+    const cached   = await kv.get(cacheKey).catch(() => null)
+    if (cached) return res.json(cached)
+    const data = await fetchFundamentals(ticker, exchange).catch(() => null)
+    if (!data) return res.status(404).json({ error: 'no fundamentals data' })
+    await kv.set(cacheKey, data, { ex: 24 * 60 * 60 }).catch(() => {})
     return res.json(data)
   }
 

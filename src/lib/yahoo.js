@@ -7,7 +7,20 @@ const TICKER_MAP = {
   'swig80.pl': 'SWIG80.WA',
 }
 
+const ETF_TICKER_MAP = {
+  'vwce': 'VWCE.L',
+  'cspx': 'CSPX.L',
+  'eqqq': 'EQQQ.L',
+  'eunl': 'EUNL.L',
+  'vhyl': 'VHYL.L',
+  'vwrl': 'VWRL.L',
+}
+
 export function toYahooSymbol(ticker, exchange = 'GPW') {
+  if (exchange === 'ETF') {
+    const t = ticker.toLowerCase()
+    return ETF_TICKER_MAP[t] ?? ticker.toUpperCase() + '.L'
+  }
   if (exchange === 'NYSE') return ticker.toUpperCase().replace(/\.pl$/i, '')
   const t = ticker.toLowerCase()
   return TICKER_MAP[t] ?? t.replace(/\.pl$/, '').toUpperCase() + '.WA'
@@ -90,5 +103,34 @@ export async function fetchCurrent(ticker, exchange = 'GPW') {
     Close:     String(meta.regularMarketPrice ?? 'N/D'),
     Open:      String(meta.regularMarketOpen  ?? 'N/D'),
     shortName: result.meta?.shortName ?? null,
+  }
+}
+
+export async function fetchFundamentals(ticker, exchange = 'GPW') {
+  const symbol = toYahooSymbol(ticker, exchange)
+  const url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${symbol}?modules=summaryDetail%2CdefaultKeyStatistics%2Cprice`
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+  if (!res.ok) return null
+  const json = await res.json()
+  const result = json?.quoteSummary?.result?.[0]
+  if (!result) return null
+
+  const sd = result.summaryDetail ?? {}
+  const ks = result.defaultKeyStatistics ?? {}
+  const pr = result.price ?? {}
+
+  const tsToDate = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : null
+
+  return {
+    price:                    pr.regularMarketPrice?.raw ?? null,
+    currency:                 pr.currency ?? null,
+    shortName:                pr.shortName ?? null,
+    dividendYield:            sd.dividendYield?.raw ?? null,
+    payoutRatio:              sd.payoutRatio?.raw ?? null,
+    forwardPE:                sd.forwardPE?.raw ?? ks.forwardPE?.raw ?? null,
+    trailingPE:               sd.trailingPE?.raw ?? null,
+    exDividendDate:           tsToDate(sd.exDividendDate?.raw),
+    dividendDate:             tsToDate(sd.dividendDate?.raw),
+    fiveYearAvgDividendYield: sd.fiveYearAvgDividendYield?.raw ?? null,
   }
 }
