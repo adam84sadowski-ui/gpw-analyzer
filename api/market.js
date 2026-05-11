@@ -58,12 +58,37 @@ async function getCachedData(ticker, exchange) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end()
-
   const { mode = 'daily', ticker, strategy, exchange = 'GPW' } = req.query
 
-  if (!['GPW', 'NYSE'].includes(exchange)) {
-    return res.status(400).json({ error: 'exchange must be GPW or NYSE' })
+  // ── ETF purchase modes (GET + POST) ──────────────────────────────────
+  if (mode === 'etf-list') {
+    const data = await kv.get(`${ENV}:etf:purchases`).catch(() => null)
+    return res.json(Array.isArray(data) ? data : [])
+  }
+
+  if (mode === 'etf-add') {
+    if (req.method !== 'POST') return res.status(405).end()
+    const { ticker: t, date, price, units } = req.body ?? {}
+    if (!t || !price || !units) return res.status(400).json({ error: 'ticker, price, units required' })
+    const existing = await kv.get(`${ENV}:etf:purchases`).catch(() => null) ?? []
+    const entry = { id: `${t}-${Date.now()}`, ticker: t, date: date ?? new Date().toISOString().slice(0, 10), price: Number(price), units: Number(units), addedAt: new Date().toISOString() }
+    await kv.set(`${ENV}:etf:purchases`, [...existing, entry])
+    return res.json(entry)
+  }
+
+  if (mode === 'etf-delete') {
+    if (req.method !== 'POST') return res.status(405).end()
+    const { id } = req.body ?? {}
+    if (!id) return res.status(400).json({ error: 'id required' })
+    const existing = await kv.get(`${ENV}:etf:purchases`).catch(() => null) ?? []
+    await kv.set(`${ENV}:etf:purchases`, existing.filter(p => p.id !== id))
+    return res.json({ deleted: id })
+  }
+
+  if (req.method !== 'GET') return res.status(405).end()
+
+  if (!['GPW', 'NYSE', 'ETF'].includes(exchange)) {
+    return res.status(400).json({ error: 'exchange must be GPW|NYSE|ETF' })
   }
 
   // ── Single ticker modes ──────────────────────────────────────────────

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import DividendSignals from './DividendSignals.jsx'
 import DividendCalendar from './DividendCalendar.jsx'
 import DCAConfigForm from './DCAConfigForm.jsx'
+import ETFPortfolio from './ETFPortfolio.jsx'
+import AnnualIncomeCard from './AnnualIncomeCard.jsx'
 
 const SUB_TABS = [
   { id: 'dca',      label: '📅 ETF / DCA' },
@@ -30,13 +32,15 @@ export default function LongTermPage() {
       </div>
 
       {sub === 'dca' && (
-        <div className="max-w-2xl">
+        <div className="max-w-2xl space-y-6">
+          <ETFPortfolio />
           <DCAConfigForm />
         </div>
       )}
 
       {sub === 'dividend' && (
         <div className="space-y-6">
+          <AnnualIncomeCard />
           <div>
             <h2 className="text-sm font-semibold text-gray-300 mb-3">📊 Sygnały dywidendowe</h2>
             <DividendSignals />
