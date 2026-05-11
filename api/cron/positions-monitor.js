@@ -6,6 +6,7 @@ import { calcSMA } from '../../src/indicators/sma.js'
 import { isBreakout } from '../../src/indicators/breakout.js'
 import { calculateMACD, getMACDSignal } from '../../src/indicators/macd.js'
 import { fetchIndexTrend } from '../../src/lib/indextrend.js'
+import { calcTrailingStop } from '../../src/lib/trailingStop.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV = IS_STAGING ? 'staging' : 'prod'
@@ -147,13 +148,10 @@ export default async function handler(req, res) {
 
       // 0. TRAILING STOP — update highWaterMark and recalculate dynamic stop
       const highWaterMark = pos.highWaterMark ?? pos.entryPrice
-      if (price > highWaterMark) {
-        const newHWM          = price
-        const trailingStop    = Math.round(newHWM * (1 - stopPct) * 100) / 100
-        // Break-even: when P&L ≥ 50% of target → stop at entry price
-        const breakEven       = pnlPct >= targetFrac * 0.5 ? pos.entryPrice : null
-        const effectiveStop   = breakEven != null ? Math.max(trailingStop, breakEven) : trailingStop
-        const prevStop        = pos.dynamicStopLoss != null
+      const tsResult = calcTrailingStop(pos.entryPrice, price, highWaterMark, stopPct, targetFrac)
+      if (tsResult) {
+        const { newHWM, effectiveStop, breakEven } = tsResult
+        const prevStop = pos.dynamicStopLoss != null
           ? pos.entryPrice * (1 - pos.dynamicStopLoss / 100)
           : pos.entryPrice * (1 - pos.stopLoss / 100)
 
@@ -175,8 +173,7 @@ export default async function handler(req, res) {
             alertsSent++
           }
         } else {
-          // Just update highWaterMark without alert
-          await kv.set(pos.id, { ...pos, highWaterMark: newHWM }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
+          await kv.set(pos.id, { ...pos, highWaterMark: tsResult.newHWM }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
         }
       }
 

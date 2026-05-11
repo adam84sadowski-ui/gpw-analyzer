@@ -65,12 +65,37 @@ const ENV = IS_STAGING ? 'staging' : 'prod'   // prefiks kluczy KV
 
 ```bash
 cd projects/gpw-analyzer
-npm run dev          # lokalny dev server (Vite HMR, port 5173)
-npm run build        # build produkcyjny → dist/
-npm run lint         # ESLint (tylko eslint-plugin-react — UWAGA niżej)
-vercel --yes         # deploy STAGING
-vercel --prod --yes  # deploy PROD (tylko za zgodą Adama!)
+npm run dev             # lokalny dev server (Vite HMR, port 5173)
+npm run build           # build produkcyjny → dist/
+npm run lint            # ESLint (tylko eslint-plugin-react — UWAGA niżej)
+npm run test            # Vitest watch mode
+npm run test:coverage   # Vitest jednorazowy run + raport pokrycia (CI)
+vercel --yes            # deploy STAGING
+vercel --prod --yes     # deploy PROD (tylko za zgodą Adama!)
 ```
+
+---
+
+## REGUŁA TESTÓW — OBOWIĄZKOWA
+
+Przy każdej zmianie lub dodaniu:
+- nowej funkcji w `src/indicators/`
+- nowego `mode` w `api/market.js`
+- nowej strategii sygnałowej w `src/lib/signals.js`
+- nowej logiki w `src/lib/`
+
+Developer **MUSI**:
+1. Dodać lub zaktualizować odpowiedni plik w `src/indicators/__tests__/` lub `tests/`
+2. Uruchomić `npm run test:coverage` lokalnie — **musi przejść bez błędów**
+3. Nie commitować jeśli coverage per-plik spada poniżej progów w `vitest.config.js`
+
+**PR bez testów dla nowego kodu = Developer wraca do kroku 3.**
+
+Progi pokrycia (zdefiniowane w `vitest.config.js`):
+- `rsi.js`, `scoring.js`, `positionSizing.js`, `trailingStop.js` → min 90% linii
+- `macd.js`, `bollinger.js`, `atr.js`, `macroFilter.js`, `backtester.js` → min 80% linii
+- `signals.js` → min 75% linii
+- Globalnie → min 70% linii / funkcji
 
 ---
 
