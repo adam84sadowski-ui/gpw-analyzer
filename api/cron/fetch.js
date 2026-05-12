@@ -193,21 +193,34 @@ export default async function handler(req, res) {
     .filter(s => s.score >= SCORE_THRESHOLD)
     .sort((a, b) => b.score - a.score)
 
+  const skipDate = now.toISOString().slice(0, 10)
+  async function logSkip(ticker, reason, score, adjustedScore) {
+    await kv.set(`${ENV}:skip:${strategy}:${ticker}:${skipDate}`,
+      { reason, score, adjustedScore, strategy, exchange, timestamp: now.toISOString() },
+      { ex: 48 * 60 * 60 }
+    ).catch(() => {})
+  }
+
+  // Log signals beyond maxAlerts
+  for (const signal of signals.slice(config.maxAlerts)) {
+    await logSkip(signal.ticker, 'max_alerts', signal.score, signal.score)
+  }
+
   let sent = 0
   for (const signal of signals.slice(0, config.maxAlerts)) {
     // Macro score adjustment
     const macroAdj      = macro?.scoreAdjustment ?? 0
     const adjustedScore = signal.score + macroAdj
-    if (adjustedScore < SCORE_THRESHOLD) continue
+    if (adjustedScore < SCORE_THRESHOLD) { await logSkip(signal.ticker, 'macro', signal.score, adjustedScore); continue }
 
     // Sector exposure check
     const sectorCheck = checkSectorExposure(signal.ticker, exchange, openPositions)
-    if (sectorCheck.block) continue
+    if (sectorCheck.block) { await logSkip(signal.ticker, 'sector', signal.score, adjustedScore); continue }
 
     // Dynamic position sizing
     const effectiveMaxPct = sectorCheck.reduce ? maxPositionPct * 0.5 : maxPositionPct
     const posResult       = calcPositionSize(portfolio, effectiveMaxPct, adjustedScore, 0, totalExposurePct)
-    if (posResult.blocked) continue
+    if (posResult.blocked) { await logSkip(signal.ticker, 'position_size', signal.score, adjustedScore); continue }
 
     const positionSize = posResult.size
     const shares       = positionSize > 0 && signal.price > 0 ? Math.floor(positionSize / signal.price) : 0

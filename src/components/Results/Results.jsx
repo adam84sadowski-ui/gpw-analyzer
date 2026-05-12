@@ -68,6 +68,9 @@ export default function Results() {
   const [closing, setClosing]       = useState(null)
   const [addingTest, setAddingTest] = useState(false)
   const [settings, setSettings]     = useState({ capital: 10000 })
+  const [expanded, setExpanded]     = useState(new Set())
+  const [indics, setIndics]         = useState({})
+  const [names, setNames]           = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -84,15 +87,18 @@ export default function Results() {
         setPositions(data)
         if (tab === 'open' && data.length > 0) {
           const priceMap = {}
+          const nameMap  = {}
           await Promise.all(data.map(async pos => {
             if (priceMap[pos.ticker] !== undefined) return
             try {
               const posEx = pos.exchange ?? 'GPW'
               const r = await fetch(`/api/market?mode=current&ticker=${pos.ticker}&exchange=${posEx}`)
               const d = await r.json()
-              if (d?.close) priceMap[pos.ticker] = d.close
+              if (d?.close)     priceMap[pos.ticker] = d.close
+              if (d?.shortName) nameMap[pos.ticker]  = d.shortName
             } catch {}
           }))
+          setNames(nameMap)
           setPrices(priceMap)
         }
       })
@@ -135,6 +141,33 @@ export default function Results() {
     })
     setClosing(null)
     load()
+  }
+
+  function toggleExpand(pos) {
+    const id = pos.id
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id); return next }
+      next.add(id)
+      if (!indics[id]) {
+        fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
+          .then(r => r.json())
+          .then(d => setIndics(prev2 => ({ ...prev2, [id]: d })))
+          .catch(() => {})
+      }
+      return next
+    })
+  }
+
+  function signalComment(pos, cur) {
+    if (!cur) return null
+    const { signal } = pos
+    if (signal === 'RSI_OVERSOLD'    && cur.rsi > 55)   return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku'
+    if (signal === 'SMA50_CROSSOVER' && cur.sma50Delta < 0) return '⚠️ Cena wróciła pod SMA50 — sygnał osłabiony'
+    if (signal === 'BREAKOUT'        && cur.volMult < 1.2)  return '⚠️ Wolumen opada — breakout może być fałszywy'
+    if (signal === 'RSI_OVERSOLD'    && cur.rsi < 40)   return '✅ RSI nadal w strefie — sygnał aktywny'
+    if (signal === 'SMA50_CROSSOVER' && cur.sma50Delta > 0) return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany'
+    return null
   }
 
   const openPositions = positions.filter(p => p.status === 'open')
@@ -231,13 +264,22 @@ export default function Results() {
 
             return (
               <div key={pos.id} className="bg-gpw-card border border-gpw-border rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-start">
+                <button
+                  onClick={() => toggleExpand(pos)}
+                  className="w-full flex justify-between items-start text-left"
+                >
                   <div>
                     <span className="font-bold text-lg">{pos.tickerDisplay}</span>
+                    {names[pos.ticker] && (
+                      <span className="ml-1.5 text-sm text-gray-400">({names[pos.ticker]})</span>
+                    )}
                     <span className="ml-2 text-xs text-gray-400">{pos.strategy}</span>
                     <span className="ml-1 text-xs text-gray-500">{cur}</span>
+                    {pos.entryScore != null && (
+                      <span className="ml-2 text-xs text-yellow-400">⭐ {pos.entryScore}/100</span>
+                    )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex items-center gap-2">
                     {pos.status === 'open' && cp && (
                       <div className={`font-bold text-lg ${pnlPct >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
                         {pct(pnlPct)}
@@ -248,8 +290,9 @@ export default function Results() {
                         {pct(pos.pnlPct)}
                       </div>
                     )}
+                    <span className="text-gray-500 text-xs">{expanded.has(pos.id) ? '▲' : '▼'}</span>
                   </div>
-                </div>
+                </button>
 
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
@@ -317,6 +360,53 @@ export default function Results() {
                       <div className="w-full bg-gpw-dark rounded-full h-1.5">
                         <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
                       </div>
+                    </div>
+                  )
+                })()}
+
+                {/* ── Expand panel: wskaźniki ── */}
+                {expanded.has(pos.id) && (() => {
+                  const cur = indics[pos.id]
+                  const comment = signalComment(pos, cur)
+                  const trendLabel = t => t === 'up' ? '📈 wzrostowy' : t === 'down' ? '📉 spadkowy' : t ? '➡️ neutralny' : '—'
+                  const delta = (entry, now) => {
+                    if (entry == null || now == null) return null
+                    const d = now - entry
+                    return { d, cls: d > 0 ? 'text-gpw-green' : d < 0 ? 'text-gpw-red' : 'text-gray-400', arrow: d > 0 ? '↑' : d < 0 ? '↓' : '→' }
+                  }
+                  const rsiDelta  = delta(pos.entryRsi,        cur?.rsi)
+                  const volDelta  = delta(pos.entryVolMult,    cur?.volMult)
+                  const smaDelta  = delta(pos.entrySma50Delta, cur?.sma50Delta)
+                  return (
+                    <div className="border-t border-gpw-border pt-3 space-y-3">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Zmiana wskaźników od wejścia</p>
+                      <div className="grid grid-cols-4 gap-1 text-xs text-center">
+                        <div className="text-gray-500"></div>
+                        <div className="text-gray-500">Wejście</div>
+                        <div className="text-gray-500">Teraz</div>
+                        <div className="text-gray-500">Zmiana</div>
+
+                        <div className="text-gray-400 text-left">RSI({cur?.rsiPeriod ?? 14})</div>
+                        <div>{pos.entryRsi != null ? pos.entryRsi.toFixed(1) : '—'}</div>
+                        <div>{cur ? cur.rsi?.toFixed(1) ?? '—' : '…'}</div>
+                        <div className={rsiDelta?.cls ?? ''}>{rsiDelta ? `${rsiDelta.d > 0 ? '+' : ''}${rsiDelta.d.toFixed(1)} ${rsiDelta.arrow}` : '—'}</div>
+
+                        <div className="text-gray-400 text-left">Wolumen</div>
+                        <div>{pos.entryVolMult != null ? `${pos.entryVolMult}x` : '—'}</div>
+                        <div>{cur ? `${cur.volMult}x` : '…'}</div>
+                        <div className={volDelta?.cls ?? ''}>{volDelta ? `${volDelta.d > 0 ? '+' : ''}${volDelta.d.toFixed(1)}x ${volDelta.arrow}` : '—'}</div>
+
+                        <div className="text-gray-400 text-left">vs SMA50</div>
+                        <div>{pos.entrySma50Delta != null ? `${pos.entrySma50Delta > 0 ? '+' : ''}${pos.entrySma50Delta}%` : '—'}</div>
+                        <div>{cur?.sma50Delta != null ? `${cur.sma50Delta > 0 ? '+' : ''}${cur.sma50Delta}%` : '…'}</div>
+                        <div className={smaDelta?.cls ?? ''}>{smaDelta ? `${smaDelta.d > 0 ? '+' : ''}${smaDelta.d.toFixed(1)}pp ${smaDelta.arrow}` : '—'}</div>
+
+                        <div className="text-gray-400 text-left">Indeks</div>
+                        <div className="col-span-3 text-left">{trendLabel(pos.entryIndexTrend)}</div>
+                      </div>
+                      {comment && (
+                        <div className="text-xs text-gray-300 bg-gpw-dark rounded-lg px-3 py-2">{comment}</div>
+                      )}
                     </div>
                   )
                 })()}

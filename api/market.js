@@ -1,6 +1,9 @@
 import { createClient } from '@vercel/kv'
 import { fetchCandles, fetchCurrent, fetchCandlesExtended, fetchFundamentals } from '../src/lib/yahoo.js'
-import { detectSignal, calcIndicators } from '../src/lib/signals.js'
+import { detectSignal, calcIndicators, SIGNAL_DEFAULTS } from '../src/lib/signals.js'
+import { calcRSI } from '../src/indicators/rsi.js'
+import { volumeMultiplier } from '../src/indicators/volume.js'
+import { calcSMA } from '../src/indicators/sma.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
@@ -168,6 +171,27 @@ export default async function handler(req, res) {
 
     await kv.set(cacheKey, result, { ex: 30 * 24 * 60 * 60 }).catch(() => {})
     return res.json(result)
+  }
+
+  // ── Indicators mode ──────────────────────────────────────────────────
+  if (mode === 'indicators') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const data    = await getCachedData(ticker, exchange)
+    const candles = data?.candles
+    if (!candles || candles.length < 25) return res.status(404).json({ error: 'no data' })
+    const closes    = candles.map(c => c.close)
+    const volumes   = candles.map(c => c.volume)
+    const price     = closes[closes.length - 1]
+    const defaults  = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
+    const rsiPeriod = defaults[strategy]?.rsiPeriod ?? 14
+    const sma50     = calcSMA(closes, 50)
+    return res.json({
+      price,
+      rsi:        calcRSI(closes, rsiPeriod),
+      rsiPeriod,
+      volMult:    Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10,
+      sma50Delta: sma50 ? Math.round((price - sma50) / sma50 * 10000) / 100 : null,
+    })
   }
 
   // ── Macro mode ───────────────────────────────────────────────────────
