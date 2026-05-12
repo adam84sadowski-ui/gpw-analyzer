@@ -55,7 +55,7 @@ async function getCachedData(ticker, exchange) {
   const data = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
   if (data) {
     memSet(memKey, data)
-    await kv.set(kvKey, data, { ex: 25 * 60 }).catch(() => {})
+    await kv.set(kvKey, data, { ex: exchange === 'NYSE' ? 90 * 60 : 25 * 60 }).catch(() => {})
   }
   return data  // { candles, shortName }
 }

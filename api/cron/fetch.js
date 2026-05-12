@@ -140,10 +140,10 @@ export default async function handler(req, res) {
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
 
-  const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
-  const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
+  const rawUniverse = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
+  const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
 
-  const seasonalityKeys = universe.map(t => `${ENV}:seasonality:${exchange}:${t}`)
+  const seasonalityKeys = rawUniverse.map(t => `${ENV}:seasonality:${exchange}:${t}`)
   const [thresholds, indexTrend, settings, positionKeys, macro, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
@@ -159,8 +159,13 @@ export default async function handler(req, res) {
     ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
 
+  // Index filter: neutral NYSE → limit to 5 tickers to conserve TwelveData credits
+  const universe = (exchange === 'NYSE' && indexTrend === 'neutral')
+    ? rawUniverse.slice(0, 5)
+    : rawUniverse
+
   const seasonalityMap = {}
-  universe.forEach((t, i) => {
+  rawUniverse.forEach((t, i) => {
     if (seasonalityValues[i]) seasonalityMap[t] = seasonalityValues[i].monthlyReturns
   })
 
@@ -174,24 +179,47 @@ export default async function handler(req, res) {
   const totalInvested    = openPositions.reduce((sum, p) => sum + (p.positionSize ?? 0), 0)
   const totalExposurePct = portfolio > 0 ? totalInvested / portfolio * 100 : 0
 
-  const settled = await Promise.allSettled(
-    universe.map(async ticker => {
+  // ── Rate-limited candle fetching (Layer 1+2) ────────────────────────────
+  // Check KV cache in parallel first; only call TwelveData on cache miss.
+  // NYSE: max 3 misses/run with 12s delay = ~36s safe within Vercel 60s limit.
+  const CANDLE_TTL  = exchange === 'NYSE' ? 90 * 60 : 25 * 60
+  const MISS_LIMIT  = exchange === 'NYSE' ? 3 : universe.length
+  const MISS_DELAY  = 12000
+
+  const cacheChecks = await Promise.all(
+    universe.map(async ticker => ({
+      ticker,
+      data: await kv.get(`${ENV}:candles:${exchange}:${ticker}`).catch(() => null),
+    }))
+  )
+  const cacheHits   = cacheChecks.filter(c => c.data !== null)
+  const cacheMisses = cacheChecks.filter(c => c.data === null)
+
+  const fetchedData = []
+  for (let i = 0; i < Math.min(cacheMisses.length, MISS_LIMIT); i++) {
+    if (i > 0 && exchange === 'NYSE') await new Promise(r => setTimeout(r, MISS_DELAY))
+    const { ticker } = cacheMisses[i]
+    try {
       const data = await Promise.race([
         fetchCandles(ticker, exchange),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 7000)),
       ])
-      const candles = data?.candles
-      if (!candles || candles.length < 25) return null
-      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[ticker])
-      return sig ? { ...sig, ticker } : null
-    })
-  )
+      if (data) {
+        await kv.set(`${ENV}:candles:${exchange}:${ticker}`, data, { ex: CANDLE_TTL }).catch(() => {})
+        fetchedData.push({ ticker, data })
+      }
+    } catch { /* skip this ticker this run */ }
+  }
 
-  const signals = settled
-    .filter(r => r.status === 'fulfilled' && r.value !== null)
-    .map(r => r.value)
-    .filter(s => s.score >= SCORE_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
+  const allCandles = [...cacheHits, ...fetchedData]
+  const signals = []
+  for (const { ticker, data } of allCandles) {
+    const candles = data?.candles
+    if (!candles || candles.length < 25) continue
+    const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[ticker])
+    if (sig && sig.score >= SCORE_THRESHOLD) signals.push({ ...sig, ticker })
+  }
+  signals.sort((a, b) => b.score - a.score)
 
   const skipDate = now.toISOString().slice(0, 10)
   async function logSkip(ticker, reason, score, adjustedScore) {
