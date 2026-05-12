@@ -171,13 +171,16 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
         target:          rec.target,
         stopLoss:        rec.stopLoss,
         signal:          rec.signal,
-        entryRsi:        rec.rsi          ?? null,
-        entryScore:      rec.score        ?? null,
-        entryVolMult:    rec.volMult      ?? null,
-        entrySma50Delta: rec.sma50 && rec.price
+        entryRsi:         rec.rsi           ?? null,
+        entryRsiPeriod:   rec.rsiPeriod    ?? null,
+        entryScore:       rec.score        ?? null,
+        entryVolMult:     rec.volMult      ?? null,
+        entrySma50Delta:  rec.sma50 && rec.price
           ? Math.round((rec.price - rec.sma50) / rec.sma50 * 10000) / 100
           : null,
-        entryIndexTrend: rec.indexTrend  ?? null,
+        entrySma150trend: rec.sma150trend  ?? null,
+        entryNearSupport: rec.nearSupport  ?? null,
+        entryIndexTrend:  rec.indexTrend   ?? null,
       }),
     })
     setConfirming(null)

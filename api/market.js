@@ -184,13 +184,16 @@ export default async function handler(req, res) {
     const price     = closes[closes.length - 1]
     const defaults  = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
     const rsiPeriod = defaults[strategy]?.rsiPeriod ?? 14
-    const sma50     = calcSMA(closes, 50)
+    const sma50      = calcSMA(closes, 50)
+    const sma150     = calcSMA(closes, 150)
+    const sma150trend = sma150 != null ? (price > sma150 ? 'above' : 'below') : null
     return res.json({
       price,
-      rsi:        calcRSI(closes, rsiPeriod),
+      rsi:         calcRSI(closes, rsiPeriod),
       rsiPeriod,
-      volMult:    Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10,
-      sma50Delta: sma50 ? Math.round((price - sma50) / sma50 * 10000) / 100 : null,
+      volMult:     Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10,
+      sma50Delta:  sma50 ? Math.round((price - sma50) / sma50 * 10000) / 100 : null,
+      sma150trend,
     })
   }
 

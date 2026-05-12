@@ -13,7 +13,8 @@ export default async function handler(req, res) {
   if (method === 'POST') {
     // Otwórz pozycję
     const { ticker, strategy, exchange, entryPrice, positionSize, target, stopLoss, signal,
-            entryRsi, entryScore, entryVolMult, entrySma50Delta, entryIndexTrend } = req.body
+            entryRsi, entryRsiPeriod, entryScore, entryVolMult, entrySma50Delta,
+            entrySma150trend, entryNearSupport, entryIndexTrend } = req.body
     if (!ticker || !entryPrice || !positionSize) {
       return res.status(400).json({ error: 'ticker, entryPrice, positionSize required' })
     }
@@ -26,11 +27,14 @@ export default async function handler(req, res) {
       exchange:  exchange ?? 'GPW',
       signal,
       entryPrice,
-      entryRsi:         entryRsi        ?? null,
-      entryScore:       entryScore      ?? null,
-      entryVolMult:     entryVolMult    ?? null,
-      entrySma50Delta:  entrySma50Delta ?? null,
-      entryIndexTrend:  entryIndexTrend ?? null,
+      entryRsi:          entryRsi          ?? null,
+      entryRsiPeriod:    entryRsiPeriod    ?? null,
+      entryScore:        entryScore        ?? null,
+      entryVolMult:      entryVolMult      ?? null,
+      entrySma50Delta:   entrySma50Delta   ?? null,
+      entrySma150trend:  entrySma150trend  ?? null,
+      entryNearSupport:  entryNearSupport  ?? null,
+      entryIndexTrend:   entryIndexTrend   ?? null,
       positionSize,
       shares: Math.floor(positionSize / entryPrice),
       target,
@@ -80,6 +84,16 @@ export default async function handler(req, res) {
     }
 
     return res.json(updated)
+  }
+
+  if (method === 'DELETE') {
+    const { id } = req.query
+    if (!id) return res.status(400).json({ error: 'id required' })
+    const position = await kv.get(id)
+    if (!position) return res.status(404).json({ error: 'Position not found' })
+    if (position.status !== 'closed') return res.status(400).json({ error: 'Only closed positions can be deleted' })
+    await kv.del(id)
+    return res.json({ deleted: id })
   }
 
   if (method === 'GET') {
