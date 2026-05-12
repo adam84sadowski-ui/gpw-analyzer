@@ -70,6 +70,7 @@ export default function Results() {
   const [settings, setSettings]     = useState({ capital: 10000 })
   const [expanded, setExpanded]     = useState(new Set())
   const [indics, setIndics]         = useState({})
+  const [names, setNames]           = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -86,15 +87,18 @@ export default function Results() {
         setPositions(data)
         if (tab === 'open' && data.length > 0) {
           const priceMap = {}
+          const nameMap  = {}
           await Promise.all(data.map(async pos => {
             if (priceMap[pos.ticker] !== undefined) return
             try {
               const posEx = pos.exchange ?? 'GPW'
               const r = await fetch(`/api/market?mode=current&ticker=${pos.ticker}&exchange=${posEx}`)
               const d = await r.json()
-              if (d?.close) priceMap[pos.ticker] = d.close
+              if (d?.close)     priceMap[pos.ticker] = d.close
+              if (d?.shortName) nameMap[pos.ticker]  = d.shortName
             } catch {}
           }))
+          setNames(nameMap)
           setPrices(priceMap)
         }
       })
@@ -266,6 +270,9 @@ export default function Results() {
                 >
                   <div>
                     <span className="font-bold text-lg">{pos.tickerDisplay}</span>
+                    {names[pos.ticker] && (
+                      <span className="ml-1.5 text-sm text-gray-400">({names[pos.ticker]})</span>
+                    )}
                     <span className="ml-2 text-xs text-gray-400">{pos.strategy}</span>
                     <span className="ml-1 text-xs text-gray-500">{cur}</span>
                     {pos.entryScore != null && (
