@@ -86,6 +86,16 @@ export default async function handler(req, res) {
     return res.json(updated)
   }
 
+  if (method === 'DELETE') {
+    const { id } = req.query
+    if (!id) return res.status(400).json({ error: 'id required' })
+    const position = await kv.get(id)
+    if (!position) return res.status(404).json({ error: 'Position not found' })
+    if (position.status !== 'closed') return res.status(400).json({ error: 'Only closed positions can be deleted' })
+    await kv.del(id)
+    return res.json({ deleted: id })
+  }
+
   if (method === 'GET') {
     // Pobierz pozycje (open lub closed)
     const { status = 'open' } = req.query

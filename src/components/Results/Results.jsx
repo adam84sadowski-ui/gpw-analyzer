@@ -71,6 +71,7 @@ export default function Results() {
   const [expanded, setExpanded]     = useState(new Set())
   const [indics, setIndics]         = useState({})
   const [names, setNames]           = useState({})
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -187,6 +188,12 @@ export default function Results() {
     }
 
     return null
+  }
+
+  async function deletePosition(id) {
+    await fetch(`/api/positions?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    setPositions(prev => prev.filter(p => p.id !== id))
+    setDeletingId(null)
   }
 
   const openPositions = positions.filter(p => p.status === 'open')
@@ -457,6 +464,32 @@ export default function Results() {
                   >
                     Zamknij pozycję
                   </button>
+                )}
+
+                {pos.status === 'closed' && (
+                  deletingId === pos.id ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => deletePosition(pos.id)}
+                        className="flex-1 bg-red-900/40 border border-red-800 hover:bg-red-900/70 text-red-300 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Tak, usuń
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        className="flex-1 border border-gpw-border hover:border-gray-500 text-gray-400 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Anuluj
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeletingId(pos.id)}
+                      className="w-full border border-gpw-border hover:border-red-900 text-gray-500 hover:text-red-400 py-2 rounded-lg text-sm transition-colors"
+                    >
+                      Usuń z historii
+                    </button>
+                  )
                 )}
               </div>
             )
