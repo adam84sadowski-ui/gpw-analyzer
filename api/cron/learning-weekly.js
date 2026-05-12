@@ -61,6 +61,7 @@ export default async function handler(req, res) {
     res.json({ success: true, newThresholds })
   } catch (e) {
     console.error('Learning weekly error:', e)
+    await sendTelegram(`🧠 Learning Agent: błąd tygodniowego raportu\n<code>${e.message}</code>`, IS_STAGING).catch(() => {})
     res.status(500).json({ error: e.message })
   }
 }
