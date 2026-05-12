@@ -107,37 +107,44 @@ export async function fetchCurrent(ticker, exchange = 'GPW') {
 }
 
 export async function fetchFundamentals(ticker, exchange = 'GPW') {
-  const symbol = toYahooSymbol(ticker, exchange)
-  // v8/chart with events=div — works without crumb, returns dividends + meta
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y&includePrePost=false&events=div`
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
-  if (!res.ok) return null
-  const json = await res.json()
-  const result = json?.chart?.result?.[0]
-  if (!result) return null
-
-  const meta   = result.meta ?? {}
-  const price  = meta.regularMarketPrice ?? null
+  const symbol   = toYahooSymbol(ticker, exchange)
   const tsToDate = ts => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : null
 
-  // Dividend events: Yahoo returns both past and upcoming declared dividends
-  const divEvents  = Object.values(result.events?.dividends ?? {})
-  const nowSec     = Date.now() / 1000
-  const yearAgoSec = nowSec - 365 * 24 * 3600
+  // Step 1: meta (price, currency, shortName) — range=5d proven to work from Vercel IPs
+  const metaJson = await yahooFetch(symbol, '5d')
+  const metaRes  = metaJson?.chart?.result?.[0]
+  if (!metaRes) return null
+  const meta  = metaRes.meta ?? {}
+  const price = meta.regularMarketPrice ?? null
 
-  const pastDivs   = divEvents.filter(d => d.date >= yearAgoSec && d.date <= nowSec)
-  const annualDiv  = pastDivs.reduce((sum, d) => sum + (d.amount ?? 0), 0)
-  const divYield   = price && annualDiv > 0 ? annualDiv / price : null
+  // Step 2: dividend events — separate call with range=2y&events=div
+  let divYield = null
+  let exDivDate = null
+  try {
+    const divUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2y&includePrePost=false&events=div`
+    const divRes = await fetch(divUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } })
+    if (divRes.ok) {
+      const divJson   = await divRes.json()
+      const divResult = divJson?.chart?.result?.[0]
+      const divEvents = Object.values(divResult?.events?.dividends ?? {})
+      const nowSec    = Date.now() / 1000
+      const yearAgo   = nowSec - 365 * 24 * 3600
 
-  const futureDivs = divEvents.filter(d => d.date > nowSec).sort((a, b) => a.date - b.date)
-  const exDivDate  = futureDivs[0] ? tsToDate(futureDivs[0].date) : null
+      const pastDivs  = divEvents.filter(d => d.date >= yearAgo && d.date <= nowSec)
+      const annualDiv = pastDivs.reduce((sum, d) => sum + (d.amount ?? 0), 0)
+      if (price && annualDiv > 0) divYield = annualDiv / price
+
+      const future = divEvents.filter(d => d.date > nowSec).sort((a, b) => a.date - b.date)
+      if (future[0]) exDivDate = tsToDate(future[0].date)
+    }
+  } catch { /* dividend data optional — signal still works without it */ }
 
   return {
     price,
     currency:                 meta.currency ?? null,
     shortName:                meta.shortName ?? meta.longName ?? null,
     dividendYield:            divYield,
-    payoutRatio:              null,   // unavailable without Yahoo crumb
+    payoutRatio:              null,
     forwardPE:                null,
     trailingPE:               null,
     exDividendDate:           exDivDate,
