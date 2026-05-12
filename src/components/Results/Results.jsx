@@ -374,19 +374,23 @@ export default function Results() {
                     const d = now - entry
                     return { d, cls: d > 0 ? 'text-gpw-green' : d < 0 ? 'text-gpw-red' : 'text-gray-400', arrow: d > 0 ? '↑' : d < 0 ? '↓' : '→' }
                   }
+                  const rsiPeriod = pos.entryRsiPeriod ?? cur?.rsiPeriod ?? 14
                   const rsiDelta  = delta(pos.entryRsi,        cur?.rsi)
                   const volDelta  = delta(pos.entryVolMult,    cur?.volMult)
                   const smaDelta  = delta(pos.entrySma50Delta, cur?.sma50Delta)
+                  const sma150Label = t => t === 'above' ? '✅ powyżej' : t === 'below' ? '⚠️ poniżej' : null
+                  const sma150Changed = pos.entrySma150trend && cur?.sma150trend && pos.entrySma150trend !== cur.sma150trend
+                  const indexName = pos.exchange === 'NYSE' ? 'S&P500' : 'WIG20'
                   return (
                     <div className="border-t border-gpw-border pt-3 space-y-3">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Zmiana wskaźników od wejścia</p>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Wskaźniki przy wejściu → teraz</p>
                       <div className="grid grid-cols-4 gap-1 text-xs text-center">
                         <div className="text-gray-500"></div>
                         <div className="text-gray-500">Wejście</div>
                         <div className="text-gray-500">Teraz</div>
                         <div className="text-gray-500">Zmiana</div>
 
-                        <div className="text-gray-400 text-left">RSI({cur?.rsiPeriod ?? 14})</div>
+                        <div className="text-gray-400 text-left">RSI({rsiPeriod})</div>
                         <div>{pos.entryRsi != null ? pos.entryRsi.toFixed(1) : '—'}</div>
                         <div>{cur ? cur.rsi?.toFixed(1) ?? '—' : '…'}</div>
                         <div className={rsiDelta?.cls ?? ''}>{rsiDelta ? `${rsiDelta.d > 0 ? '+' : ''}${rsiDelta.d.toFixed(1)} ${rsiDelta.arrow}` : '—'}</div>
@@ -401,8 +405,20 @@ export default function Results() {
                         <div>{cur?.sma50Delta != null ? `${cur.sma50Delta > 0 ? '+' : ''}${cur.sma50Delta}%` : '…'}</div>
                         <div className={smaDelta?.cls ?? ''}>{smaDelta ? `${smaDelta.d > 0 ? '+' : ''}${smaDelta.d.toFixed(1)}pp ${smaDelta.arrow}` : '—'}</div>
 
-                        <div className="text-gray-400 text-left">Indeks</div>
+                        <div className="text-gray-400 text-left">SMA150</div>
+                        <div>{sma150Label(pos.entrySma150trend) ?? '—'}</div>
+                        <div>{cur ? (sma150Label(cur.sma150trend) ?? '—') : '…'}</div>
+                        <div className={sma150Changed ? 'text-gpw-red' : 'text-gray-400'}>{sma150Changed ? (cur.sma150trend === 'below' ? '⬇️ zmiana' : '⬆️ zmiana') : '—'}</div>
+
+                        <div className="text-gray-400 text-left">{indexName}</div>
                         <div className="col-span-3 text-left">{trendLabel(pos.entryIndexTrend)}</div>
+
+                        {pos.entryNearSupport != null && (
+                          <>
+                            <div className="text-gray-400 text-left">Wsparcie</div>
+                            <div className="col-span-3 text-left text-blue-400">{pos.entryNearSupport}</div>
+                          </>
+                        )}
                       </div>
                       {comment && (
                         <div className="text-xs text-gray-300 bg-gpw-dark rounded-lg px-3 py-2">{comment}</div>
