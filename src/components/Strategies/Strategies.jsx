@@ -93,6 +93,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [eodhd, setEodhd]             = useState({})
   const [interpretOpen, setInterpretOpen] = useState({})
   const [confirming, setConfirming]   = useState(null)
+  const [expandedRsi, setExpandedRsi] = useState(new Set())
   const scanStartedRef                = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
 
@@ -204,21 +205,133 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
         ) : (
           <div className="space-y-1.5">
             {topRsi.map(r => {
-              const rsiVal = r.rsi?.toFixed(1)
-              const badge  = r.rsi < 30 ? 'bg-gpw-green text-white'
+              const rsiVal    = r.rsi?.toFixed(1)
+              const badge     = r.rsi < 30 ? 'bg-gpw-green text-white'
                 : r.rsi < 40 ? 'bg-yellow-600 text-white'
                 : 'bg-gpw-card text-gray-400'
-              const cur = r.exchange === 'NYSE' ? 'USD' : 'PLN'
+              const cur       = r.exchange === 'NYSE' ? 'USD' : 'PLN'
+              const isOpen    = expandedRsi.has(r.ticker)
+              const sma50Delta = r.sma50 && r.price
+                ? Math.round((r.price - r.sma50) / r.sma50 * 10000) / 100 : null
+
+              // Thresholds per strategy/exchange
+              const rsiThr = strategy === 'scalping' ? 35 : strategy === 'aggressive' ? 60 : null
+              const volMin = strategy === 'scalping'
+                ? (r.exchange === 'NYSE' ? 1.15 : 1.5)
+                : strategy === 'swing'
+                  ? (r.exchange === 'NYSE' ? 1.3 : 1.2)
+                  : (r.exchange === 'NYSE' ? 1.5 : 2.0)
+
+              // Per-indicator check rows
+              const checks = []
+              if (strategy === 'scalping') {
+                const rsiOk = r.rsi != null && r.rsi < rsiThr
+                checks.push({
+                  label: `RSI(${rsiPeriod})`,
+                  value: r.rsi != null ? r.rsi.toFixed(1) : '—',
+                  req:   `< ${rsiThr}`,
+                  ok:    rsiOk,
+                  note:  r.rsi != null && !rsiOk ? `brakuje ${(r.rsi - rsiThr).toFixed(1)} pkt` : rsiOk ? 'spełnione' : '—',
+                })
+              }
+              if (strategy === 'aggressive') {
+                const rsiOk = r.rsi != null && r.rsi > rsiThr
+                checks.push({
+                  label: `RSI(${rsiPeriod})`,
+                  value: r.rsi != null ? r.rsi.toFixed(1) : '—',
+                  req:   `> ${rsiThr}`,
+                  ok:    rsiOk,
+                  note:  r.rsi != null && !rsiOk ? `brakuje ${(rsiThr - r.rsi).toFixed(1)} pkt` : rsiOk ? 'spełnione' : '—',
+                })
+              }
+              if (strategy === 'swing') {
+                const crossOk = sma50Delta != null && sma50Delta > 0
+                checks.push({
+                  label: 'vs SMA50',
+                  value: sma50Delta != null ? `${sma50Delta > 0 ? '+' : ''}${sma50Delta}%` : '—',
+                  req:   'crossover ↑',
+                  ok:    crossOk,
+                  note:  crossOk ? 'powyżej — czeka na crossover w oknie 3 dni' : sma50Delta != null ? `${Math.abs(sma50Delta).toFixed(1)}% poniżej SMA50` : '—',
+                })
+              }
+              const volOk = r.volMult != null && r.volMult >= volMin
+              checks.push({
+                label: 'Wolumen',
+                value: r.volMult != null ? `${r.volMult}x` : '—',
+                req:   `≥ ${volMin}x`,
+                ok:    volOk,
+                note:  r.volMult != null && !volOk ? `brakuje ${(volMin - r.volMult).toFixed(1)}x` : volOk ? 'spełnione' : '—',
+              })
+              checks.push({
+                label: 'SMA150',
+                value: r.sma150trend === 'above' ? '✅ powyżej' : r.sma150trend === 'below' ? '⚠️ poniżej' : '—',
+                req:   'powyżej',
+                ok:    r.sma150trend === 'above',
+                note:  r.sma150trend === 'below' ? 'cena poniżej długoterm. trendu' : r.sma150trend === 'above' ? 'ok' : '—',
+              })
+              if (r.score != null) {
+                checks.push({
+                  label: 'Score',
+                  value: `${r.score}/100`,
+                  req:   '≥ 60',
+                  ok:    r.score >= 60,
+                  note:  r.score < 60 ? `brakuje ${60 - r.score} pkt` : 'próg osiągnięty',
+                })
+              }
+
+              const metCount = checks.filter(c => c.ok).length
+              const summary  = r.hasSignal
+                ? '✅ Sygnał aktywny — wszystkie warunki spełnione'
+                : `Spełnione ${metCount}/${checks.length} warunków — brak sygnału`
+
               return (
-                <div key={r.ticker} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-bold w-12">{r.tickerDisplay}</span>
-                    {r.companyName && <span className="text-gray-500 truncate max-w-[90px]">({r.companyName})</span>}
+                <div key={r.ticker} className="bg-gpw-card rounded-lg overflow-hidden">
+                  <div
+                    className="flex items-center justify-between text-xs px-2 py-1.5 cursor-pointer hover:bg-white/5 transition-colors"
+                    onClick={() => setExpandedRsi(prev => {
+                      const next = new Set(prev)
+                      next.has(r.ticker) ? next.delete(r.ticker) : next.add(r.ticker)
+                      return next
+                    })}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold w-12">{r.tickerDisplay}</span>
+                      {r.companyName && <span className="text-gray-500 truncate max-w-[80px]">({r.companyName})</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${badge}`}>RSI {rsiVal}</span>
+                      <span className="text-gray-400 w-20 text-right">{r.price} {cur}</span>
+                      <span className="text-gray-600">{isOpen ? '▲' : '▼'}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded font-bold text-xs ${badge}`}>RSI {rsiVal}</span>
-                    <span className="text-gray-400 w-20 text-right">{r.price} {cur}</span>
-                  </div>
+
+                  {isOpen && (
+                    <div className="border-t border-gpw-border px-2 py-2 space-y-2">
+                      <div className="grid grid-cols-4 gap-1 text-xs text-center">
+                        <div className="text-gray-500 text-left">Wskaźnik</div>
+                        <div className="text-gray-500">Teraz</div>
+                        <div className="text-gray-500">Wymóg</div>
+                        <div className="text-gray-500">Status</div>
+                        {checks.map(c => (
+                          <>
+                            <div key={c.label + 'l'} className="text-gray-400 text-left">{c.label}</div>
+                            <div key={c.label + 'v'}>{c.value}</div>
+                            <div key={c.label + 'r'} className="text-gray-500">{c.req}</div>
+                            <div key={c.label + 's'} className={c.ok ? 'text-gpw-green' : 'text-gpw-red'}>{c.ok ? '✅' : '❌'}</div>
+                          </>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-400 border-t border-gpw-border pt-1.5 space-y-0.5">
+                        {checks.filter(c => !c.ok && c.note && c.note !== '—').map(c => (
+                          <div key={c.label + 'n'}>❌ <span className="text-gray-500">{c.label}:</span> {c.note}</div>
+                        ))}
+                        <div className={`font-semibold mt-1 ${r.hasSignal ? 'text-gpw-green' : 'text-gray-300'}`}>{summary}</div>
+                      </div>
+                      {r.nearSupport != null && (
+                        <div className="text-xs text-blue-400">🔵 Blisko wsparcia: {r.nearSupport}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             })}
