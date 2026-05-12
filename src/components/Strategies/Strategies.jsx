@@ -162,16 +162,22 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticker:       rec.ticker,
-        strategy:     rec.strategy,
-        exchange:     rec.exchange ?? exchange,
-        entryPrice:   price,
+        ticker:          rec.ticker,
+        strategy:        rec.strategy,
+        exchange:        rec.exchange ?? exchange,
+        entryPrice:      price,
         positionSize,
         shares,
-        target:       rec.target,
-        stopLoss:     rec.stopLoss,
-        signal:       rec.signal,
-        entryRsi:     rec.rsi ?? null,
+        target:          rec.target,
+        stopLoss:        rec.stopLoss,
+        signal:          rec.signal,
+        entryRsi:        rec.rsi          ?? null,
+        entryScore:      rec.score        ?? null,
+        entryVolMult:    rec.volMult      ?? null,
+        entrySma50Delta: rec.sma50 && rec.price
+          ? Math.round((rec.price - rec.sma50) / rec.sma50 * 10000) / 100
+          : null,
+        entryIndexTrend: rec.indexTrend  ?? null,
       }),
     })
     setConfirming(null)
