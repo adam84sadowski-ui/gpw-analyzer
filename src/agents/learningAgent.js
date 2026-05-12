@@ -1,4 +1,7 @@
-const MODEL = 'claude-sonnet-4-20250514'
+import Anthropic from '@anthropic-ai/sdk'
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const MODEL = 'claude-sonnet-4-6'
 
 export async function runLearningAgent(alertHistory) {
   if (!alertHistory || alertHistory.length === 0) return null
@@ -20,18 +23,14 @@ Odpowiedz TYLKO w JSON bez żadnego tekstu przed ani po JSON:
 DANE:
 ${JSON.stringify(alertHistory, null, 2)}`
 
-  const res = await fetch('/api/claude', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemPrompt: 'Jesteś Learning Agentem GPW Analyzer. Analizujesz wyniki rekomendacji i zwracasz JSON z korektami progów.',
-      messages: [{ role: 'user', content: prompt }],
-    }),
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 1024,
+    system: 'Jesteś Learning Agentem GPW Analyzer. Analizujesz wyniki rekomendacji i zwracasz JSON z korektami progów.',
+    messages: [{ role: 'user', content: prompt }],
   })
 
-  if (!res.ok) throw new Error(`Claude error: ${res.status}`)
-  const data = await res.json()
-  return JSON.parse(data.content)
+  return JSON.parse(response.content[0].text)
 }
 
 export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, focusTickers }) {
