@@ -108,29 +108,40 @@ export async function fetchCurrent(ticker, exchange = 'GPW') {
 
 export async function fetchFundamentals(ticker, exchange = 'GPW') {
   const symbol = toYahooSymbol(ticker, exchange)
-  const url = `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${symbol}?modules=summaryDetail%2CdefaultKeyStatistics%2Cprice`
+  // v8/chart with events=div — works without crumb, returns dividends + meta
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y&includePrePost=false&events=div`
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } })
   if (!res.ok) return null
   const json = await res.json()
-  const result = json?.quoteSummary?.result?.[0]
+  const result = json?.chart?.result?.[0]
   if (!result) return null
 
-  const sd = result.summaryDetail ?? {}
-  const ks = result.defaultKeyStatistics ?? {}
-  const pr = result.price ?? {}
+  const meta   = result.meta ?? {}
+  const price  = meta.regularMarketPrice ?? null
+  const tsToDate = ts => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : null
 
-  const tsToDate = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : null
+  // Dividend events: Yahoo returns both past and upcoming declared dividends
+  const divEvents  = Object.values(result.events?.dividends ?? {})
+  const nowSec     = Date.now() / 1000
+  const yearAgoSec = nowSec - 365 * 24 * 3600
+
+  const pastDivs   = divEvents.filter(d => d.date >= yearAgoSec && d.date <= nowSec)
+  const annualDiv  = pastDivs.reduce((sum, d) => sum + (d.amount ?? 0), 0)
+  const divYield   = price && annualDiv > 0 ? annualDiv / price : null
+
+  const futureDivs = divEvents.filter(d => d.date > nowSec).sort((a, b) => a.date - b.date)
+  const exDivDate  = futureDivs[0] ? tsToDate(futureDivs[0].date) : null
 
   return {
-    price:                    pr.regularMarketPrice?.raw ?? null,
-    currency:                 pr.currency ?? null,
-    shortName:                pr.shortName ?? null,
-    dividendYield:            sd.dividendYield?.raw ?? null,
-    payoutRatio:              sd.payoutRatio?.raw ?? null,
-    forwardPE:                sd.forwardPE?.raw ?? ks.forwardPE?.raw ?? null,
-    trailingPE:               sd.trailingPE?.raw ?? null,
-    exDividendDate:           tsToDate(sd.exDividendDate?.raw),
-    dividendDate:             tsToDate(sd.dividendDate?.raw),
-    fiveYearAvgDividendYield: sd.fiveYearAvgDividendYield?.raw ?? null,
+    price,
+    currency:                 meta.currency ?? null,
+    shortName:                meta.shortName ?? meta.longName ?? null,
+    dividendYield:            divYield,
+    payoutRatio:              null,   // unavailable without Yahoo crumb
+    forwardPE:                null,
+    trailingPE:               null,
+    exDividendDate:           exDivDate,
+    dividendDate:             null,
+    fiveYearAvgDividendYield: null,
   }
 }
