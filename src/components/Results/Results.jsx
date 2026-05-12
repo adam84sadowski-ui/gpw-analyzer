@@ -162,11 +162,30 @@ export default function Results() {
   function signalComment(pos, cur) {
     if (!cur) return null
     const { signal } = pos
-    if (signal === 'RSI_OVERSOLD'    && cur.rsi > 55)   return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku'
-    if (signal === 'SMA50_CROSSOVER' && cur.sma50Delta < 0) return '⚠️ Cena wróciła pod SMA50 — sygnał osłabiony'
-    if (signal === 'BREAKOUT'        && cur.volMult < 1.2)  return '⚠️ Wolumen opada — breakout może być fałszywy'
-    if (signal === 'RSI_OVERSOLD'    && cur.rsi < 40)   return '✅ RSI nadal w strefie — sygnał aktywny'
-    if (signal === 'SMA50_CROSSOVER' && cur.sma50Delta > 0) return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany'
+    const { rsi, volMult, sma50Delta } = cur
+
+    if (signal === 'BREAKOUT') {
+      if (rsi > 80)       return '⚠️ RSI wykupiony (>80) — ryzyko korekty. Rozważ trailing stop.'
+      if (volMult < 1.2)  return '⚠️ Wolumen opada — breakout może być fałszywy. Monitoruj uważnie.'
+      if (sma50Delta > 30) return `⚠️ Mocne oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
+      if (volMult >= 2)   return `✅ Wolumen potwierdza breakout (${volMult}x). RSI ${rsi?.toFixed(1)} — trend kontynuowany.`
+      return `📊 Breakout aktywny. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
+    }
+
+    if (signal === 'RSI_OVERSOLD') {
+      if (rsi > 70) return '⚠️ RSI wykupiony (>70) — rozważ realizację zysku.'
+      if (rsi > 55) return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku.'
+      if (rsi < 40) return '✅ RSI nadal w strefie wyprzedania — sygnał aktywny.'
+      return `📊 RSI ${rsi?.toFixed(1)} — w normalnym zakresie. Trend wzrostowy.`
+    }
+
+    if (signal === 'SMA50_CROSSOVER') {
+      if (sma50Delta < 0)  return '⚠️ Cena wróciła pod SMA50 — sygnał osłabiony. Rozważ stop loss.'
+      if (sma50Delta > 25) return `⚠️ Duże oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
+      if (sma50Delta > 0)  return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany.'
+      return '📊 SMA50: neutralnie.'
+    }
+
     return null
   }
 
@@ -381,9 +400,13 @@ export default function Results() {
                   const sma150Label = t => t === 'above' ? '✅ powyżej' : t === 'below' ? '⚠️ poniżej' : null
                   const sma150Changed = pos.entrySma150trend && cur?.sma150trend && pos.entrySma150trend !== cur.sma150trend
                   const indexName = pos.exchange === 'NYSE' ? 'S&P500' : 'WIG20'
+                  const noEntryData = pos.entryVolMult == null && pos.entrySma50Delta == null
                   return (
                     <div className="border-t border-gpw-border pt-3 space-y-3">
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Wskaźniki przy wejściu → teraz</p>
+                      {noEntryData && (
+                        <p className="text-xs text-gray-600 italic">Dane z wejścia niedostępne — pozycja otwarta przed v1.21</p>
+                      )}
                       <div className="grid grid-cols-4 gap-1 text-xs text-center">
                         <div className="text-gray-500"></div>
                         <div className="text-gray-500">Wejście</div>
