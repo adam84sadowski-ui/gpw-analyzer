@@ -3,7 +3,7 @@ import { useExchange } from '../../context/ExchangeContext.jsx'
 import { DIVIDEND_UNIVERSE, COMPANY_NAMES, daysToExDividend } from '../../strategies/dividend.js'
 
 function criteriaCheck(fund) {
-  if (!fund) return { yieldOk: false, payoutOk: false, peOk: false }
+  if (!fund) return { yieldOk: false, payoutOk: false, peOk: false, dataOk: false }
   const SECTOR_PE = {
     'pko.pl': 12, 'pzu.pl': 13, 'pkn.pl': 10, 'kghm.pl': 8,
     JNJ: 18, KO: 24, PG: 24, XOM: 14, ABBV: 16,
@@ -14,6 +14,7 @@ function criteriaCheck(fund) {
     yieldOk:  fund.dividendYield != null && fund.dividendYield >= 0.03,
     payoutOk: fund.payoutRatio == null   || fund.payoutRatio < 0.70,
     peOk:     pe == null                 || pe <= sectorPE * 1.2,
+    dataOk:   fund.payoutRatio != null   || pe != null,  // need at least one quality metric
   }
 }
 
@@ -29,7 +30,7 @@ function FundCard({ ticker, fund }) {
   const label    = ticker.replace('.pl', '').toUpperCase()
   const currency = fund?.currency ?? (ticker.endsWith('.pl') ? 'PLN' : 'USD')
   const c        = criteriaCheck({ ...fund, _ticker: ticker })
-  const hasSignal = c.yieldOk && c.payoutOk && c.peOk
+  const hasSignal = c.yieldOk && c.payoutOk && c.peOk && c.dataOk
 
   const yieldPct    = fund?.dividendYield   != null ? (fund.dividendYield * 100).toFixed(1) : null
   const payoutPct   = fund?.payoutRatio     != null ? Math.round(fund.payoutRatio * 100)    : null
@@ -77,6 +78,7 @@ function FundCard({ ticker, fund }) {
         <CriterionDot ok={c.yieldOk}  label="Yield≥3%" />
         <CriterionDot ok={c.payoutOk} label="Payout<70%" />
         <CriterionDot ok={c.peOk}     label="P/E ok" />
+        <CriterionDot ok={c.dataOk}   label="Dane" />
       </div>
 
       <div className="text-xs text-gray-400 flex gap-3 flex-wrap">
@@ -132,7 +134,7 @@ export default function DividendSignals() {
 
   const signalCount = rows.filter(({ ticker, fund }) => {
     const c = criteriaCheck({ ...fund, _ticker: ticker })
-    return c.yieldOk && c.payoutOk && c.peOk
+    return c.yieldOk && c.payoutOk && c.peOk && c.dataOk
   }).length
 
   return (
