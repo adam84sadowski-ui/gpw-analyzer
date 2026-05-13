@@ -10,6 +10,8 @@ const TICKER_MAP = {
 const ETF_TICKER_MAP = {
   'vwce': 'VWCE.L',
   'cspx': 'CSPX.L',
+  'swrd': 'SWRD.L',
+  'aggh': 'AGGH.L',
   'eqqq': 'EQQQ.L',
   'eunl': 'EUNL.L',
   'vhyl': 'VHYL.L',

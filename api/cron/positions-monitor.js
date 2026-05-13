@@ -1,6 +1,8 @@
 import { createClient } from '@vercel/kv'
-import { fetchCurrent, fetchCandles, fetchFundamentals } from '../../src/lib/yahoo.js'
-import { sendTelegram } from '../../src/services/telegram.js'
+import { fetchCurrent, fetchCandles, fetchCandlesExtended, fetchFundamentals } from '../../src/lib/yahoo.js'
+import { sendTelegram, formatGEMAlert } from '../../src/services/telegram.js'
+import { runGEMAlgorithm, isLastBusinessDay } from '../../src/strategies/gem.js'
+import { getMacroEnvironment } from '../../src/indicators/macroFilter.js'
 import { DIVIDEND_UNIVERSE, daysToExDividend } from '../../src/strategies/dividend.js'
 import { getDCAReminder } from '../../src/strategies/dca.js'
 import { calcRSI } from '../../src/indicators/rsi.js'
@@ -339,6 +341,43 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error(`div-calendar error for ${ticker}:`, e.message)
     }
+  }
+
+  // ── GEM MONTHLY REVIEW (last business day of month) ──────────────────
+  try {
+    // Cron fires at 15:50 UTC = 17:50 CET — use UTC+1 for last-biz-day check
+    const nowCET = new Date(Date.now() + 60 * 60 * 1000)
+    if (isLastBusinessDay(nowCET)) {
+      const monthKey    = nowCET.toISOString().slice(0, 7)
+      const dedupKey    = `${ENV}:gem-alert:${monthKey}`
+      const alreadyRan  = await kv.get(dedupKey).catch(() => null)
+      if (!alreadyRan) {
+        const gemConfig  = await kv.get(`${ENV}:gem:config`).catch(() => null)
+        const lookback   = gemConfig?.lookback ?? 12
+        const prevResult = await kv.get(`${ENV}:gem:latest`).catch(() => null)
+        const [cspxData, swrdData, macro] = await Promise.allSettled([
+          fetchCandlesExtended('cspx', 'ETF', '1y'),
+          fetchCandlesExtended('swrd', 'ETF', '1y'),
+          getMacroEnvironment('GPW'),
+        ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
+        const cashRate = (macro?.fedRate ?? 5.75) / 100
+        const result   = runGEMAlgorithm(cspxData?.candles, swrdData?.candles, cashRate, lookback)
+        if (result) {
+          await kv.set(`${ENV}:gem:latest`, result, { ex: 35 * 24 * 60 * 60 }).catch(() => {})
+          const history = await kv.get(`${ENV}:gem:history`).catch(() => null) ?? []
+          history.push({ ...result, month: monthKey })
+          if (history.length > 13) history.shift()
+          await kv.set(`${ENV}:gem:history`, history).catch(() => {})
+          const gemPortfolio = await kv.get(`${ENV}:gem:portfolio`).catch(() => null)
+          const msg = formatGEMAlert(result, prevResult, gemPortfolio)
+          await sendTelegram(msg, IS_STAGING)
+          await kv.set(dedupKey, 1, { ex: 35 * 24 * 60 * 60 }).catch(() => {})
+          alertsSent++
+        }
+      }
+    }
+  } catch (e) {
+    console.error('GEM monthly review error:', e.message)
   }
 
   res.json({ checked: positions.length, alerts: alertsSent })
