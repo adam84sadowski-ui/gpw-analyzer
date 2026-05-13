@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import GEMPage        from './GEM/GEMPage.jsx'
 import DividendSignals from './DividendSignals.jsx'
 import DividendCalendar from './DividendCalendar.jsx'
 import DCAConfigForm from './DCAConfigForm.jsx'
@@ -6,12 +7,13 @@ import ETFPortfolio from './ETFPortfolio.jsx'
 import AnnualIncomeCard from './AnnualIncomeCard.jsx'
 
 const SUB_TABS = [
+  { id: 'gem',      label: '🌍 GEM' },
   { id: 'dca',      label: '📅 ETF / DCA' },
   { id: 'dividend', label: '💰 Dywidendowe' },
 ]
 
 export default function LongTermPage() {
-  const [sub, setSub] = useState('dca')
+  const [sub, setSub] = useState('gem')
 
   return (
     <div className="space-y-4">
@@ -30,6 +32,8 @@ export default function LongTermPage() {
           </button>
         ))}
       </div>
+
+      {sub === 'gem' && <GEMPage />}
 
       {sub === 'dca' && (
         <div className="max-w-2xl space-y-6">

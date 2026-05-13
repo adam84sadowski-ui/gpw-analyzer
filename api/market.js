@@ -9,6 +9,7 @@ import { fetchIndexTrend } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
+import { runGEMAlgorithm, simulateGEM } from '../src/strategies/gem.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -88,6 +89,16 @@ export default async function handler(req, res) {
     return res.json({ deleted: id })
   }
 
+  if (mode === 'gem-portfolio') {
+    if (req.method === 'POST') {
+      const body = req.body ?? {}
+      await kv.set(`${ENV}:gem:portfolio`, body)
+      return res.json({ ok: true })
+    }
+    const portfolio = await kv.get(`${ENV}:gem:portfolio`).catch(() => null)
+    return res.json(portfolio ?? {})
+  }
+
   if (req.method !== 'GET') return res.status(405).end()
 
   if (!['GPW', 'NYSE', 'ETF'].includes(exchange)) {
@@ -138,6 +149,61 @@ export default async function handler(req, res) {
     if (!data) return res.status(404).json({ error: 'no fundamentals data' })
     await kv.set(cacheKey, data, { ex: 24 * 60 * 60 }).catch(() => {})
     return res.json(data)
+  }
+
+  // ── GEM modes ────────────────────────────────────────────────────────
+  if (mode === 'gem-decision') {
+    let result = await kv.get(`${ENV}:gem:latest`).catch(() => null)
+    if (!result) {
+      // Run on-demand if no cached result yet
+      const [cspxData, swrdData, macro] = await Promise.allSettled([
+        fetchCandlesExtended('cspx', 'ETF', '1y'),
+        fetchCandlesExtended('swrd', 'ETF', '1y'),
+        getMacroEnvironment('GPW'),
+      ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
+      const cashRate = ((macro?.fedRate ?? 5.75) / 100)
+      const gemConfig = await kv.get(`${ENV}:gem:config`).catch(() => null)
+      const lookback  = gemConfig?.lookback ?? 12
+      result = runGEMAlgorithm(cspxData?.candles, swrdData?.candles, cashRate, lookback)
+      if (result) await kv.set(`${ENV}:gem:latest`, result, { ex: 35 * 24 * 60 * 60 }).catch(() => {})
+    }
+    if (!result) return res.status(503).json({ error: 'GEM data unavailable' })
+    return res.json(result)
+  }
+
+  if (mode === 'gem-history') {
+    const history = await kv.get(`${ENV}:gem:history`).catch(() => null)
+    return res.json(Array.isArray(history) ? history : [])
+  }
+
+  if (mode === 'gem-simulate') {
+    const cacheKey = `${ENV}:gem:simulate`
+    const cached   = await kv.get(cacheKey).catch(() => null)
+    if (cached) return res.json(cached)
+    // Fetch CSPX+SWRD first (must succeed), then AGGH+VWCE (optional)
+    const [cspxData, swrdData] = await Promise.allSettled([
+      fetchCandlesExtended('cspx', 'ETF', '2y'),
+      fetchCandlesExtended('swrd', 'ETF', '2y'),
+    ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
+    if (!cspxData?.candles) {
+      return res.status(503).json({ error: 'Insufficient ETF data for simulation' })
+    }
+    const [agghData, vwceData, macro] = await Promise.allSettled([
+      fetchCandlesExtended('aggh', 'ETF', '2y'),
+      fetchCandlesExtended('vwce', 'ETF', '2y'),
+      getMacroEnvironment('GPW'),
+    ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
+    const cashRate = ((macro?.fedRate ?? 5.75) / 100)
+    const result   = simulateGEM(
+      cspxData.candles,
+      swrdData?.candles ?? [],
+      agghData?.candles ?? [],
+      vwceData?.candles ?? cspxData.candles,
+      { cashRate }
+    )
+    if (!result) return res.status(503).json({ error: 'Simulation failed' })
+    await kv.set(cacheKey, result, { ex: 7 * 24 * 60 * 60 }).catch(() => {})
+    return res.json(result)
   }
 
   // ── Backtest mode ────────────────────────────────────────────────────
