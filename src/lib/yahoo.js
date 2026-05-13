@@ -139,12 +139,31 @@ export async function fetchFundamentals(ticker, exchange = 'GPW') {
     }
   } catch { /* dividend data optional — signal still works without it */ }
 
+  // Step 3: payout ratio via FMP (NYSE only — GPW not in free tier)
+  let payoutRatio = null
+  const fmpKey = typeof process !== 'undefined' ? process.env?.FMP_API_KEY : null
+  if (fmpKey && exchange === 'NYSE') {
+    try {
+      const fmpRes = await fetch(
+        `https://financialmodelingprep.com/stable/ratios-ttm?symbol=${encodeURIComponent(symbol)}&apikey=${fmpKey}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } }
+      )
+      if (fmpRes.ok) {
+        const fmpJson = await fmpRes.json()
+        const r = Array.isArray(fmpJson) ? fmpJson[0] : null
+        if (r && typeof r.dividendPayoutRatioTTM === 'number') {
+          payoutRatio = r.dividendPayoutRatioTTM
+        }
+      }
+    } catch { /* FMP optional */ }
+  }
+
   return {
     price,
     currency:                 meta.currency ?? null,
     shortName:                meta.shortName ?? meta.longName ?? null,
     dividendYield:            divYield,
-    payoutRatio:              null,
+    payoutRatio,
     forwardPE:                null,
     trailingPE:               null,
     exDividendDate:           exDivDate,
