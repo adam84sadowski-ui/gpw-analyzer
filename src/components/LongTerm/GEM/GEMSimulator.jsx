@@ -37,7 +37,7 @@ export default function GEMSimulator() {
   if (loading) {
     return (
       <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">
-        <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Symulator GEM (5 lat)</div>
+        <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Symulator GEM (2 lata)</div>
         <p className="text-sm text-gray-500 animate-pulse">Ładowanie danych historycznych…</p>
       </div>
     )
@@ -46,7 +46,7 @@ export default function GEMSimulator() {
   if (error || !data?.curve?.length) {
     return (
       <div className="bg-gpw-card border border-gpw-border rounded-lg p-4">
-        <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Symulator GEM (5 lat)</div>
+        <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Symulator GEM (2 lata)</div>
         <p className="text-sm text-gray-500">{error ?? 'Brak danych symulacji.'}</p>
       </div>
     )
@@ -69,7 +69,7 @@ export default function GEMSimulator() {
 
   return (
     <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 space-y-4">
-      <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Symulator GEM (5 lat)</div>
+      <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Symulator GEM (2 lata)</div>
 
       <div className="flex flex-wrap gap-4 text-xs">
         <div className="space-y-0.5">

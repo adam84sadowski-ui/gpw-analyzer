@@ -181,10 +181,10 @@ export default async function handler(req, res) {
     const cached   = await kv.get(cacheKey).catch(() => null)
     if (cached) return res.json(cached)
     const [cspxData, swrdData, agghData, vwceData, macro] = await Promise.allSettled([
-      fetchCandlesExtended('cspx', 'ETF', '5y'),
-      fetchCandlesExtended('swrd', 'ETF', '5y'),
-      fetchCandlesExtended('aggh', 'ETF', '5y'),
-      fetchCandlesExtended('vwce', 'ETF', '5y'),
+      fetchCandlesExtended('cspx', 'ETF', '2y'),
+      fetchCandlesExtended('swrd', 'ETF', '2y'),
+      fetchCandlesExtended('aggh', 'ETF', '2y'),
+      fetchCandlesExtended('vwce', 'ETF', '2y'),
       getMacroEnvironment('GPW'),
     ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
     if (!cspxData?.candles || !vwceData?.candles) {
