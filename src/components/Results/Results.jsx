@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useExchange } from '../../context/ExchangeContext.jsx'
-import { HORIZON } from '../../lib/interpretSignal.js'
+import { HORIZON, interpretPositionState } from '../../lib/interpretSignal.js'
 
 function pct(v)          { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` }
@@ -160,34 +160,8 @@ export default function Results() {
     })
   }
 
-  function signalComment(pos, cur) {
-    if (!cur) return null
-    const { signal } = pos
-    const { rsi, volMult, sma50Delta } = cur
-
-    if (signal === 'BREAKOUT') {
-      if (rsi > 80)       return '⚠️ RSI wykupiony (>80) — ryzyko korekty. Rozważ trailing stop.'
-      if (volMult < 1.2)  return '⚠️ Wolumen opada — breakout może być fałszywy. Monitoruj uważnie.'
-      if (sma50Delta > 30) return `⚠️ Mocne oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
-      if (volMult >= 2)   return `✅ Wolumen potwierdza breakout (${volMult}x). RSI ${rsi?.toFixed(1)} — trend kontynuowany.`
-      return `📊 Breakout aktywny. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
-    }
-
-    if (signal === 'RSI_OVERSOLD') {
-      if (rsi > 70) return '⚠️ RSI wykupiony (>70) — rozważ realizację zysku.'
-      if (rsi > 55) return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku.'
-      if (rsi < 40) return '✅ RSI nadal w strefie wyprzedania — sygnał aktywny.'
-      return `📊 RSI ${rsi?.toFixed(1)} — w normalnym zakresie. Trend wzrostowy.`
-    }
-
-    if (signal === 'SMA50_CROSSOVER') {
-      if (sma50Delta < 0)  return '⚠️ Cena wróciła pod SMA50 — sygnał osłabiony. Rozważ stop loss.'
-      if (sma50Delta > 25) return `⚠️ Duże oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
-      if (sma50Delta > 0)  return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany.'
-      return '📊 SMA50: neutralnie.'
-    }
-
-    return null
+  function signalComment(pos, cur, currentPrice) {
+    return interpretPositionState(pos, currentPrice ?? null, cur)
   }
 
   async function deletePosition(id) {
@@ -393,7 +367,7 @@ export default function Results() {
                 {/* ── Expand panel: wskaźniki ── */}
                 {expanded.has(pos.id) && (() => {
                   const cur = indics[pos.id]
-                  const comment = signalComment(pos, cur)
+                  const comment = signalComment(pos, cur, prices[pos.ticker])
                   const trendLabel = t => t === 'up' ? '📈 wzrostowy' : t === 'down' ? '📉 spadkowy' : t ? '➡️ neutralny' : '—'
                   const delta = (entry, now) => {
                     if (entry == null || now == null) return null

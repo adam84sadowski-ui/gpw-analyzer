@@ -41,3 +41,56 @@ export function interpretSignal(signal, values = {}, strategy = 'scalping') {
 
   return { text, warnings, positives, horizon }
 }
+
+// Position-aware interpretation for open positions.
+// Hierarchy: stop-loss override → volume direction → premise validation.
+export function interpretPositionState(pos, currentPrice, cur) {
+  if (!cur || currentPrice == null) return null
+
+  const { signal, entryPrice, stopLoss, trailingActive, trailingStopPrice } = pos
+  const { rsi, volMult, sma50Delta } = cur
+
+  // Priority 1 — stop-loss override
+  if (trailingActive && trailingStopPrice != null && currentPrice <= trailingStopPrice) {
+    return `⛔ Trailing stop przekroczony — cena ${currentPrice.toFixed(2)} ≤ stop ${trailingStopPrice.toFixed(2)}. Zamknij pozycję.`
+  }
+  const staticStop = entryPrice != null && stopLoss != null ? entryPrice * (1 - stopLoss / 100) : null
+  if (staticStop != null && currentPrice <= staticStop) {
+    return `⛔ Stop loss osiągnięty — cena ${currentPrice.toFixed(2)} ≤ stop ${staticStop.toFixed(2)}. Zamknij pozycję.`
+  }
+
+  // Priority 2 — volume direction: high volume on a falling price = selling pressure
+  const isPriceDown = currentPrice < entryPrice
+  if (isPriceDown && volMult >= 2) {
+    if (signal === 'BREAKOUT') {
+      return `⛔ Wybicie zanegowane — cena wróciła poniżej ceny wejścia. Wolumen ${volMult}x przy spadku = presja sprzedających. Rozważ zamknięcie.`
+    }
+    return `⚠️ Wysoki wolumen (${volMult}x) przy spadającej cenie — presja sprzedających. Monitoruj uważnie.`
+  }
+
+  // Priority 3 — premise validation per signal type
+  if (signal === 'BREAKOUT') {
+    if (isPriceDown)          return '⚠️ Wybicie zanegowane — cena wróciła poniżej ceny wejścia. Rozważ zamknięcie.'
+    if (rsi > 80)             return '⚠️ RSI wykupiony (>80) — ryzyko korekty. Rozważ trailing stop.'
+    if (volMult < 1.2)        return '⚠️ Wolumen opada — breakout może być fałszywy. Monitoruj uważnie.'
+    if (sma50Delta > 30)      return `⚠️ Mocne oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
+    if (volMult >= 2)         return `✅ Wolumen potwierdza wybicie (${volMult}x). RSI ${rsi?.toFixed(1)} — trend kontynuowany.`
+    return `📊 Breakout aktywny. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
+  }
+
+  if (signal === 'RSI_OVERSOLD') {
+    if (rsi > 70) return '⚠️ RSI wykupiony (>70) — rozważ realizację zysku.'
+    if (rsi > 55) return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku.'
+    if (rsi < 40) return '✅ RSI nadal w strefie wyprzedania — sygnał aktywny.'
+    return `📊 RSI ${rsi?.toFixed(1)} — w normalnym zakresie. Trend wzrostowy.`
+  }
+
+  if (signal === 'SMA50_CROSSOVER') {
+    if (sma50Delta < 0)  return '⚠️ Cena wróciła pod SMA50 — sygnał osłabiony. Rozważ stop loss.'
+    if (sma50Delta > 25) return `⚠️ Duże oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
+    if (sma50Delta > 0)  return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany.'
+    return '📊 SMA50: neutralnie.'
+  }
+
+  return null
+}
