@@ -60,9 +60,12 @@ export function detectDividendSignal(ticker, fundamentals) {
   const { dividendYield, payoutRatio, forwardPE, trailingPE } = fundamentals
 
   if (dividendYield == null || dividendYield < 0.03) return null
-  if (payoutRatio != null && payoutRatio > 0.70) return null
 
   const pe = forwardPE ?? trailingPE
+  if (payoutRatio == null && pe == null) return null  // insufficient data — need at least one quality metric
+
+  if (payoutRatio != null && payoutRatio > 0.70) return null
+
   const sectorPE = SECTOR_PE[ticker.toLowerCase()] ?? SECTOR_PE[ticker] ?? 20
   if (pe != null && pe > sectorPE * 1.2) return null
 
