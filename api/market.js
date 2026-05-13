@@ -18,12 +18,13 @@ const kv = createClient({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-const MEM_CACHE_TTL = 25 * 60 * 1000
+const PRICE_CACHE_TTL   =  5 * 60 * 1000   // mode=current, mode=index
+const CANDLES_CACHE_TTL = 25 * 60 * 1000   // mode=daily, scan, signals
 const memCache = new Map()
 
-function memGet(key) {
+function memGet(key, ttl = CANDLES_CACHE_TTL) {
   const hit = memCache.get(key)
-  return hit && Date.now() - hit.ts < MEM_CACHE_TTL ? hit.data : null
+  return hit && Date.now() - hit.ts < ttl ? hit.data : null
 }
 function memSet(key, data) { memCache.set(key, { data, ts: Date.now() }) }
 
@@ -120,7 +121,7 @@ export default async function handler(req, res) {
   if (mode === 'current' || mode === 'index') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const cacheKey = `current:${exchange}:${ticker}`
-    const cached = memGet(cacheKey)
+    const cached = memGet(cacheKey, PRICE_CACHE_TTL)
     if (cached) return res.json(cached)
     let data = await fetchCurrent(ticker, exchange).catch(() => null)
     if (!data?.close) {
