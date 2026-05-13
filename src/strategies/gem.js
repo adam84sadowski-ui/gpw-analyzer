@@ -158,11 +158,12 @@ export function simulateGEM(cspxCandles, swrdCandles, agghCandles, vwceCandles, 
     vwceVal *= 1 + vwceRet
     cspxVal *= 1 + cspxRet
 
+    // Store as multipliers (1.0 = break-even, 1.1 = +10%) for chart compatibility
     curve.push({
       date:    next,
-      gem:     Math.round(gemVal  * 10) / 10,
-      vwce:    Math.round(vwceVal * 10) / 10,
-      cspx:    Math.round(cspxVal * 10) / 10,
+      gem:     Math.round(gemVal  * 1000) / 100000,
+      vwce:    Math.round(vwceVal * 1000) / 100000,
+      cspx:    Math.round(cspxVal * 1000) / 100000,
       holding: sig?.etf ?? 'CSPX',
     })
   }
@@ -172,8 +173,8 @@ export function simulateGEM(cspxCandles, swrdCandles, agghCandles, vwceCandles, 
     curve,
     startDate:  curve[0].date,
     endDate:    curve[curve.length - 1].date,
-    gemReturn:  Math.round((gemVal  - 100) * 10) / 10,
-    vwceReturn: Math.round((vwceVal - 100) * 10) / 10,
-    cspxReturn: Math.round((cspxVal - 100) * 10) / 10,
+    gemReturn:  Math.round(gemVal  * 1000) / 100000,
+    vwceReturn: Math.round(vwceVal * 1000) / 100000,
+    cspxReturn: Math.round(cspxVal * 1000) / 100000,
   }
 }
