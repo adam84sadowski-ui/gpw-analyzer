@@ -12,13 +12,18 @@ function criteriaCheck(fund) {
   const sectorPE  = SECTOR_PE[fund._ticker?.toLowerCase()] ?? SECTOR_PE[fund._ticker] ?? 20
   return {
     yieldOk:  fund.dividendYield != null && fund.dividendYield >= 0.03,
-    payoutOk: fund.payoutRatio == null   || fund.payoutRatio < 0.70,
-    peOk:     pe == null                 || pe <= sectorPE * 1.2,
-    dataOk:   fund.payoutRatio != null   || pe != null,  // need at least one quality metric
+    payoutOk: fund.payoutRatio == null ? null : fund.payoutRatio < 0.70,
+    peOk:     pe == null               ? null : pe <= sectorPE * 1.2,
+    dataOk:   fund.payoutRatio != null || pe != null,
   }
 }
 
 function CriterionDot({ ok, label }) {
+  if (ok === null) return (
+    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500">
+      — {label}
+    </span>
+  )
   return (
     <span className={`text-xs px-1.5 py-0.5 rounded ${ok ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
       {ok ? '✓' : '✗'} {label}
@@ -30,7 +35,7 @@ function FundCard({ ticker, fund }) {
   const label    = ticker.replace('.pl', '').toUpperCase()
   const currency = fund?.currency ?? (ticker.endsWith('.pl') ? 'PLN' : 'USD')
   const c        = criteriaCheck({ ...fund, _ticker: ticker })
-  const hasSignal = c.yieldOk && c.payoutOk && c.peOk && c.dataOk
+  const hasSignal = c.yieldOk && c.payoutOk !== false && c.peOk !== false && c.dataOk
 
   const yieldPct    = fund?.dividendYield   != null ? (fund.dividendYield * 100).toFixed(1) : null
   const payoutPct   = fund?.payoutRatio     != null ? Math.round(fund.payoutRatio * 100)    : null
@@ -134,7 +139,7 @@ export default function DividendSignals() {
 
   const signalCount = rows.filter(({ ticker, fund }) => {
     const c = criteriaCheck({ ...fund, _ticker: ticker })
-    return c.yieldOk && c.payoutOk && c.peOk && c.dataOk
+    return c.yieldOk && c.payoutOk !== false && c.peOk !== false && c.dataOk
   }).length
 
   return (
