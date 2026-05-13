@@ -48,17 +48,19 @@ async function fetchWithTimeout(fn, ms = 5000) {
   ])
 }
 
-async function getCachedData(ticker, exchange) {
+async function getCachedData(ticker, exchange, cacheOnly = false) {
   const kvKey = `${ENV}:candles:${exchange}:${ticker}`
   const memKey = `candles:${exchange}:${ticker}`
   const fromMem = memGet(memKey)
   if (fromMem) return fromMem
   const fromKv = await kv.get(kvKey).catch(() => null)
   if (fromKv) { memSet(memKey, fromKv); return fromKv }
+  if (cacheOnly) return null
   const data = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
   if (data) {
     memSet(memKey, data)
-    await kv.set(kvKey, data, { ex: exchange === 'NYSE' ? 90 * 60 : 25 * 60 }).catch(() => {})
+    // Longer KV TTL so cron-warmed cache survives until next cron run
+    await kv.set(kvKey, data, { ex: exchange === 'NYSE' ? 8 * 60 * 60 : 4 * 60 * 60 }).catch(() => {})
   }
   return data  // { candles, shortName }
 }
@@ -363,44 +365,53 @@ export default async function handler(req, res) {
   const config = STRATEGY_CONFIG[strategy]
   const results = []
 
-  // Batch fetch: groups of 10 in parallel
-  const batchSize = 10
-  for (let i = 0; i < universe.length; i += batchSize) {
-    const batch = universe.slice(i, i + batchSize)
-    const settled = await Promise.allSettled(
-      batch.map(async t => {
-        const data = await getCachedData(t, exchange)
-        const candles = data?.candles
-        if (!candles || candles.length < 25) return null
-        const display = tickerDisplay(t, exchange)
-        const companyName = data?.shortName ?? null
-        if (mode === 'scan') {
-          const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
-          if (!ind) return null
-          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            target: config.target, stopLoss: config.stopLoss,
-            timestamp: new Date().toISOString(), ...ind }
-        } else {
-          const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
-          if (!sig) return null
-          const [dynTarget, dynHorizon] = await Promise.all([
-            calcDynamicTarget(kv, t, strategy, ENV),
-            calcDynamicHorizon(kv, t, strategy, ENV),
-          ])
-          const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
-          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            label: config.label,
-            target: dynTarget.target, targetSource: dynTarget.source, targetSamples: dynTarget.samples,
-            horizon: dynHorizon.horizon, horizonSource: dynHorizon.source,
-            stopLoss,
-            timestamp: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            ...sig }
-        }
-      })
-    )
+  const processTicker = async (t, cacheOnly) => {
+    const data = await getCachedData(t, exchange, cacheOnly)
+    const candles = data?.candles
+    if (!candles || candles.length < 25) return null
+    const display = tickerDisplay(t, exchange)
+    const companyName = data?.shortName ?? null
+    if (mode === 'scan') {
+      const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
+      if (!ind) return null
+      return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
+        target: config.target, stopLoss: config.stopLoss,
+        timestamp: new Date().toISOString(), ...ind }
+    } else {
+      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
+      if (!sig) return null
+      const [dynTarget, dynHorizon] = await Promise.all([
+        calcDynamicTarget(kv, t, strategy, ENV),
+        calcDynamicHorizon(kv, t, strategy, ENV),
+      ])
+      const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
+      return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
+        label: config.label,
+        target: dynTarget.target, targetSource: dynTarget.source, targetSamples: dynTarget.samples,
+        horizon: dynHorizon.horizon, horizonSource: dynHorizon.source,
+        stopLoss,
+        timestamp: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        ...sig }
+    }
+  }
+
+  if (mode === 'scan') {
+    // All tickers in parallel, cache-only — KV reads are <10ms each so this completes in <500ms.
+    // Cron jobs pre-warm KV; if a ticker isn't cached it's skipped rather than timing out.
+    const settled = await Promise.allSettled(universe.map(t => processTicker(t, true)))
     for (const r of settled) {
       if (r.status === 'fulfilled' && r.value) results.push(r.value)
+    }
+  } else {
+    // signals mode — batches of 10 with live Yahoo fallback on cache miss
+    const batchSize = 10
+    for (let i = 0; i < universe.length; i += batchSize) {
+      const batch = universe.slice(i, i + batchSize)
+      const settled = await Promise.allSettled(batch.map(t => processTicker(t, false)))
+      for (const r of settled) {
+        if (r.status === 'fulfilled' && r.value) results.push(r.value)
+      }
     }
   }
 
