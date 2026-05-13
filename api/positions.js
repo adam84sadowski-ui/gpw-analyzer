@@ -18,9 +18,12 @@ export default async function handler(req, res) {
     if (!ticker || !entryPrice || !positionSize) {
       return res.status(400).json({ error: 'ticker, entryPrice, positionSize required' })
     }
-    const id = `${ENV_PREFIX}:position:${ticker}:${Date.now()}`
+    const ts  = Date.now()
+    const id  = `${ENV_PREFIX}:position:${ticker}:${ts}`
+    const lifecycleKey = `${ENV_PREFIX}:lifecycle:${ticker}:${ts}`
     const position = {
       id,
+      lifecycleKey,
       ticker,
       tickerDisplay: exchange === 'NYSE' ? ticker.toUpperCase() : ticker.replace('.pl', '').toUpperCase(),
       strategy,
@@ -44,7 +47,14 @@ export default async function handler(req, res) {
       exitPrice: null,
       exitDate: null,
     }
-    await kv.set(id, position, { ex: 365 * 24 * 60 * 60 })
+    const lifecycle = {
+      ticker, exchange: position.exchange, signal, entryPrice, entryDate: position.entryDate,
+      entryScore: entryScore ?? null, status: 'open', evaluations: [], aiEntry: null,
+    }
+    await Promise.all([
+      kv.set(id, position, { ex: 365 * 24 * 60 * 60 }),
+      kv.set(lifecycleKey, lifecycle, { ex: 365 * 24 * 60 * 60 }),
+    ])
     return res.json(position)
   }
 
@@ -59,7 +69,14 @@ export default async function handler(req, res) {
     const pnlPln   = Math.round((exitPrice - position.entryPrice) * position.shares * 100) / 100
     const daysHeld = Math.floor((new Date(exitDate) - new Date(position.entryDate)) / 86400000)
     const updated  = { ...position, exitPrice, exitDate, status: 'closed', pnlPct, pnlPln }
-    await kv.set(id, updated)
+    const lk = position.lifecycleKey ?? id.replace(':position:', ':lifecycle:')
+    const existingLC = await kv.get(lk).catch(() => null)
+    await Promise.all([
+      kv.set(id, updated),
+      existingLC
+        ? kv.set(lk, { ...existingLC, exitPrice, exitDate, pnlPct, status: 'closed' })
+        : Promise.resolve(),
+    ])
 
     // Powiąż wynik z alertem KV → aktualizuj targetAchieved i actualGainPct
     if (position.strategy && position.ticker) {

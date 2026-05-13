@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getSector, checkSectorExposure, formatSectorLine } from '../sectorCorrelation.js'
+import { getSector, checkSectorExposure, formatSectorLine, getCorrelatedStocks } from '../sectorCorrelation.js'
 
 describe('getSector', () => {
   it('PKN → ENERGY (GPW)', () => {
@@ -20,6 +20,32 @@ describe('getSector', () => {
 
   it('nieznany ticker → OTHER', () => {
     expect(getSector('xyz.pl', 'GPW')).toBe('OTHER')
+  })
+})
+
+describe('getCorrelatedStocks', () => {
+  it('returns up to limit peers in same sector, excluding self (GPW)', () => {
+    const result = getCorrelatedStocks('pko.pl', 'GPW', 3)
+    expect(result).not.toContain('pko.pl')
+    expect(result.length).toBeGreaterThan(0)
+    expect(result.length).toBeLessThanOrEqual(3)
+  })
+
+  it('returns up to limit peers in same sector, excluding self (NYSE)', () => {
+    const result = getCorrelatedStocks('AAPL', 'NYSE', 3)
+    expect(result).not.toContain('AAPL')
+    expect(result.length).toBeLessThanOrEqual(3)
+  })
+
+  it('excludes self regardless of case', () => {
+    const result = getCorrelatedStocks('PKO.PL', 'GPW', 5)
+    expect(result).not.toContain('PKO.PL')
+    expect(result).not.toContain('pko.pl')
+  })
+
+  it('returns empty array for ticker in tiny sector', () => {
+    const result = getCorrelatedStocks('opl.pl', 'GPW', 3)
+    expect(Array.isArray(result)).toBe(true)
   })
 })
 

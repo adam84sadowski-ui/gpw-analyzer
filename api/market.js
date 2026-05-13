@@ -10,6 +10,7 @@ import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
 import { runGEMAlgorithm, simulateGEM } from '../src/strategies/gem.js'
+import { fetchNewsHeadlines, buildSectorContext, validateEntry, evaluatePosition } from '../src/services/aiEvaluator.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -101,6 +102,58 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'GET') return res.status(405).end()
+
+  // ── AI / news modes ──────────────────────────────────────────────────
+  if (mode === 'news') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const headlines = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    return res.json({ headlines })
+  }
+
+  if (mode === 'ai-validate') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const { signal, score, rsi, volMult, sma50Delta } = req.query
+    const positions = await kv.keys(`${ENV}:position:*`)
+      .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
+      .then(all => all.filter(Boolean))
+      .catch(() => [])
+    const sectorCtx = buildSectorContext(ticker, exchange, positions)
+    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    const result = await validateEntry({
+      ticker,
+      exchange,
+      signal,
+      score:       Number(score ?? 0),
+      rsi:         Number(rsi ?? 50),
+      volMult:     Number(volMult ?? 1),
+      sma50Delta:  Number(sma50Delta ?? 0),
+      ...sectorCtx,
+      news,
+    })
+    return res.json(result)
+  }
+
+  if (mode === 'ai-evaluate') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta } = req.query
+    let pos = null
+    if (posId) pos = await kv.get(posId).catch(() => null)
+    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    const result = await evaluatePosition({
+      ticker,
+      exchange,
+      signal:       pos?.signal       ?? signal,
+      entryPrice:   pos?.entryPrice   ?? Number(entryPrice ?? 0),
+      currentPrice: Number(currentPrice ?? 0),
+      pnlPct:       Number(pnlPct ?? 0),
+      daysHeld:     Number(daysHeld ?? 0),
+      rsi:          Number(rsi ?? 50),
+      volMult:      Number(volMult ?? 1),
+      sma50Delta:   Number(sma50Delta ?? 0),
+      news,
+    })
+    return res.json(result)
+  }
 
   if (!['GPW', 'NYSE', 'ETF'].includes(exchange)) {
     return res.status(400).json({ error: 'exchange must be GPW|NYSE|ETF' })
