@@ -180,19 +180,25 @@ export default async function handler(req, res) {
     const cacheKey = `${ENV}:gem:simulate`
     const cached   = await kv.get(cacheKey).catch(() => null)
     if (cached) return res.json(cached)
-    const [cspxData, swrdData, agghData, vwceData, macro] = await Promise.allSettled([
+    // Fetch CSPX+SWRD first (must succeed), then AGGH+VWCE (optional)
+    const [cspxData, swrdData] = await Promise.allSettled([
       fetchCandlesExtended('cspx', 'ETF', '2y'),
       fetchCandlesExtended('swrd', 'ETF', '2y'),
+    ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
+    if (!cspxData?.candles) {
+      return res.status(503).json({ error: 'Insufficient ETF data for simulation' })
+    }
+    const [agghData, vwceData, macro] = await Promise.allSettled([
       fetchCandlesExtended('aggh', 'ETF', '2y'),
       fetchCandlesExtended('vwce', 'ETF', '2y'),
       getMacroEnvironment('GPW'),
     ]).then(r => r.map(s => s.status === 'fulfilled' ? s.value : null))
-    if (!cspxData?.candles || !vwceData?.candles) {
-      return res.status(503).json({ error: 'Insufficient ETF data for simulation' })
-    }
     const cashRate = ((macro?.fedRate ?? 5.75) / 100)
     const result   = simulateGEM(
-      cspxData.candles, swrdData?.candles ?? [], agghData?.candles ?? [], vwceData.candles,
+      cspxData.candles,
+      swrdData?.candles ?? [],
+      agghData?.candles ?? [],
+      vwceData?.candles ?? cspxData.candles,
       { cashRate }
     )
     if (!result) return res.status(503).json({ error: 'Simulation failed' })
