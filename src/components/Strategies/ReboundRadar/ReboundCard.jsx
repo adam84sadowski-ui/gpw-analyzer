@@ -6,13 +6,12 @@ export default function ReboundCard({ item, tier, strategy, exchange, onOpenPosi
   const [showModal, setShowModal] = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
   const t = TIERS[tier]
-  const canValidate = tier === 'green'
 
   return (
     <>
       <div
-        className={`bg-gpw-card border ${t.borderColor} rounded-lg p-3 space-y-2 ${canValidate ? 'cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-all' : ''}`}
-        onClick={() => canValidate && setShowModal(true)}
+        className={`bg-gpw-card border ${t.borderColor} rounded-lg p-3 space-y-2 cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-all`}
+        onClick={() => setShowModal(true)}
       >
         <div className="flex justify-between items-start">
           <div>
@@ -56,11 +55,9 @@ export default function ReboundCard({ item, tier, strategy, exchange, onOpenPosi
           <div className="text-xs text-gray-500">{item.signal}</div>
         )}
 
-        {canValidate && (
-          <div className={`text-xs font-semibold ${t.textColor} text-right`}>
-            Dotknij → walidacja AI →
-          </div>
-        )}
+        <div className={`text-xs font-semibold ${t.textColor} text-right`}>
+          🤖 waliduj z AI →
+        </div>
       </div>
 
       {showModal && (
