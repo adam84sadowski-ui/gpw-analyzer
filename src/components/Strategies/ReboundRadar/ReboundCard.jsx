@@ -9,10 +9,7 @@ export default function ReboundCard({ item, tier, strategy, exchange, onOpenPosi
 
   return (
     <>
-      <div
-        className={`bg-gpw-card border ${t.borderColor} rounded-lg p-3 space-y-2 cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-all`}
-        onClick={() => setShowModal(true)}
-      >
+      <div className={`bg-gpw-card border ${t.borderColor} rounded-lg p-3 space-y-2`}>
         <div className="flex justify-between items-start">
           <div>
             <span className="font-bold text-sm">{item.tickerDisplay}</span>
@@ -55,9 +52,12 @@ export default function ReboundCard({ item, tier, strategy, exchange, onOpenPosi
           <div className="text-xs text-gray-500">{item.signal}</div>
         )}
 
-        <div className={`text-xs font-semibold ${t.textColor} text-right`}>
-          🤖 waliduj z AI →
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="w-full bg-gpw-blue hover:bg-blue-600 text-white text-xs font-semibold py-1.5 rounded transition-colors"
+        >
+          🤖 Waliduj z AI
+        </button>
       </div>
 
       {showModal && (
