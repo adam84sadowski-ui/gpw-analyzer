@@ -4,6 +4,7 @@ import { SWING_DEFAULTS } from '../../strategies/swing.js'
 import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { interpretSignal } from '../../lib/interpretSignal.js'
+import ReboundRadarPage from './ReboundRadar/ReboundRadarPage.jsx'
 
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCancel }) {
   const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
@@ -150,7 +151,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
 
   // When switching to scan tab, ensure scan data is loaded
   useEffect(() => {
-    if (viewMode === 'scan') startScanFetch()
+    if (viewMode === 'scan' || viewMode === 'radar') startScanFetch()
   }, [viewMode])
 
   const topRsi = [...scanData]
@@ -179,9 +180,10 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
         entrySma50Delta:  rec.sma50 && rec.price
           ? Math.round((rec.price - rec.sma50) / rec.sma50 * 10000) / 100
           : null,
-        entrySma150trend: rec.sma150trend  ?? null,
-        entryNearSupport: rec.nearSupport  ?? null,
-        entryIndexTrend:  rec.indexTrend   ?? null,
+        entrySma150trend: rec.sma150trend   ?? null,
+        entryNearSupport: rec.nearSupport   ?? null,
+        entryIndexTrend:  rec.indexTrend    ?? null,
+        aiValidation:     rec._aiValidation ?? null,
       }),
     })
     setConfirming(null)
@@ -345,13 +347,19 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           onClick={() => setViewMode('signals')}
           className={`flex-1 py-2 transition-colors ${viewMode === 'signals' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
         >
-          Tylko sygnały
+          Sygnały
+        </button>
+        <button
+          onClick={() => setViewMode('radar')}
+          className={`flex-1 py-2 transition-colors ${viewMode === 'radar' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
+        >
+          🎯 Radar
         </button>
         <button
           onClick={() => setViewMode('scan')}
           className={`flex-1 py-2 transition-colors ${viewMode === 'scan' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
         >
-          Wszystkie spółki
+          Wszystkie
         </button>
       </div>
 
@@ -570,6 +578,20 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
             )
           })}</>)
         })()
+      )}
+
+      {/* Radar view */}
+      {viewMode === 'radar' && (
+        <ReboundRadarPage
+          scanData={scanData}
+          scanLoading={scanLoading}
+          strategy={strategy}
+          exchange={exchange}
+          onOpenPosition={(rec, aiResult) => {
+            if (aiResult) rec._aiValidation = aiResult
+            setConfirming(rec)
+          }}
+        />
       )}
 
       {/* Scan view — all stocks with indicators */}

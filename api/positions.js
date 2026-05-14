@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     // Otwórz pozycję
     const { ticker, strategy, exchange, entryPrice, positionSize, target, stopLoss, signal,
             entryRsi, entryRsiPeriod, entryScore, entryVolMult, entrySma50Delta,
-            entrySma150trend, entryNearSupport, entryIndexTrend } = req.body
+            entrySma150trend, entryNearSupport, entryIndexTrend, aiValidation } = req.body
     if (!ticker || !entryPrice || !positionSize) {
       return res.status(400).json({ error: 'ticker, entryPrice, positionSize required' })
     }
@@ -49,7 +49,8 @@ export default async function handler(req, res) {
     }
     const lifecycle = {
       ticker, exchange: position.exchange, signal, entryPrice, entryDate: position.entryDate,
-      entryScore: entryScore ?? null, status: 'open', evaluations: [], aiEntry: null,
+      entryScore: entryScore ?? null, status: 'open', evaluations: [],
+      aiEntry: aiValidation ?? null,
     }
     await Promise.all([
       kv.set(id, position, { ex: 365 * 24 * 60 * 60 }),
