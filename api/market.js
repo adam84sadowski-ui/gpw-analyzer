@@ -10,6 +10,7 @@ import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
 import { runGEMAlgorithm, simulateGEM } from '../src/strategies/gem.js'
+import { fetchNewsHeadlines, buildSectorContext, validateEntry, evaluatePosition } from '../src/services/aiEvaluator.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -47,17 +48,19 @@ async function fetchWithTimeout(fn, ms = 5000) {
   ])
 }
 
-async function getCachedData(ticker, exchange) {
+async function getCachedData(ticker, exchange, cacheOnly = false) {
   const kvKey = `${ENV}:candles:${exchange}:${ticker}`
   const memKey = `candles:${exchange}:${ticker}`
   const fromMem = memGet(memKey)
   if (fromMem) return fromMem
   const fromKv = await kv.get(kvKey).catch(() => null)
   if (fromKv) { memSet(memKey, fromKv); return fromKv }
+  if (cacheOnly) return null
   const data = await fetchWithTimeout(() => fetchCandles(ticker, exchange))
   if (data) {
     memSet(memKey, data)
-    await kv.set(kvKey, data, { ex: exchange === 'NYSE' ? 90 * 60 : 25 * 60 }).catch(() => {})
+    // Longer KV TTL so cron-warmed cache survives until next cron run
+    await kv.set(kvKey, data, { ex: exchange === 'NYSE' ? 8 * 60 * 60 : 4 * 60 * 60 }).catch(() => {})
   }
   return data  // { candles, shortName }
 }
@@ -101,6 +104,58 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'GET') return res.status(405).end()
+
+  // ── AI / news modes ──────────────────────────────────────────────────
+  if (mode === 'news') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const headlines = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    return res.json({ headlines })
+  }
+
+  if (mode === 'ai-validate') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const { signal, score, rsi, volMult, sma50Delta } = req.query
+    const positions = await kv.keys(`${ENV}:position:*`)
+      .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
+      .then(all => all.filter(Boolean))
+      .catch(() => [])
+    const sectorCtx = buildSectorContext(ticker, exchange, positions)
+    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    const result = await validateEntry({
+      ticker,
+      exchange,
+      signal,
+      score:       Number(score ?? 0),
+      rsi:         Number(rsi ?? 50),
+      volMult:     Number(volMult ?? 1),
+      sma50Delta:  Number(sma50Delta ?? 0),
+      ...sectorCtx,
+      news,
+    })
+    return res.json(result)
+  }
+
+  if (mode === 'ai-evaluate') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta } = req.query
+    let pos = null
+    if (posId) pos = await kv.get(posId).catch(() => null)
+    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    const result = await evaluatePosition({
+      ticker,
+      exchange,
+      signal:       pos?.signal       ?? signal,
+      entryPrice:   pos?.entryPrice   ?? Number(entryPrice ?? 0),
+      currentPrice: Number(currentPrice ?? 0),
+      pnlPct:       Number(pnlPct ?? 0),
+      daysHeld:     Number(daysHeld ?? 0),
+      rsi:          Number(rsi ?? 50),
+      volMult:      Number(volMult ?? 1),
+      sma50Delta:   Number(sma50Delta ?? 0),
+      news,
+    })
+    return res.json(result)
+  }
 
   if (!['GPW', 'NYSE', 'ETF'].includes(exchange)) {
     return res.status(400).json({ error: 'exchange must be GPW|NYSE|ETF' })
@@ -310,44 +365,53 @@ export default async function handler(req, res) {
   const config = STRATEGY_CONFIG[strategy]
   const results = []
 
-  // Batch fetch: groups of 10 in parallel
-  const batchSize = 10
-  for (let i = 0; i < universe.length; i += batchSize) {
-    const batch = universe.slice(i, i + batchSize)
-    const settled = await Promise.allSettled(
-      batch.map(async t => {
-        const data = await getCachedData(t, exchange)
-        const candles = data?.candles
-        if (!candles || candles.length < 25) return null
-        const display = tickerDisplay(t, exchange)
-        const companyName = data?.shortName ?? null
-        if (mode === 'scan') {
-          const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
-          if (!ind) return null
-          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            target: config.target, stopLoss: config.stopLoss,
-            timestamp: new Date().toISOString(), ...ind }
-        } else {
-          const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
-          if (!sig) return null
-          const [dynTarget, dynHorizon] = await Promise.all([
-            calcDynamicTarget(kv, t, strategy, ENV),
-            calcDynamicHorizon(kv, t, strategy, ENV),
-          ])
-          const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
-          return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
-            label: config.label,
-            target: dynTarget.target, targetSource: dynTarget.source, targetSamples: dynTarget.samples,
-            horizon: dynHorizon.horizon, horizonSource: dynHorizon.source,
-            stopLoss,
-            timestamp: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            ...sig }
-        }
-      })
-    )
+  const processTicker = async (t, cacheOnly) => {
+    const data = await getCachedData(t, exchange, cacheOnly)
+    const candles = data?.candles
+    if (!candles || candles.length < 25) return null
+    const display = tickerDisplay(t, exchange)
+    const companyName = data?.shortName ?? null
+    if (mode === 'scan') {
+      const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
+      if (!ind) return null
+      return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
+        target: config.target, stopLoss: config.stopLoss,
+        timestamp: new Date().toISOString(), ...ind }
+    } else {
+      const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
+      if (!sig) return null
+      const [dynTarget, dynHorizon] = await Promise.all([
+        calcDynamicTarget(kv, t, strategy, ENV),
+        calcDynamicHorizon(kv, t, strategy, ENV),
+      ])
+      const stopLoss = sig.dynamicStopLoss ?? config.stopLoss
+      return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
+        label: config.label,
+        target: dynTarget.target, targetSource: dynTarget.source, targetSamples: dynTarget.samples,
+        horizon: dynHorizon.horizon, horizonSource: dynHorizon.source,
+        stopLoss,
+        timestamp: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        ...sig }
+    }
+  }
+
+  if (mode === 'scan') {
+    // All tickers in parallel, cache-only — KV reads are <10ms each so this completes in <500ms.
+    // Cron jobs pre-warm KV; if a ticker isn't cached it's skipped rather than timing out.
+    const settled = await Promise.allSettled(universe.map(t => processTicker(t, true)))
     for (const r of settled) {
       if (r.status === 'fulfilled' && r.value) results.push(r.value)
+    }
+  } else {
+    // signals mode — batches of 10 with live Yahoo fallback on cache miss
+    const batchSize = 10
+    for (let i = 0; i < universe.length; i += batchSize) {
+      const batch = universe.slice(i, i + batchSize)
+      const settled = await Promise.allSettled(batch.map(t => processTicker(t, false)))
+      for (const r of settled) {
+        if (r.status === 'fulfilled' && r.value) results.push(r.value)
+      }
     }
   }
 

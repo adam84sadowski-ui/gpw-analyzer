@@ -41,6 +41,16 @@ export function checkSectorExposure(ticker, exchange, openPositions = []) {
   return           { block: true,  reduce: false, count, sector }
 }
 
+export function getCorrelatedStocks(ticker, exchange = 'GPW', limit = 3) {
+  const sector = getSector(ticker, exchange)
+  const map = SECTORS[exchange] ?? SECTORS.GPW
+  const sectorTickers = map[sector] ?? []
+  const norm = ticker.toLowerCase()
+  return sectorTickers
+    .filter(t => t !== norm && t !== ticker)
+    .slice(0, limit)
+}
+
 export function formatSectorLine(check) {
   if (check.block)  return `🚫 Sektor ${check.sector}: ${check.count} pozycje otwarte — limit osiągnięty`
   if (check.reduce) return `⚠️ Sektor ${check.sector}: 1 pozycja otwarta — redukcja do 50%`
