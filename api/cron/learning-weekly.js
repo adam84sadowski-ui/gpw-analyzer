@@ -42,6 +42,15 @@ export default async function handler(req, res) {
     // Zapisz nowe progi w KV
     await kv.set(`${ENV_PREFIX}:thresholds`, newThresholds)
 
+    // AI accuracy from lifecycle outcomes
+    const lifecycleKeys = await kv.keys(`${ENV_PREFIX}:lifecycle:*`).catch(() => [])
+    const lifecycles    = lifecycleKeys.length
+      ? await Promise.all(lifecycleKeys.map(k => kv.get(k).catch(() => null)))
+      : []
+    const withOutcomes  = lifecycles.filter(lc => lc?.aiEntry && lc?.aiOutcomes?.length)
+    const aiHit         = withOutcomes.filter(lc => lc.aiOutcomes[lc.aiOutcomes.length - 1]?.hit).length
+    const aiTotal       = withOutcomes.length
+
     const msg = formatWeeklyReport({
       scalping:      report.byStrategy.scalping   ?? { hit: 0, total: 0 },
       swing:         report.byStrategy.swing      ?? { hit: 0, total: 0 },
@@ -55,6 +64,8 @@ export default async function handler(req, res) {
       },
       insights:     newThresholds.insights,
       focusTickers: report.focusTickers,
+      aiHit,
+      aiTotal,
     })
 
     await sendTelegram(msg, IS_STAGING)

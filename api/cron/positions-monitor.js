@@ -271,6 +271,31 @@ export default async function handler(req, res) {
         }
       }
 
+      // 7. AI OUTCOME — milestone checkpoints at day 5 and day 14
+      if (pos.lifecycleKey && (daysHeld === 5 || daysHeld === 14)) {
+        try {
+          const lifecycle = await kv.get(pos.lifecycleKey).catch(() => null)
+          if (lifecycle?.aiEntry?.decision) {
+            const dedupKey = `ai-outcome-${daysHeld}`
+            if (!(await dedup(dedupKey, 24 * 30))) {
+              const pnlPctNum  = pnlPct * 100
+              const aiDecision = lifecycle.aiEntry.decision
+              const hit        = (aiDecision === 'WEJDŹ' && pnlPctNum > 0)
+                              || (aiDecision === 'ODRZUĆ' && pnlPctNum <= 0)
+              const hitLabel   = hit ? '✅ TRAFIONA' : '❌ CHYBIONA'
+              const outcomes   = lifecycle.aiOutcomes ?? []
+              outcomes.push({ daysHeld, pnlPct: +pnlPctNum.toFixed(2), hit, date: new Date().toISOString() })
+              await kv.set(pos.lifecycleKey, { ...lifecycle, aiOutcomes: outcomes }, { ex: 365 * 24 * 60 * 60 }).catch(() => {})
+              await sendTelegram(
+                `🤖 <b>OCENA AI PO ${daysHeld} DNIACH — ${ticker}</b>\n\nAI sugerowała: <b>${aiDecision}</b> (pewność: ${lifecycle.aiEntry.confidence}%)\nAktualny P&L: <b>${pnlPctNum >= 0 ? '+' : ''}${pnlPctNum.toFixed(1)}%</b>\n\nWynik: <b>${hitLabel}</b>\n\nCena wejścia: ${pos.entryPrice} ${currency} → teraz: ${price} ${currency}\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
+                IS_STAGING
+              )
+              alertsSent++
+            }
+          }
+        } catch {}
+      }
+
     } catch (e) {
       console.error(`positions-monitor: error for ${pos.ticker}:`, e.message)
     }

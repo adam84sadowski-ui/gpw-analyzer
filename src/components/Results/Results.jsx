@@ -167,8 +167,15 @@ export default function Results() {
 
   async function evaluateWithAI(pos) {
     const cp  = prices[pos.ticker]
-    const cur = indics[pos.id]
+    let cur   = indics[pos.id]
     setAiEvals(prev => ({ ...prev, [pos.id]: { loading: true, result: null } }))
+    if (!cur) {
+      try {
+        const r = await fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
+        const d = await r.json()
+        if (d && !d.error) { cur = d; setIndics(prev => ({ ...prev, [pos.id]: d })) }
+      } catch {}
+    }
     try {
       const entryDay = new Date(pos.entryDate.slice(0, 10))
       const today    = new Date(new Date().toISOString().slice(0, 10))
