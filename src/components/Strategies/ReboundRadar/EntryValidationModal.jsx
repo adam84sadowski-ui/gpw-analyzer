@@ -104,14 +104,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
 
         {state === 'result' && result && (
           <div className="space-y-3">
-            <div className="bg-gpw-card rounded-lg p-3 space-y-2.5">
+            {/* Decision + risk + confidence */}
+            <div className="bg-gpw-card rounded-lg p-3 space-y-2">
               <div className="flex justify-between items-center">
                 <span className={`text-xl font-bold ${ds.cls}`}>{ds.icon} {result.decision}</span>
                 <span className={`text-sm font-semibold ${RISK_STYLE[result.risk] ?? 'text-gray-400'}`}>
                   Ryzyko: {result.risk}
                 </span>
               </div>
-              {/* Confidence bar */}
               <div className="text-xs text-gray-400">
                 Pewność AI: <span className="text-white font-bold">{result.confidence}%</span>
                 <div className="mt-1 bg-gpw-border rounded-full h-1.5 overflow-hidden">
@@ -127,6 +127,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
               </div>
               <p className="text-xs text-gray-300 leading-relaxed">{result.reason}</p>
             </div>
+
+            {/* Recommendation box */}
+            {result.recommendation && (
+              <div className="bg-gpw-dark border border-gpw-border rounded-lg p-3">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1.5">📋 Plan działania</p>
+                <p className="text-sm text-white leading-relaxed">{result.recommendation}</p>
+              </div>
+            )}
 
             {result.decision === 'WEJDŹ' ? (
               <button

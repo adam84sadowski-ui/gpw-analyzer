@@ -141,22 +141,28 @@ export default async function handler(req, res) {
 
   if (mode === 'ai-evaluate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
-    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta } = req.query
-    let pos = null
-    if (posId) pos = await kv.get(posId).catch(() => null)
-    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive } = req.query
+    const [pos, news, fundamentals] = await Promise.all([
+      posId ? kv.get(posId).catch(() => null) : Promise.resolve(null),
+      fetchNewsHeadlines(ticker, exchange).catch(() => []),
+      fetchQuoteSummary(ticker, exchange).catch(() => null),
+    ])
     const result = await evaluatePosition({
       ticker,
       exchange,
-      signal:       pos?.signal       ?? signal,
-      entryPrice:   pos?.entryPrice   ?? Number(entryPrice ?? 0),
-      currentPrice: Number(currentPrice ?? 0),
-      pnlPct:       Number(pnlPct ?? 0),
-      daysHeld:     Number(daysHeld ?? 0),
-      rsi:          Number(rsi ?? 50),
-      volMult:      Number(volMult ?? 1),
-      sma50Delta:   Number(sma50Delta ?? 0),
+      signal:         pos?.signal         ?? signal,
+      entryPrice:     pos?.entryPrice      ?? Number(entryPrice ?? 0),
+      currentPrice:   Number(currentPrice ?? 0),
+      pnlPct:         Number(pnlPct ?? 0),
+      daysHeld:       Number(daysHeld ?? 0),
+      rsi:            Number(rsi ?? 50),
+      volMult:        Number(volMult ?? 1),
+      sma50Delta:     Number(sma50Delta ?? 0),
+      stopLoss:       pos?.stopLoss        ?? Number(stopLoss ?? 0),
+      target:         pos?.target          ?? Number(target ?? 0),
+      trailingActive: pos?.trailingActive  ?? (trailingActive === 'true'),
       news,
+      fundamentals,
     })
     return res.json(result)
   }

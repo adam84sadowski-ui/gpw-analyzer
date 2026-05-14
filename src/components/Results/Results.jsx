@@ -72,6 +72,7 @@ export default function Results() {
   const [indics, setIndics]         = useState({})
   const [names, setNames]           = useState({})
   const [deletingId, setDeletingId] = useState(null)
+  const [aiEvals, setAiEvals]       = useState({})  // posId → { loading, result }
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -162,6 +163,35 @@ export default function Results() {
 
   function signalComment(pos, cur, currentPrice) {
     return interpretPositionState(pos, currentPrice ?? null, cur)
+  }
+
+  async function evaluateWithAI(pos) {
+    const cp  = prices[pos.ticker]
+    const cur = indics[pos.id]
+    setAiEvals(prev => ({ ...prev, [pos.id]: { loading: true, result: null } }))
+    try {
+      const entryDay = new Date(pos.entryDate.slice(0, 10))
+      const today    = new Date(new Date().toISOString().slice(0, 10))
+      const daysHeld = Math.round((today - entryDay) / 86400000)
+      const pnlPct   = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : 0
+      const params   = new URLSearchParams({
+        mode:          'ai-evaluate',
+        ticker:        pos.ticker,
+        exchange:      pos.exchange ?? 'GPW',
+        posId:         pos.id,
+        currentPrice:  cp ?? pos.entryPrice,
+        pnlPct,
+        daysHeld,
+        rsi:           cur?.rsi        ?? 50,
+        volMult:       cur?.volMult    ?? 1,
+        sma50Delta:    cur?.sma50Delta ?? 0,
+      })
+      const res  = await fetch(`/api/market?${params}`)
+      const data = await res.json()
+      setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
+    } catch {
+      setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
+    }
   }
 
   async function deletePosition(id) {
@@ -431,14 +461,72 @@ export default function Results() {
                   )
                 })()}
 
-                {pos.status === 'open' && (
-                  <button
-                    onClick={() => setClosing(pos)}
-                    className="w-full border border-gpw-border hover:border-gray-500 text-gray-300 py-2 rounded-lg text-sm transition-colors"
-                  >
-                    Zamknij pozycję
-                  </button>
-                )}
+                {pos.status === 'open' && (() => {
+                  const ev = aiEvals[pos.id]
+                  const ACTION_STYLE = {
+                    'TRZYMAJ':   { icon: '✅', cls: 'text-gpw-green'  },
+                    'ZAMKNIJ':   { icon: '⛔', cls: 'text-gpw-red'    },
+                    'ZMODYFIKUJ':{ icon: '⚙️', cls: 'text-yellow-400' },
+                  }
+                  const URGENCY_STYLE = { 'NISKA':'text-gray-400', 'UMIARKOWANA':'text-yellow-400', 'WYSOKA':'text-gpw-red' }
+                  return (
+                    <div className="space-y-2">
+                      {!ev && (
+                        <button
+                          onClick={() => evaluateWithAI(pos)}
+                          className="w-full bg-gpw-blue hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          🤖 Oceń pozycję z AI
+                        </button>
+                      )}
+                      {ev?.loading && (
+                        <div className="text-xs text-gray-400 text-center py-2 animate-pulse">Analizuję z Claude AI…</div>
+                      )}
+                      {ev?.result && (() => {
+                        const r  = ev.result
+                        const as = ACTION_STYLE[r.action] ?? { icon: '—', cls: 'text-gray-400' }
+                        return (
+                          <div className="bg-gpw-dark border border-gpw-border rounded-lg p-3 space-y-2.5">
+                            <div className="flex justify-between items-center">
+                              <span className={`text-base font-bold ${as.cls}`}>{as.icon} {r.action}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-semibold ${URGENCY_STYLE[r.urgency] ?? 'text-gray-400'}`}>
+                                  Pilność: {r.urgency}
+                                </span>
+                                <span className="text-xs text-gray-500">{r.confidence}%</span>
+                              </div>
+                            </div>
+                            <div className="bg-gpw-border rounded-full h-1 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${r.confidence >= 70 ? 'bg-gpw-green' : r.confidence >= 50 ? 'bg-yellow-500' : 'bg-gpw-red'}`}
+                                style={{ width: `${r.confidence}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-300 leading-relaxed">{r.reason}</p>
+                            {r.modification && (
+                              <div className="border-t border-gpw-border pt-2">
+                                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">📋 Plan działania</p>
+                                <p className="text-sm text-white leading-relaxed">{r.modification}</p>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => setAiEvals(prev => ({ ...prev, [pos.id]: undefined }))}
+                              className="w-full text-xs text-gray-500 hover:text-gray-300 py-1 transition-colors"
+                            >
+                              🔄 Odśwież ocenę
+                            </button>
+                          </div>
+                        )
+                      })()}
+                      <button
+                        onClick={() => setClosing(pos)}
+                        className="w-full border border-gpw-border hover:border-gray-500 text-gray-300 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Zamknij pozycję
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {pos.status === 'closed' && (
                   deletingId === pos.id ? (
