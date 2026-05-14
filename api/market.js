@@ -10,7 +10,7 @@ import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
 import { runGEMAlgorithm, simulateGEM } from '../src/strategies/gem.js'
-import { fetchNewsHeadlines, buildSectorContext, validateEntry, evaluatePosition } from '../src/services/aiEvaluator.js'
+import { fetchNewsHeadlines, fetchQuoteSummary, buildSectorContext, validateEntry, evaluatePosition } from '../src/services/aiEvaluator.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -115,12 +115,15 @@ export default async function handler(req, res) {
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta } = req.query
-    const positions = await kv.keys(`${ENV}:position:*`)
-      .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
-      .then(all => all.filter(Boolean))
-      .catch(() => [])
+    const [positions, news, fundamentals] = await Promise.all([
+      kv.keys(`${ENV}:position:*`)
+        .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
+        .then(all => all.filter(Boolean))
+        .catch(() => []),
+      fetchNewsHeadlines(ticker, exchange).catch(() => []),
+      fetchQuoteSummary(ticker, exchange).catch(() => null),
+    ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
-    const news = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
     const result = await validateEntry({
       ticker,
       exchange,
@@ -131,6 +134,7 @@ export default async function handler(req, res) {
       sma50Delta:  Number(sma50Delta ?? 0),
       ...sectorCtx,
       news,
+      fundamentals,
     })
     return res.json(result)
   }

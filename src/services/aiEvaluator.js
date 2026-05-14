@@ -2,6 +2,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@vercel/kv'
 import { getSector, getCorrelatedStocks } from '../indicators/sectorCorrelation.js'
+import { toYahooSymbol } from '../lib/yahoo.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -35,6 +36,55 @@ export async function fetchNewsHeadlines(ticker, exchange = 'GPW') {
     return titles
   } catch {
     return []
+  }
+}
+
+// Yahoo Finance quoteSummary: P/E, analyst ratings, revenue growth — KV-cached 4h
+export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
+  const cacheKey = `${ENV}:qsummary:${ticker}`
+  const cached = await kv.get(cacheKey).catch(() => null)
+  if (cached) return cached
+
+  try {
+    const symbol = toYahooSymbol(ticker, exchange)
+    const modules = 'financialData,summaryDetail,defaultKeyStatistics,recommendationTrend'
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return null
+    const json = await res.json()
+    const r = json?.quoteSummary?.result?.[0]
+    if (!r) return null
+
+    const fd = r.financialData ?? {}
+    const sd = r.summaryDetail ?? {}
+    const ks = r.defaultKeyStatistics ?? {}
+    const rt = r.recommendationTrend?.trend?.[0] ?? {}
+
+    const summary = {
+      trailingPE:        sd.trailingPE?.raw         ?? null,
+      forwardPE:         sd.forwardPE?.raw          ?? null,
+      priceToBook:       ks.priceToBook?.raw         ?? null,
+      revenueGrowth:     fd.revenueGrowth?.raw       != null ? Math.round(fd.revenueGrowth.raw * 100) : null,
+      grossMargins:      fd.grossMargins?.raw        != null ? Math.round(fd.grossMargins.raw * 100) : null,
+      returnOnEquity:    fd.returnOnEquity?.raw      != null ? Math.round(fd.returnOnEquity.raw * 100) : null,
+      targetMeanPrice:   fd.targetMeanPrice?.raw     ?? null,
+      targetUpside:      fd.currentPrice?.raw && fd.targetMeanPrice?.raw
+        ? Math.round((fd.targetMeanPrice.raw / fd.currentPrice.raw - 1) * 100)
+        : null,
+      recommendationKey: fd.recommendationKey       ?? null,
+      analystBuy:        (rt.strongBuy ?? 0) + (rt.buy ?? 0),
+      analystHold:       rt.hold                    ?? 0,
+      analystSell:       (rt.sell ?? 0) + (rt.strongSell ?? 0),
+      beta:              sd.beta?.raw               ?? null,
+      currency:          fd.financialCurrency       ?? null,
+    }
+    await kv.set(cacheKey, summary, { ex: 4 * 3600 }).catch(() => {})
+    return summary
+  } catch {
+    return null
   }
 }
 
@@ -89,20 +139,40 @@ function parseJSON(text, fallback) {
 }
 
 // AI entry validation — returns { decision, confidence, reason, risk }
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, sector, correlated, sectorPositions, news }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, sector, correlated, sectorPositions, news, fundamentals }) {
   const newsText = news?.length ? news.join('\n') : 'Brak nagłówków'
-  const prompt = `Jesteś ekspertem analizy technicznej GPW i NYSE.
-Oceń czy warto wejść w tę pozycję. Odpowiedz TYLKO w JSON bez markdown:
-{"decision":"WEJDŹ"|"POCZEKAJ"|"ODRZUĆ","confidence":0-100,"reason":"max 2 zdania po polsku","risk":"NISKIE"|"UMIARKOWANE"|"WYSOKIE"}
 
-Dane:
+  const fundLines = fundamentals ? [
+    fundamentals.trailingPE    != null ? `- P/E (trailing): ${fundamentals.trailingPE.toFixed(1)}` : null,
+    fundamentals.forwardPE     != null ? `- P/E (forward): ${fundamentals.forwardPE.toFixed(1)}` : null,
+    fundamentals.priceToBook   != null ? `- P/BV: ${fundamentals.priceToBook.toFixed(2)}` : null,
+    fundamentals.revenueGrowth != null ? `- Wzrost przychodów (YoY): ${fundamentals.revenueGrowth > 0 ? '+' : ''}${fundamentals.revenueGrowth}%` : null,
+    fundamentals.grossMargins  != null ? `- Marża brutto: ${fundamentals.grossMargins}%` : null,
+    fundamentals.returnOnEquity != null ? `- ROE: ${fundamentals.returnOnEquity}%` : null,
+    fundamentals.recommendationKey ? `- Rekomendacja analityków: ${fundamentals.recommendationKey.toUpperCase()} (Kup: ${fundamentals.analystBuy}, Trzymaj: ${fundamentals.analystHold}, Sprzedaj: ${fundamentals.analystSell})` : null,
+    fundamentals.targetMeanPrice != null && fundamentals.targetUpside != null
+      ? `- Średnia cena docelowa: ${fundamentals.targetMeanPrice} ${fundamentals.currency ?? ''} (${fundamentals.targetUpside > 0 ? '+' : ''}${fundamentals.targetUpside}% potencjał)` : null,
+    fundamentals.beta != null ? `- Beta: ${fundamentals.beta.toFixed(2)}` : null,
+  ].filter(Boolean).join('\n') : 'Brak danych fundamentalnych'
+
+  const prompt = `Jesteś ekspertem analizy technicznej i fundamentalnej GPW i NYSE.
+Oceń czy warto wejść w tę pozycję. Weź pod uwagę zarówno dane techniczne jak i fundamentalne.
+Odpowiedz TYLKO w JSON bez markdown:
+{"decision":"WEJDŹ"|"POCZEKAJ"|"ODRZUĆ","confidence":0-100,"reason":"max 3 zdania po polsku uwzględniające fundamenty i techniczne","risk":"NISKIE"|"UMIARKOWANE"|"WYSOKIE"}
+
+DANE TECHNICZNE:
 - Ticker: ${ticker} (${exchange}), sektor: ${sector}, powiązane: ${correlated.join(', ')}
 - Sygnał: ${signal}, score: ${score}/100
 - RSI: ${rsi}, wolumen: ${volMult}x, odch. SMA50: ${sma50Delta}%
 - Otwarte pozycje w sektorze: ${sectorPositions}
-- Nagłówki: ${newsText}`
 
-  const text = await callClaudeAPI(prompt, 250)
+DANE FUNDAMENTALNE:
+${fundLines}
+
+NAGŁÓWKI NEWSÓW:
+${newsText}`
+
+  const text = await callClaudeAPI(prompt, 350)
   return parseJSON(text, { decision: 'POCZEKAJ', confidence: 50, reason: 'Błąd AI.', risk: 'UMIARKOWANE' })
 }
 
