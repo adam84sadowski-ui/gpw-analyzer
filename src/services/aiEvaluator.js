@@ -39,7 +39,7 @@ export async function fetchNewsHeadlines(ticker, exchange = 'GPW') {
   }
 }
 
-// Yahoo Finance quoteSummary: P/E, analyst ratings, revenue growth — KV-cached 4h
+// Yahoo Finance quoteSummary — KV-cached 4h
 export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
   const cacheKey = `${ENV}:qsummary:${ticker}`
   const cached = await kv.get(cacheKey).catch(() => null)
@@ -63,23 +63,35 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
     const ks = r.defaultKeyStatistics ?? {}
     const rt = r.recommendationTrend?.trend?.[0] ?? {}
 
+    const freeCashflow = fd.freeCashflow?.raw ?? null
+    const marketCap    = sd.marketCap?.raw    ?? null
+    const fcfYield     = freeCashflow && marketCap && marketCap > 0
+      ? Math.round(freeCashflow / marketCap * 1000) / 10
+      : null
+
     const summary = {
-      trailingPE:        sd.trailingPE?.raw         ?? null,
-      forwardPE:         sd.forwardPE?.raw          ?? null,
-      priceToBook:       ks.priceToBook?.raw         ?? null,
-      revenueGrowth:     fd.revenueGrowth?.raw       != null ? Math.round(fd.revenueGrowth.raw * 100) : null,
-      grossMargins:      fd.grossMargins?.raw        != null ? Math.round(fd.grossMargins.raw * 100) : null,
-      returnOnEquity:    fd.returnOnEquity?.raw      != null ? Math.round(fd.returnOnEquity.raw * 100) : null,
-      targetMeanPrice:   fd.targetMeanPrice?.raw     ?? null,
+      trailingPE:        sd.trailingPE?.raw          ?? null,
+      forwardPE:         sd.forwardPE?.raw           ?? null,
+      priceToBook:       ks.priceToBook?.raw          ?? null,
+      revenueGrowth:     fd.revenueGrowth?.raw        != null ? Math.round(fd.revenueGrowth.raw * 100) : null,
+      grossMargins:      fd.grossMargins?.raw         != null ? Math.round(fd.grossMargins.raw * 100) : null,
+      operatingMargins:  fd.operatingMargins?.raw     != null ? Math.round(fd.operatingMargins.raw * 100) : null,
+      returnOnEquity:    fd.returnOnEquity?.raw       != null ? Math.round(fd.returnOnEquity.raw * 100) : null,
+      fcfYield,
+      evEbitda:          ks.enterpriseToEbitda?.raw   ?? null,
+      debtToEquity:      fd.debtToEquity?.raw         != null ? Math.round(fd.debtToEquity.raw) / 100 : null,
+      high52w:           sd.fiftyTwoWeekHigh?.raw     ?? null,
+      low52w:            sd.fiftyTwoWeekLow?.raw      ?? null,
+      targetMeanPrice:   fd.targetMeanPrice?.raw      ?? null,
       targetUpside:      fd.currentPrice?.raw && fd.targetMeanPrice?.raw
         ? Math.round((fd.targetMeanPrice.raw / fd.currentPrice.raw - 1) * 100)
         : null,
-      recommendationKey: fd.recommendationKey       ?? null,
+      recommendationKey: fd.recommendationKey        ?? null,
       analystBuy:        (rt.strongBuy ?? 0) + (rt.buy ?? 0),
-      analystHold:       rt.hold                    ?? 0,
+      analystHold:       rt.hold                     ?? 0,
       analystSell:       (rt.sell ?? 0) + (rt.strongSell ?? 0),
-      beta:              sd.beta?.raw               ?? null,
-      currency:          fd.financialCurrency       ?? null,
+      beta:              sd.beta?.raw                ?? null,
+      currency:          fd.financialCurrency        ?? null,
     }
     await kv.set(cacheKey, summary, { ex: 4 * 3600 }).catch(() => {})
     return summary
@@ -138,88 +150,112 @@ function parseJSON(text, fallback) {
   }
 }
 
-function buildFundLines(f) {
+function na(val, format) {
+  if (val == null) return 'niedostępne'
+  return format ? format(val) : String(val)
+}
+
+function buildFundBlock(f) {
   if (!f) return 'Brak danych fundamentalnych'
   return [
-    f.trailingPE     != null ? `- P/E trailing: ${f.trailingPE.toFixed(1)}` : null,
-    f.forwardPE      != null ? `- P/E forward: ${f.forwardPE.toFixed(1)}` : null,
-    f.priceToBook    != null ? `- P/BV: ${f.priceToBook.toFixed(2)}` : null,
-    f.revenueGrowth  != null ? `- Wzrost przychodów YoY: ${f.revenueGrowth > 0 ? '+' : ''}${f.revenueGrowth}%` : null,
-    f.grossMargins   != null ? `- Marża brutto: ${f.grossMargins}%` : null,
-    f.returnOnEquity != null ? `- ROE: ${f.returnOnEquity}%` : null,
+    `P/E trailing: ${na(f.trailingPE, v => v.toFixed(1))} | Forward P/E: ${na(f.forwardPE, v => v.toFixed(1))}`,
+    `ROE: ${na(f.returnOnEquity, v => v + '%')} | Marża operacyjna: ${na(f.operatingMargins, v => v + '%')}`,
+    `FCF Yield: ${na(f.fcfYield, v => v + '%')} | EV/EBITDA: ${na(f.evEbitda, v => v.toFixed(1))}`,
+    `Dług/Equity: ${na(f.debtToEquity, v => v.toFixed(2) + 'x')}`,
+    `Wzrost przychodów YoY: ${na(f.revenueGrowth, v => (v > 0 ? '+' : '') + v + '%')}`,
+    `52W zakres: ${na(f.low52w, v => v.toFixed(2))} — ${na(f.high52w, v => v.toFixed(2))} ${f.currency ?? ''}`,
+    f.targetMeanPrice != null
+      ? `Cel analityków: ${f.targetMeanPrice} ${f.currency ?? ''} (${f.targetUpside > 0 ? '+' : ''}${f.targetUpside}% potencjał)`
+      : null,
     f.recommendationKey
-      ? `- Konsensus analityków: ${f.recommendationKey.toUpperCase()} (${f.analystBuy} Kup / ${f.analystHold} Trzymaj / ${f.analystSell} Sprzedaj)` : null,
-    f.targetMeanPrice != null && f.targetUpside != null
-      ? `- Śr. cena docelowa: ${f.targetMeanPrice} ${f.currency ?? ''} (${f.targetUpside > 0 ? '+' : ''}${f.targetUpside}% potencjał)` : null,
-    f.beta != null ? `- Beta: ${f.beta.toFixed(2)}` : null,
+      ? `Konsensus: ${f.recommendationKey.toUpperCase()} — ${f.analystBuy} Kup / ${f.analystHold} Trzymaj / ${f.analystSell} Sprzedaj`
+      : null,
+    f.beta != null ? `Beta: ${f.beta.toFixed(2)}` : null,
   ].filter(Boolean).join('\n')
 }
 
-// AI entry validation — returns { decision, confidence, reason, risk, recommendation }
+// AI entry validation (Buffett/Lynch) — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, sector, correlated, sectorPositions, news, fundamentals }) {
-  const newsText = news?.length ? news.join('\n') : 'Brak nagłówków'
-  const fundLines = buildFundLines(fundamentals)
+  const newsLines = news?.length
+    ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
+    : 'Brak nagłówków'
+  const fundBlock = buildFundBlock(fundamentals)
+  const f = fundamentals ?? {}
 
-  const prompt = `Jesteś doświadczonym analitykiem inwestycyjnym. Napisz profesjonalną rekomendację dla inwestora detalicznego dotyczącą otwarcia pozycji.
+  const prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
 
-Odpowiedz TYLKO w JSON bez markdown (bez \`\`\`):
+Twoje zadanie: profesjonalna ocena czy warto wejść w tę spółkę i jak to zrobić optymalnie.
+
+═══════════════════════════════════════════
+DANE SPÓŁKI
+═══════════════════════════════════════════
+Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
+Sygnał techniczny: ${signal ?? 'brak'} | Score: ${score}/100
+RSI: ${rsi} | Wolumen: ${volMult}x średniej | vs SMA50: ${sma50Delta}%
+Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
+
+WSKAŹNIKI FUNDAMENTALNE:
+${fundBlock}
+
+NEWSY (ostatnie 5):
+${newsLines}
+
+═══════════════════════════════════════════
+
+Odpowiedz TYLKO w JSON bez markdown. Pole "analysis" to pełna checklist Buffetta jako string z \\n dla nowych linii. Pole "recommendation" to plan wejścia.
+
 {
-  "decision": "WEJDŹ" | "POCZEKAJ" | "ODRZUĆ",
-  "confidence": 0-100,
-  "reason": "2-3 zdania PL: oceń sygnał techniczny w kontekście fundamentów i konsensusu analityków",
-  "risk": "NISKIE" | "UMIARKOWANE" | "WYSOKIE",
-  "recommendation": "Konkretny plan działania (1-3 zdania PL): jeśli WEJDŹ — podaj sugerowaną wielkość pozycji (% portfela), poziom stop loss i uzasadnienie celu; jeśli POCZEKAJ — co musi się zmienić; jeśli ODRZUĆ — dlaczego i kiedy warto wrócić"
+  "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
+  "buffettScore": <liczba 0-10 ile checkpoints Buffetta jest spełnionych>,
+  "confidence": <0-100>,
+  "summary": "<jedno zdanie: najważniejsza rzecz którą powinieneś wiedzieć o tej spółce>",
+  "analysis": "<pełna checklist 10 punktów Buffetta w formacie:\\n1. CIRCLE OF COMPETENCE\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n2. ECONOMIC MOAT\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n3. EARNINGS CONSISTENCY\\n[✅/⚠️/❌] ocena + dane\\n\\n4. RETURN ON EQUITY\\n[✅/⚠️/❌] ocena + wartość\\n\\n5. FREE CASH FLOW\\n[✅/⚠️/❌] ocena + wartość\\n\\n6. DŁUG\\n[✅/⚠️/❌] ocena + wartość\\n\\n7. MANAGEMENT QUALITY\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n8. MARGIN OF SAFETY\\n[✅/⚠️/❌] cena vs cel analityków + obliczenie\\n\\n9. REKOMENDACJE INSTYTUCJONALNE\\n[✅/⚠️/❌] konsensus + liczby\\n\\n10. RYZYKO SPECYFICZNE\\n[⚠️] lista 2-3 ryzyk dla tej spółki">",
+  "recommendation": "<gdy WEJDŹ lub OBSERWUJ: KIEDY WEJŚĆ: [konkretny warunek]\\n\\nSCALE IN:\\nTransza 1: X% kapitału gdy [warunek] | Cena: ~X\\nTransza 2: X% kapitału gdy [warunek] | Cena: ~X\\n\\nPARAMETRY:\\nStop loss: -X% | Cel min: +X% | Cel opt: +X% | Horyzont: X tyg/mies\\n\\nNASTĘPNY PRZEGLĄD: [data lub wydarzenie] — co sprawdzić: [lista]\\n\\nGdy UNIKAJ: dlaczego i kiedy warto wrócić>"
+}`
+
+  const text = await callClaudeAPI(prompt, 2000)
+  return parseJSON(text, {
+    decision: 'OBSERWUJ', buffettScore: 5, confidence: 50,
+    summary: 'Błąd AI — spróbuj ponownie.',
+    analysis: 'Analiza niedostępna.',
+    recommendation: 'Brak rekomendacji — spróbuj ponownie.',
+  })
 }
 
-ANALIZA TECHNICZNA:
-- Ticker: ${ticker} (${exchange}), sektor: ${sector}
-- Sygnał: ${signal ?? 'brak'}, score jakości: ${score}/100
-- RSI(14): ${rsi} | Wolumen: ${volMult}x średniej | Odchylenie od SMA50: ${sma50Delta}%
-- Inne otwarte pozycje w sektorze ${sector}: ${sectorPositions}
-- Spółki powiązane sektorem: ${correlated.join(', ') || 'brak'}
-
-ANALIZA FUNDAMENTALNA:
-${fundLines}
-
-NAJNOWSZE NAGŁÓWKI:
-${newsText}`
-
-  const text = await callClaudeAPI(prompt, 500)
-  return parseJSON(text, { decision: 'POCZEKAJ', confidence: 50, reason: 'Błąd AI.', risk: 'UMIARKOWANE', recommendation: 'Brak rekomendacji — spróbuj ponownie.' })
-}
-
-// AI position evaluation — returns { action, confidence, reason, urgency, modification }
+// AI position evaluation (Buffett thesis check) — returns { action, confidence, reason, urgency, modification }
 export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals }) {
-  const newsText = news?.length ? news.join('\n') : 'Brak nagłówków'
-  const fundLines = buildFundLines(fundamentals)
-  const staticStop = entryPrice && stopLoss ? (entryPrice * (1 - stopLoss / 100)).toFixed(2) : null
-  const targetPrice = entryPrice && target ? (entryPrice * (1 + target / 100)).toFixed(2) : null
+  const newsLines = news?.length
+    ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
+    : 'Brak nagłówków'
+  const fundBlock = buildFundBlock(fundamentals)
+  const staticStop  = entryPrice && stopLoss  ? (entryPrice * (1 - stopLoss / 100)).toFixed(2)  : null
+  const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
 
-  const prompt = `Jesteś doświadczonym analitykiem inwestycyjnym. Napisz profesjonalną rekomendację dla inwestora detalicznego dotyczącą zarządzania otwartą pozycją.
+  const prompt = `Jesteś seniorem analitykiem inwestycyjnym. Oceniasz otwartą pozycję przez pryzmat Buffetta: czy teza inwestycyjna nadal obowiązuje, czy fundamenty się zmieniły, i jak optymalnie zarządzać pozycją.
 
 Odpowiedz TYLKO w JSON bez markdown (bez \`\`\`):
 {
   "action": "TRZYMAJ" | "ZAMKNIJ" | "ZMODYFIKUJ",
   "confidence": 0-100,
-  "reason": "2-3 zdania PL: obecny stan techniczny + kontekst fundamentalny + ocena trzymania",
+  "reason": "2-3 zdania PL: czy teza inwestycyjna nadal obowiązuje? Co zmieniło się technicznie i fundamentalnie od wejścia?",
   "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
-  "modification": "Wypełnij ZAWSZE (nawet dla TRZYMAJ/ZAMKNIJ): konkretne kroki zarządzania pozycją — gdzie ustawić stop loss, czy realizować część zysku/straty, jak dostosować wielkość pozycji. Np: 'Przesuń stop loss do poziomu wejścia (breakeven). Zrealizuj 30% przy +10%. Resztę trzymaj z celem +25%.'"
+  "modification": "Wypełnij ZAWSZE: konkretny plan zarządzania pozycją — gdzie stop loss, kiedy realizować zysk/stratę częściowo, co monitorować. Buffett: 'trzymaj aż zmienią się fundamenty, nie cena'. Lynch: 'sprzedaj gdy historia się kończy'. Zastosuj odpowiednią filozofię do tej sytuacji."
 }
 
 DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlPct > 0 ? '+' : ''}${pnlPct}%
-- Dni trzymania: ${daysHeld} | Stop loss: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})
 
 WSKAŹNIKI BIEŻĄCE:
-- RSI(14): ${rsi} | Wolumen: ${volMult}x | Odchylenie od SMA50: ${sma50Delta}%
+- RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
 
-ANALIZA FUNDAMENTALNA:
-${fundLines}
+FUNDAMENTY:
+${fundBlock}
 
-NAJNOWSZE NAGŁÓWKI:
-${newsText}`
+NEWSY:
+${newsLines}`
 
-  const text = await callClaudeAPI(prompt, 500)
+  const text = await callClaudeAPI(prompt, 1000)
   return parseJSON(text, { action: 'TRZYMAJ', confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.' })
 }
