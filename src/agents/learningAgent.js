@@ -33,15 +33,18 @@ ${JSON.stringify(alertHistory, null, 2)}`
   return JSON.parse(response.content[0].text)
 }
 
-export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, focusTickers }) {
-  const pct = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0
+export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, focusTickers, aiHit = 0, aiTotal = 0 }) {
+  const pct    = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0
+  const aiLine = aiTotal > 0
+    ? `\n🤖 <b>TRAFNOŚĆ AI (rekomendacje wejść):</b> ${aiHit}/${aiTotal} (${pct(aiHit, aiTotal)}%)`
+    : ''
 
   return `🧠 <b>RAPORT TYGODNIOWY — Learning Agent</b>
 
 📊 <b>SKUTECZNOŚĆ (ostatnie 30 dni):</b>
 ⚡ Scalping:   ${scalping.hit}/${scalping.total} trafnych (${pct(scalping.hit, scalping.total)}%)
 📈 Swing:      ${swing.hit}/${swing.total} trafnych (${pct(swing.hit, swing.total)}%)
-🚀 Agresywna:  ${aggressive.hit}/${aggressive.total} trafnych (${pct(aggressive.hit, aggressive.total)}%)
+🚀 Agresywna:  ${aggressive.hit}/${aggressive.total} trafnych (${pct(aggressive.hit, aggressive.total)}%)${aiLine}
 
 🏆 <b>NAJLEPSZA SPÓŁKA:</b> ${bestStock.ticker} (${bestStock.pct}% trafności)
 📉 <b>NAJSŁABSZA:</b>       ${worstStock.ticker} (${worstStock.pct}% trafności)
