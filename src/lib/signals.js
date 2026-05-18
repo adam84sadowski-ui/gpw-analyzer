@@ -12,14 +12,14 @@ import { calcScore } from '../indicators/scoring.js'
 
 export const SIGNAL_DEFAULTS = {
   GPW: {
-    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
+    scalping:   { rsiThreshold: 28, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
     swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3, rsiPeriod: 14 },
-    aggressive: { rsiMin: 60, volumeMultiplierMin: 2.0, rsiPeriod: 14 },
+    aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 2.5, rsiPeriod: 14 },
   },
   NYSE: {
-    scalping:   { rsiThreshold: 35, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
+    scalping:   { rsiThreshold: 28, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
     swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 3, rsiPeriod: 14 },
-    aggressive: { rsiMin: 60, volumeMultiplierMin: 1.5, rsiPeriod: 14 },
+    aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 1.5, rsiPeriod: 14 },
   },
 }
 
@@ -116,10 +116,11 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
 
   if (strategy === 'aggressive') {
     const rsiMin    = thresholds.rsi_min ?? defaults.aggressive.rsiMin
+    const rsiMax    = thresholds.rsi_max ?? defaults.aggressive.rsiMax
     const volThr    = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.aggressive.rsiPeriod ?? 14
     const rsi = calcRSI(closes, rsiPeriod)
-    if (isBreakout(candles) && rsi && rsi > rsiMin && volMult && volMult >= volThr) {
+    if (isBreakout(candles) && rsi && rsi > rsiMin && rsi <= rsiMax && volMult && volMult >= volThr) {
       const sma150Warning = sma150 != null && price <= sma150
       const score = calcScore('aggressive', { ...scoreInputs, rsi })
       return { signal: 'BREAKOUT', price, rsi, rsiPeriod, volMult,
