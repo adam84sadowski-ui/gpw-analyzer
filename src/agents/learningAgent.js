@@ -30,7 +30,10 @@ ${JSON.stringify(alertHistory, null, 2)}`
     messages: [{ role: 'user', content: prompt }],
   })
 
-  return JSON.parse(response.content[0].text)
+  const text = response.content[0].text
+  const match = text?.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error(`Unexpected token '${text?.slice(0, 20)}', not valid JSON`)
+  return JSON.parse(match[0])
 }
 
 export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, focusTickers, aiHit = 0, aiTotal = 0 }) {
