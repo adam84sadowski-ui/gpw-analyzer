@@ -111,7 +111,12 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
           <div>
             <span className="font-bold text-lg">{rec.tickerDisplay}</span>
             {rec.companyName && <span className="text-xs text-gray-500 ml-1.5">({rec.companyName})</span>}
-            <div className="text-xs text-gray-400 mt-0.5">{rec.signal ?? strategy} · {rec.price} {currency}</div>
+            <div className="text-xs text-gray-400 mt-0.5">
+              {rec.signal ?? strategy} · {livePrice && livePrice !== rec.price
+                ? <>{livePrice} <span className="text-yellow-500">zam. {rec.price}</span></>
+                : rec.price
+              } {currency}
+            </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
         </div>
