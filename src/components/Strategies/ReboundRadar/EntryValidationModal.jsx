@@ -111,7 +111,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
           {state === 'loading' && (
             <div className="text-center py-8 space-y-2">
               <div className="text-sm text-gray-400 animate-pulse">Analizuję z Claude AI…</div>
-              <div className="text-xs text-gray-600">Sprawdzam 10 punktów checklisty Buffetta</div>
+              <div className="text-xs text-gray-600">Sprawdzam 12 punktów analizy fundamentalnej</div>
             </div>
           )}
 
@@ -134,7 +134,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
                 </div>
                 {result.buffettScore != null && (
                   <div className="space-y-1">
-                    <div className="text-xs text-gray-400">Wynik Buffetta</div>
+                    <div className="text-xs text-gray-400">Wynik Fundamentalny (Buffett/Lynch)</div>
                     <BuffettMeter score={result.buffettScore} />
                     <div className="text-xs text-gray-500">
                       {result.buffettScore >= 8 ? 'Silna okazja fundamentalna'
@@ -153,7 +153,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
               {/* Checklist analysis */}
               {result.analysis && (
                 <div className="bg-gpw-card border border-gpw-border rounded-lg p-3">
-                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">📋 Analiza Buffetta</p>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">📋 Analiza Fundamentalna (Buffett/Lynch)</p>
                   <pre className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">{result.analysis}</pre>
                 </div>
               )}

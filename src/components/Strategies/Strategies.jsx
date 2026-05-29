@@ -5,6 +5,7 @@ import { AGGRESSIVE_DEFAULTS } from '../../strategies/aggressive.js'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { interpretSignal } from '../../lib/interpretSignal.js'
 import ReboundRadarPage from './ReboundRadar/ReboundRadarPage.jsx'
+import EntryValidationModal from './ReboundRadar/EntryValidationModal.jsx'
 
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCancel }) {
   const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
@@ -94,6 +95,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [eodhd, setEodhd]             = useState({})
   const [interpretOpen, setInterpretOpen] = useState({})
   const [confirming, setConfirming]   = useState(null)
+  const [validating, setValidating]   = useState(null)
   const [expandedRsi, setExpandedRsi] = useState(new Set())
   const scanStartedRef                = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
@@ -386,7 +388,8 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               </div>
             )
           }
-          return (<>{confirming && (
+          return (<>
+              {confirming && (
                 <ConfirmTradeModal
                   rec={confirming}
                   strategy={strategy}
@@ -396,7 +399,17 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   onConfirm={vals => confirmTrade(confirming, vals)}
                   onCancel={() => setConfirming(null)}
                 />
-              )}{visible.map(rec => {
+              )}
+              {validating && (
+                <EntryValidationModal
+                  rec={validating}
+                  strategy={strategy}
+                  exchange={exchange}
+                  onOpenPosition={() => { setValidating(null); setConfirming(validating) }}
+                  onClose={() => setValidating(null)}
+                />
+              )}
+              {visible.map(rec => {
             const amt       = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
             const shares    = Math.floor(amt / rec.price)
             const targetPLN = (rec.price * (1 + rec.target / 100)).toFixed(2)
@@ -538,10 +551,16 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                     ✅ Realizuję
                   </button>
                   <button
-                    onClick={() => skip(rec.ticker)}
-                    className="flex-1 bg-gpw-card hover:bg-gpw-border text-gray-300 py-2 rounded-lg text-sm transition-colors"
+                    onClick={() => setValidating(rec)}
+                    className="flex-1 bg-gpw-blue hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
                   >
-                    Pomijam
+                    🤖 Waliduj z AI
+                  </button>
+                  <button
+                    onClick={() => skip(rec.ticker)}
+                    className="bg-gpw-card hover:bg-gpw-border text-gray-300 px-3 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    Pomiń
                   </button>
                 </div>
 
