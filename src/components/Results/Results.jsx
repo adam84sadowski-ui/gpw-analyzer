@@ -285,6 +285,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         ticker:        pos.ticker,
         exchange:      pos.exchange ?? 'GPW',
         posId:         pos.id,
+        strategy:      pos.strategy ?? 'swing',
         currentPrice:  cp ?? pos.entryPrice,
         pnlPct,
         daysHeld,
