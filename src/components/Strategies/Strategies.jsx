@@ -435,6 +435,10 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
             const stopPLN   = (effectivePrice * (1 - rec.stopLoss / 100)).toFixed(2)
             const horizon   = STRATEGY_META[rec.strategy ?? strategy]?.time
             const currency  = rec.exchange === 'NYSE' ? 'USD' : 'PLN'
+            const priceDriftPct = rec.price > 0
+              ? Math.round((effectivePrice - rec.price) / rec.price * 1000) / 10
+              : 0
+            const isStale = Math.abs(priceDriftPct) >= 5
             return (
               <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
@@ -474,6 +478,12 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                     <div className="text-xs text-gray-400">{new Date(rec.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
                 </div>
+
+                {isStale && (
+                  <div className="bg-yellow-900/40 border border-yellow-600 rounded-lg px-3 py-2 text-xs text-yellow-300">
+                    ⚠️ Cena odeszła <span className="font-bold">{priceDriftPct > 0 ? '+' : ''}{priceDriftPct}%</span> od sygnału ({rec.price} → {effectivePrice} {currency}) — breakout mógł już się wyczerpać, oceń czy warto wchodzić.
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
