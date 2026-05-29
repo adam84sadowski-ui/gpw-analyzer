@@ -554,6 +554,35 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                             </div>
                           )}
 
+                          {/* Score delta */}
+                          {pos.entryScore != null && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Score przy wejściu → teraz</span>
+                              <span>
+                                <span className="text-yellow-400">{pos.entryScore}/100</span>
+                                {' → '}
+                                {cur
+                                  ? cur.score != null
+                                    ? (() => {
+                                        const d = cur.score - pos.entryScore
+                                        return (
+                                          <>
+                                            <span className={cur.score >= 80 ? 'text-gpw-green' : cur.score >= 60 ? 'text-yellow-400' : 'text-gray-300'}>{cur.score}/100</span>
+                                            {d !== 0 && (
+                                              <span className={`ml-1 ${d > 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+                                                ({d > 0 ? '+' : ''}{d} {d > 0 ? '↑' : '↓'})
+                                              </span>
+                                            )}
+                                          </>
+                                        )
+                                      })()
+                                    : '—'
+                                  : <span className="animate-pulse">…</span>
+                                }
+                              </span>
+                            </div>
+                          )}
+
                           {/* Verdict */}
                           {cur && verdict && (
                             <p className="text-gray-300 leading-relaxed border-t border-gpw-border pt-2">{verdict}</p>
@@ -665,6 +694,19 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                         <div>{sma150Label(pos.entrySma150trend) ?? '—'}</div>
                         <div>{cur ? (sma150Label(cur.sma150trend) ?? '—') : '…'}</div>
                         <div className={sma150Changed ? 'text-gpw-red' : 'text-gray-400'}>{sma150Changed ? (cur.sma150trend === 'below' ? '⬇️ zmiana' : '⬆️ zmiana') : '—'}</div>
+
+                        {pos.entryScore != null && (
+                          <>
+                            <div className="text-gray-400 text-left">Score</div>
+                            <div className="text-yellow-400">{pos.entryScore}/100</div>
+                            <div className={cur?.score != null ? (cur.score >= 80 ? 'text-gpw-green' : cur.score >= 60 ? 'text-yellow-400' : 'text-gray-300') : ''}>
+                              {cur ? (cur.score != null ? `${cur.score}/100` : '—') : '…'}
+                            </div>
+                            <div className={(() => { const d = cur?.score != null ? cur.score - pos.entryScore : null; return d != null ? (d > 0 ? 'text-gpw-green' : d < 0 ? 'text-gpw-red' : 'text-gray-400') : '' })()}>
+                              {(() => { const d = cur?.score != null ? cur.score - pos.entryScore : null; return d != null ? `${d > 0 ? '+' : ''}${d} ${d > 0 ? '↑' : d < 0 ? '↓' : '→'}` : '—' })()}
+                            </div>
+                          </>
+                        )}
 
                         <div className="text-gray-400 text-left">{indexName}</div>
                         <div className="col-span-3 text-left">{trendLabel(pos.entryIndexTrend)}</div>
