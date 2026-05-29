@@ -4,6 +4,7 @@ import { detectSignal, calcIndicators, SIGNAL_DEFAULTS } from '../src/lib/signal
 import { calcRSI } from '../src/indicators/rsi.js'
 import { volumeMultiplier } from '../src/indicators/volume.js'
 import { calcSMA } from '../src/indicators/sma.js'
+import { calcScore } from '../src/indicators/scoring.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
@@ -319,13 +320,19 @@ export default async function handler(req, res) {
     const sma50      = calcSMA(closes, 50)
     const sma150     = calcSMA(closes, 150)
     const sma150trend = sma150 != null ? (price > sma150 ? 'above' : 'below') : null
+    const rsiNow    = calcRSI(closes, rsiPeriod)
+    const volMultNow = Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10
+    const scoreNow  = strategy
+      ? calcScore(strategy, { rsi: rsiNow, volMult: volMultNow, sma150trend })
+      : null
     return res.json({
       price,
-      rsi:         calcRSI(closes, rsiPeriod),
+      rsi:         rsiNow,
       rsiPeriod,
-      volMult:     Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10,
+      volMult:     volMultNow,
       sma50Delta:  sma50 ? Math.round((price - sma50) / sma50 * 10000) / 100 : null,
       sma150trend,
+      score:       scoreNow,
     })
   }
 
