@@ -157,6 +157,8 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
     nearSupport:     detectSupportProximity(candles, price),
     bollinger:       bands ? { ...bands, status: getBollingerSignal(price, bands, strategy).status } : null,
     macd:            { line: macdSig.macdLine, signal: macdSig.signalLine, histogram: macdSig.histogram, trend: macdSig.trend },
+    macdScore:       macdSig.score ?? 0,
+    bollingerScore:  bands ? (getBollingerSignal(price, bands, strategy).score ?? 0) : 0,
     signal:          sig?.signal ?? null,
     hasSignal:       sig !== null,
     score:           sig?.score ?? null,

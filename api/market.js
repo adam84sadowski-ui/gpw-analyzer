@@ -312,27 +312,29 @@ export default async function handler(req, res) {
     const data    = await getCachedData(ticker, exchange)
     const candles = data?.candles
     if (!candles || candles.length < 25) return res.status(404).json({ error: 'no data' })
-    const closes    = candles.map(c => c.close)
-    const volumes   = candles.map(c => c.volume)
-    const price     = closes[closes.length - 1]
+    const strat   = strategy || 'swing'
+    const result  = calcIndicators(candles, strat, {}, exchange)
+    if (!result) return res.status(404).json({ error: 'no data' })
     const defaults  = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
-    const rsiPeriod = defaults[strategy]?.rsiPeriod ?? 14
-    const sma50      = calcSMA(closes, 50)
-    const sma150     = calcSMA(closes, 150)
-    const sma150trend = sma150 != null ? (price > sma150 ? 'above' : 'below') : null
-    const rsiNow    = calcRSI(closes, rsiPeriod)
-    const volMultNow = Math.round((volumeMultiplier(volumes) ?? 0) * 10) / 10
-    const scoreNow  = strategy
-      ? calcScore(strategy, { rsi: rsiNow, volMult: volMultNow, sma150trend })
+    const rsiPeriod = defaults[strat]?.rsiPeriod ?? 14
+    const sma50Delta = result.sma50
+      ? Math.round((result.price - result.sma50) / result.sma50 * 10000) / 100
       : null
+    const currentScore = calcScore(strat, {
+      rsi:             result.rsi,
+      volMult:         result.volMult,
+      sma150trend:     result.sma150trend,
+      nearSupport:     result.nearSupport,
+      divergence:      result.divergence,
+      indexTrend:      result.indexTrend ?? 'neutral',
+      macdScore:       result.macdScore ?? 0,
+      bollingerScore:  result.bollingerScore ?? 0,
+    })
     return res.json({
-      price,
-      rsi:         rsiNow,
+      ...result,
       rsiPeriod,
-      volMult:     volMultNow,
-      sma50Delta:  sma50 ? Math.round((price - sma50) / sma50 * 10000) / 100 : null,
-      sma150trend,
-      score:       scoreNow,
+      sma50Delta,
+      score: currentScore,
     })
   }
 
