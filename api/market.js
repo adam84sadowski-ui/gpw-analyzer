@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
-    const { signal, score, rsi, volMult, sma50Delta } = req.query
+    const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
     const [positions, news, fundamentals] = await Promise.all([
       kv.keys(`${ENV}:position:*`)
         .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
@@ -125,6 +125,8 @@ export default async function handler(req, res) {
       fetchQuoteSummary(ticker, exchange).catch(() => null),
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
+    const spNum = signalPrice ? Number(signalPrice) : null
+    const lpNum = livePriceQ  ? Number(livePriceQ)  : null
     const result = await validateEntry({
       ticker,
       exchange,
@@ -133,6 +135,8 @@ export default async function handler(req, res) {
       rsi:         Number(rsi ?? 50),
       volMult:     Number(volMult ?? 1),
       sma50Delta:  Number(sma50Delta ?? 0),
+      signalPrice: spNum,
+      livePrice:   lpNum,
       ...sectorCtx,
       news,
       fundamentals,

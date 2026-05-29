@@ -175,12 +175,19 @@ function buildFundBlock(f) {
 }
 
 // AI entry validation (Buffett/Lynch) — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, sector, correlated, sectorPositions, news, fundamentals }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
   const fundBlock = buildFundBlock(fundamentals)
   const f = fundamentals ?? {}
+
+  const priceDriftPct = signalPrice && livePrice
+    ? Math.round((livePrice - signalPrice) / signalPrice * 1000) / 10
+    : null
+  const priceBlock = signalPrice
+    ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryfт od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie atrakcyjności wejścia i margin of safety' : ''}`
+    : null
 
   const prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
 
@@ -191,7 +198,7 @@ DANE SPÓŁKI
 ═══════════════════════════════════════════
 Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał techniczny: ${signal ?? 'brak'} | Score: ${score}/100
-RSI: ${rsi} | Wolumen: ${volMult}x średniej | vs SMA50: ${sma50Delta}%
+RSI: ${rsi} | Wolumen: ${volMult}x średniej | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
 
 WSKAŹNIKI FUNDAMENTALNE:

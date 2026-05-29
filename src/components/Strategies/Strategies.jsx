@@ -423,6 +423,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   rec={validating}
                   strategy={strategy}
                   exchange={exchange}
+                  livePrice={livePrices[validating.ticker] ?? validating.livePrice}
                   onOpenPosition={() => { setValidating(null); setConfirming(validating) }}
                   onClose={() => setValidating(null)}
                 />

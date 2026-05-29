@@ -21,7 +21,7 @@ function BuffettMeter({ score }) {
   )
 }
 
-export default function EntryValidationModal({ rec, strategy, exchange, onOpenPosition, onClose }) {
+export default function EntryValidationModal({ rec, strategy, exchange, livePrice, onOpenPosition, onClose }) {
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
@@ -71,15 +71,18 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
     setState('loading')
     setError(null)
     try {
+      const effectiveLive = livePrice ?? rec.livePrice ?? null
       const params = new URLSearchParams({
-        mode:       'ai-validate',
-        ticker:     rec.ticker,
+        mode:        'ai-validate',
+        ticker:      rec.ticker,
         exchange,
-        signal:     rec.signal ?? '',
-        score:      rec.score   ?? 0,
-        rsi:        rec.rsi     ?? 50,
-        volMult:    rec.volMult ?? 1,
+        signal:      rec.signal  ?? '',
+        score:       rec.score   ?? 0,
+        rsi:         rec.rsi     ?? 50,
+        volMult:     rec.volMult ?? 1,
         sma50Delta,
+        signalPrice: rec.price   ?? '',
+        ...(effectiveLive != null ? { livePrice: effectiveLive } : {}),
       })
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
