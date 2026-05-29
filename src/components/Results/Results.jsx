@@ -198,6 +198,14 @@ export default function Results() {
     setChatState(s => ({ ...s, [posId]: { ...s[posId], msgs: newMsgs, input: '', loading: true } }))
     localStorage.setItem(`chat_pos_${posId}`, JSON.stringify(newMsgs))
 
+    const aiEval = aiEvals[posId]?.result
+    const aiBlock = aiEval
+      ? `\nOCENA AI (Buffett/Lynch):
+Akcja: ${aiEval.action} | Pewność: ${aiEval.confidence}% | Pilność: ${aiEval.urgency}
+Uzasadnienie: ${aiEval.reason}
+Plan działania: ${aiEval.modification}`
+      : ''
+
     const system = `Jesteś asystentem inwestycyjnym GPW Analyzer. Analizujesz otwartą pozycję.
 
 POZYCJA:
@@ -206,7 +214,7 @@ Cena wejścia: ${pos.entryPrice} ${cur} | Akcji: ${pos.shares}
 Cel: +${pos.target}% | Stop: -${pos.stopLoss}%
 Aktualna cena: ${cp ?? 'nieznana'} ${cur}
 P&L: ${pnlPct != null ? pnlPct + '%' : 'nieznany'}
-RSI wejście: ${pos.entryRsi ?? 'brak'} | RSI teraz: ${ci?.rsi?.toFixed(1) ?? 'brak'}
+RSI wejście: ${pos.entryRsi ?? 'brak'} | RSI teraz: ${ci?.rsi?.toFixed(1) ?? 'brak'}${aiBlock}
 
 Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`
 
