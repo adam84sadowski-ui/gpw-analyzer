@@ -73,6 +73,7 @@ export default function Results() {
   const [names, setNames]           = useState({})
   const [deletingId, setDeletingId] = useState(null)
   const [aiEvals, setAiEvals]       = useState({})  // posId → { loading, result }
+  const [progressOpen, setProgressOpen] = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -145,20 +146,29 @@ export default function Results() {
     load()
   }
 
+  function ensureIndics(pos) {
+    if (!indics[pos.id]) {
+      fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
+        .then(r => r.json())
+        .then(d => setIndics(prev => ({ ...prev, [pos.id]: d })))
+        .catch(() => {})
+    }
+  }
+
   function toggleExpand(pos) {
     const id = pos.id
     setExpanded(prev => {
       const next = new Set(prev)
       if (next.has(id)) { next.delete(id); return next }
       next.add(id)
-      if (!indics[id]) {
-        fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
-          .then(r => r.json())
-          .then(d => setIndics(prev2 => ({ ...prev2, [id]: d })))
-          .catch(() => {})
-      }
+      ensureIndics(pos)
       return next
     })
+  }
+
+  function toggleProgress(pos) {
+    ensureIndics(pos)
+    setProgressOpen(s => ({ ...s, [pos.id]: !s[pos.id] }))
   }
 
   function signalComment(pos, cur, currentPrice) {
@@ -400,6 +410,100 @@ export default function Results() {
                     </div>
                   )
                 })()}
+
+                {/* ── Jak idzie pozycja? ── */}
+                {pos.status === 'open' && (
+                  <div className="border-t border-gpw-border pt-2">
+                    <button
+                      onClick={() => toggleProgress(pos)}
+                      className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+                    >
+                      <span>📊 Jak idzie pozycja?</span>
+                      <span>{progressOpen[pos.id] ? '▲' : '▼'}</span>
+                    </button>
+                    {progressOpen[pos.id] && (() => {
+                      const cp  = prices[pos.ticker]
+                      const cur = indics[pos.id]
+                      const pnlPct      = cp != null ? (cp - pos.entryPrice) / pos.entryPrice * 100 : null
+                      const targetPct   = pos.target
+                      const stopPct     = pos.stopLoss
+                      const toTarget    = pnlPct != null && targetPct ? Math.min(100, Math.max(0, pnlPct / targetPct * 100)) : null
+                      const stopBuffer  = pnlPct != null && stopPct != null ? pnlPct + stopPct : null
+                      const rsiNow      = cur?.rsi
+                      const rsiEntry    = pos.entryRsi
+                      const rsiDelta    = rsiEntry != null && rsiNow != null ? rsiNow - rsiEntry : null
+                      const verdict     = signalComment(pos, cur, cp)
+
+                      const pnlCls = pnlPct == null ? 'text-gray-400'
+                        : pnlPct >= 0 ? 'text-gpw-green' : 'text-gpw-red'
+                      const stopCls = stopBuffer == null ? 'text-gray-400'
+                        : stopBuffer <= 0 ? 'text-gpw-red'
+                        : stopBuffer < stopPct * 0.3 ? 'text-gpw-red'
+                        : stopBuffer < stopPct ? 'text-yellow-400'
+                        : 'text-gray-300'
+
+                      return (
+                        <div className="mt-1 space-y-3 text-xs bg-gpw-card rounded-lg p-3">
+                          {/* P&L progress to target */}
+                          {pnlPct != null && targetPct != null && (
+                            <div className="space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Postęp do celu (+{targetPct}%)</span>
+                                <span className={pnlCls}>{pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%</span>
+                              </div>
+                              <div className="w-full bg-gpw-dark rounded-full h-1.5">
+                                <div
+                                  className={`h-1.5 rounded-full transition-all ${pnlPct >= 0 ? 'bg-gpw-green' : 'bg-gpw-red'}`}
+                                  style={{ width: `${Math.min(100, Math.abs(toTarget ?? 0))}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-gray-500">
+                                <span>0%</span>
+                                <span>{toTarget != null ? `${toTarget.toFixed(0)}% celu` : '—'}</span>
+                                <span>+{targetPct}%</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stop buffer */}
+                          {stopBuffer != null && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Bufor do stop loss (-{stopPct}%)</span>
+                              <span className={stopCls}>
+                                {stopBuffer > 0 ? `${stopBuffer.toFixed(1)}% buforu` : '⛔ Stop przekroczony'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* RSI delta */}
+                          {(rsiEntry != null || rsiNow != null) && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">RSI przy wejściu → teraz</span>
+                              <span>
+                                {rsiEntry != null ? rsiEntry.toFixed(1) : '—'}
+                                {' → '}
+                                {cur ? (rsiNow?.toFixed(1) ?? '—') : <span className="animate-pulse">…</span>}
+                                {rsiDelta != null && (
+                                  <span className={`ml-1 ${rsiDelta > 0 ? 'text-gpw-green' : rsiDelta < 0 ? 'text-gpw-red' : 'text-gray-400'}`}>
+                                    ({rsiDelta > 0 ? '+' : ''}{rsiDelta.toFixed(1)} {rsiDelta > 0 ? '↑' : '↓'})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Verdict */}
+                          {cur && verdict && (
+                            <p className="text-gray-300 leading-relaxed border-t border-gpw-border pt-2">{verdict}</p>
+                          )}
+                          {!cur && (
+                            <p className="text-gray-500 italic animate-pulse">Ładuję aktualne wskaźniki…</p>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
 
                 {/* ── Expand panel: wskaźniki ── */}
                 {expanded.has(pos.id) && (() => {
