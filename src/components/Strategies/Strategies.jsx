@@ -41,8 +41,8 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38
             className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
           />
           <p className="text-xs text-gray-500 mt-1">
-            {rec.livePrice && rec.livePrice !== rec.price
-              ? <>Aktualna: {rec.livePrice} · zam. {rec.price} + {commission}% prowizji</>
+            {basePrice !== rec.price
+              ? <>Aktualna: {basePrice} · zam. {rec.price} + {commission}% prowizji</>
               : <>Cena sygnału: {rec.price} + {commission}% prowizji</>
             }
           </p>
@@ -464,9 +464,9 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                     )}
                   </div>
                   <div className="text-right">
-                    {rec.livePrice && rec.livePrice !== rec.price
+                    {effectivePrice !== rec.price
                       ? <>
-                          <div className="font-semibold">{rec.livePrice} {currency}</div>
+                          <div className="font-semibold">{effectivePrice} {currency}</div>
                           <div className="text-xs text-yellow-400">zam. {rec.price}</div>
                         </>
                       : <div className="font-semibold">{rec.price} {currency}</div>
