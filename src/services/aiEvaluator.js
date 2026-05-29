@@ -202,14 +202,15 @@ ${newsLines}
 
 ═══════════════════════════════════════════
 
-Odpowiedz TYLKO w JSON bez markdown. Pole "analysis" to pełna checklist Buffetta jako string z \\n dla nowych linii. Pole "recommendation" to plan wejścia.
+Odpowiedz TYLKO w JSON bez markdown. Pole "analysis" to pełna checklist 12 punktów jako string z \\n dla nowych linii. Pole "recommendation" to plan wejścia.
+buffettScore: skala 0-10 (proporcjonalnie z 12 punktów — zaokrąglij do 1 miejsca po przecinku).
 
 {
   "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
-  "buffettScore": <liczba 0-10 ile checkpoints Buffetta jest spełnionych>,
+  "buffettScore": <liczba 0-10 — proporcja spełnionych punktów × 10/12>,
   "confidence": <0-100>,
   "summary": "<jedno zdanie: najważniejsza rzecz którą powinieneś wiedzieć o tej spółce>",
-  "analysis": "<pełna checklist 10 punktów Buffetta w formacie:\\n1. CIRCLE OF COMPETENCE\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n2. ECONOMIC MOAT\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n3. EARNINGS CONSISTENCY\\n[✅/⚠️/❌] ocena + dane\\n\\n4. RETURN ON EQUITY\\n[✅/⚠️/❌] ocena + wartość\\n\\n5. FREE CASH FLOW\\n[✅/⚠️/❌] ocena + wartość\\n\\n6. DŁUG\\n[✅/⚠️/❌] ocena + wartość\\n\\n7. MANAGEMENT QUALITY\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n8. MARGIN OF SAFETY\\n[✅/⚠️/❌] cena vs cel analityków + obliczenie\\n\\n9. REKOMENDACJE INSTYTUCJONALNE\\n[✅/⚠️/❌] konsensus + liczby\\n\\n10. RYZYKO SPECYFICZNE\\n[⚠️] lista 2-3 ryzyk dla tej spółki">",
+  "analysis": "<checklist 12 punktów w formacie:\\n1. CIRCLE OF COMPETENCE\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n2. ECONOMIC MOAT\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n3. EARNINGS CONSISTENCY\\n[✅/⚠️/❌] ocena + dane\\n\\n4. RETURN ON EQUITY\\n[✅/⚠️/❌] ocena + wartość ROE\\n\\n5. FREE CASH FLOW\\n[✅/⚠️/❌] FCF Yield + ocena\\n\\n6. DŁUG\\n[✅/⚠️/❌] Dług/Equity + ocena\\n\\n7. MANAGEMENT QUALITY\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n8. MARGIN OF SAFETY\\n[✅/⚠️/❌] cena vs cel analityków + obliczenie upside\\n\\n9. REKOMENDACJE INSTYTUCJONALNE\\n[✅/⚠️/❌] konsensus + liczby Kup/Trzymaj/Sprzedaj\\n\\n10. LYNCH — WZROST vs WYCENA (PEG)\\n[✅/⚠️/❌] P/E w relacji do wzrostu przychodów — PEG < 1 dobry, > 2 drogi\\n\\n11. WYCENA RYNKOWA (EV/EBITDA + Forward P/E)\\n[✅/⚠️/❌] porównaj do sektora — czy spółka jest tania czy droga względem zysków\\n\\n12. RYZYKO SPECYFICZNE\\n[⚠️] lista 2-3 konkretnych ryzyk dla tej spółki">",
   "recommendation": "<gdy WEJDŹ lub OBSERWUJ: KIEDY WEJŚĆ: [konkretny warunek]\\n\\nSCALE IN:\\nTransza 1: X% kapitału gdy [warunek] | Cena: ~X\\nTransza 2: X% kapitału gdy [warunek] | Cena: ~X\\n\\nPARAMETRY:\\nStop loss: -X% | Cel min: +X% | Cel opt: +X% | Horyzont: X tyg/mies\\n\\nNASTĘPNY PRZEGLĄD: [data lub wydarzenie] — co sprawdzić: [lista]\\n\\nGdy UNIKAJ: dlaczego i kiedy warto wrócić>"
 }`
 
