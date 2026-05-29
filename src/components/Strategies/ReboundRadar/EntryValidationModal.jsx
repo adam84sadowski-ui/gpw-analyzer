@@ -21,7 +21,14 @@ function BuffettMeter({ score }) {
   )
 }
 
+const FRAMEWORK_LABEL = {
+  scalping:   'PTJ (Momentum)',
+  aggressive: "O'Neil CANSLIM",
+  swing:      'Buffett/Lynch',
+}
+
 export default function EntryValidationModal({ rec, strategy, exchange, livePrice, onOpenPosition, onClose }) {
+  const frameworkLabel = FRAMEWORK_LABEL[strategy] ?? 'Fundamentalna'
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
@@ -76,6 +83,7 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
         mode:        'ai-validate',
         ticker:      rec.ticker,
         exchange,
+        strategy:    strategy ?? 'swing',
         signal:      rec.signal  ?? '',
         score:       rec.score   ?? 0,
         rsi:         rec.rsi     ?? 50,
@@ -147,7 +155,7 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
                 onClick={validate}
                 className="w-full bg-gpw-blue hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition-colors"
               >
-                🤖 Analizuj z AI (Buffett/Lynch)
+                🤖 Analizuj z AI ({frameworkLabel})
               </button>
             </>
           )}
@@ -155,7 +163,7 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
           {state === 'loading' && (
             <div className="text-center py-8 space-y-2">
               <div className="text-sm text-gray-400 animate-pulse">Analizuję z Claude AI…</div>
-              <div className="text-xs text-gray-600">Sprawdzam 12 punktów analizy fundamentalnej</div>
+              <div className="text-xs text-gray-600">Sprawdzam 12 punktów — {frameworkLabel}</div>
             </div>
           )}
 
@@ -178,7 +186,7 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
                 </div>
                 {result.buffettScore != null && (
                   <div className="space-y-1">
-                    <div className="text-xs text-gray-400">Wynik Fundamentalny (Buffett/Lynch)</div>
+                    <div className="text-xs text-gray-400">Wynik Analizy ({frameworkLabel})</div>
                     <BuffettMeter score={result.buffettScore} />
                     <div className="text-xs text-gray-500">
                       {result.buffettScore >= 8 ? 'Silna okazja fundamentalna'
@@ -197,7 +205,7 @@ Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po po
               {/* Checklist analysis */}
               {result.analysis && (
                 <div className="bg-gpw-card border border-gpw-border rounded-lg p-3">
-                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">📋 Analiza Fundamentalna (Buffett/Lynch)</p>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">📋 Analiza ({frameworkLabel})</p>
                   <pre className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap font-sans">{result.analysis}</pre>
                 </div>
               )}

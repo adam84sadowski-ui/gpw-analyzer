@@ -174,52 +174,115 @@ function buildFundBlock(f) {
   ].filter(Boolean).join('\n')
 }
 
-// AI entry validation (Buffett/Lynch) — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals }) {
+// AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
+// strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
   const fundBlock = buildFundBlock(fundamentals)
-  const f = fundamentals ?? {}
 
   const priceDriftPct = signalPrice && livePrice
     ? Math.round((livePrice - signalPrice) / signalPrice * 1000) / 10
     : null
   const priceBlock = signalPrice
-    ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryfт od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie atrakcyjności wejścia i margin of safety' : ''}`
+    ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryft od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie' : ''}`
     : null
 
-  const prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
-
-Twoje zadanie: profesjonalna ocena czy warto wejść w tę spółkę i jak to zrobić optymalnie.
-
-═══════════════════════════════════════════
-DANE SPÓŁKI
-═══════════════════════════════════════════
-Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
-Sygnał techniczny: ${signal ?? 'brak'} | Score: ${score}/100
-RSI: ${rsi} | Wolumen: ${volMult}x średniej | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}
+  const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
+Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
+RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
 
 WSKAŹNIKI FUNDAMENTALNE:
 ${fundBlock}
 
 NEWSY (ostatnie 5):
-${newsLines}
+${newsLines}`
 
-═══════════════════════════════════════════
-
-Odpowiedz TYLKO w JSON bez markdown. Pole "analysis" to pełna checklist 12 punktów jako string z \\n dla nowych linii. Pole "recommendation" to plan wejścia.
-buffettScore: skala 0-10 (proporcjonalnie z 12 punktów — zaokrąglij do 1 miejsca po przecinku).
-
+  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 12 kryteriów × 10/12, zaokrąglij do 1 miejsca).
 {
   "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
-  "buffettScore": <liczba 0-10 — proporcja spełnionych punktów × 10/12>,
+  "buffettScore": <0-10>,
   "confidence": <0-100>,
-  "summary": "<jedno zdanie: najważniejsza rzecz którą powinieneś wiedzieć o tej spółce>",
-  "analysis": "<checklist 12 punktów w formacie:\\n1. CIRCLE OF COMPETENCE\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n2. ECONOMIC MOAT\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n3. EARNINGS CONSISTENCY\\n[✅/⚠️/❌] ocena + dane\\n\\n4. RETURN ON EQUITY\\n[✅/⚠️/❌] ocena + wartość ROE\\n\\n5. FREE CASH FLOW\\n[✅/⚠️/❌] FCF Yield + ocena\\n\\n6. DŁUG\\n[✅/⚠️/❌] Dług/Equity + ocena\\n\\n7. MANAGEMENT QUALITY\\n[✅/⚠️/❌] ocena + 1 zdanie\\n\\n8. MARGIN OF SAFETY\\n[✅/⚠️/❌] cena vs cel analityków + obliczenie upside\\n\\n9. REKOMENDACJE INSTYTUCJONALNE\\n[✅/⚠️/❌] konsensus + liczby Kup/Trzymaj/Sprzedaj\\n\\n10. LYNCH — WZROST vs WYCENA (PEG)\\n[✅/⚠️/❌] P/E w relacji do wzrostu przychodów — PEG < 1 dobry, > 2 drogi\\n\\n11. WYCENA RYNKOWA (EV/EBITDA + Forward P/E)\\n[✅/⚠️/❌] porównaj do sektora — czy spółka jest tania czy droga względem zysków\\n\\n12. RYZYKO SPECYFICZNE\\n[⚠️] lista 2-3 konkretnych ryzyk dla tej spółki">",
-  "recommendation": "<gdy WEJDŹ lub OBSERWUJ: KIEDY WEJŚĆ: [konkretny warunek]\\n\\nSCALE IN:\\nTransza 1: X% kapitału gdy [warunek] | Cena: ~X\\nTransza 2: X% kapitału gdy [warunek] | Cena: ~X\\n\\nPARAMETRY:\\nStop loss: -X% | Cel min: +X% | Cel opt: +X% | Horyzont: X tyg/mies\\n\\nNASTĘPNY PRZEGLĄD: [data lub wydarzenie] — co sprawdzić: [lista]\\n\\nGdy UNIKAJ: dlaczego i kiedy warto wrócić>"
+  "summary": "<jedno zdanie: najważniejsza rzecz o tym setupie>",
+  "analysis": "<checklist 12 punktów z \\n, każdy: NAZWA\\n[✅/⚠️/❌] ocena + 1 zdanie/dane>",
+  "recommendation": "<KIEDY WEJŚĆ / dlaczego UNIKAJ | PARAMETRY: Stop -X%, Cel +X%, Horyzont X dni>"
 }`
+
+  let prompt
+  if (strategy === 'scalping') {
+    prompt = `Jesteś traderem momentum w stylu Paul Tudor Jones (PTJ). Filozofia: dyscyplina ryzyka absolutna, R/R ≥ 2:1, natychmiastowe cięcie gdy rynek mówi "nie". Horyzont: 2-5 dni. Target +5%, Stop -3%.
+
+Twoje zadanie: oceń ten setup SCALPINGOWY — czy wchodzisz, czy czekasz, czy omijasz.
+
+${dataBlock}
+
+═══════════════
+${jsonSchema}
+
+Punkty w "analysis" (12 kryteriów PTJ):
+1. MOMENTUM SETUP — RSI < 35 + wolumen: czy wyprzedanie autentyczne?
+2. VOLUME CONFIRMATION — wolumen ≥ 1.5x: czy popyt rzeczywiście rośnie?
+3. RISK/REWARD — target +5% / stop -3% = 1.67x R/R; czy akceptowalne w tym kontekście?
+4. TREND RYNKOWY — indeks w up/sideways/down? "Never fight the tape"
+5. RELATIVE STRENGTH — czy spółka zachowuje się silniej niż sektor?
+6. STOP TECHNICZNY — czy istnieje czyste wsparcie poniżej ceny wejścia?
+7. CATALYST RYZYKA — earnings, dywidenda, event w ciągu 5 dni sesji?
+8. PŁYNNOŚĆ — czy wolumen pozwala na wyjście bez slippage?
+9. SENTIMENT NEWSOWY — newsy neutralne/pozytywne? Negatywne to dealbreaker
+10. JAKOŚĆ SYGNAŁU TECHNICZNEGO — score/100: wiarygodność setupu
+11. KORELACJA PORTFELOWA — ile otwartych pozycji w tym sektorze?
+12. PLAN WYJŚCIA — jasny trigger take-profit i stop-loss bez emocji`
+  } else if (strategy === 'aggressive') {
+    prompt = `Jesteś analitykiem w stylu William O'Neil (CANSLIM). Szukasz spółek z przyspieszającymi zyski, wybijającymi się z prawidłowych baz z wolumenem ≥ 1.5x. Filozofia: "Cut losses at 7-8%, let winners run." Horyzont: 1-4 tygodnie. Target +35%, Stop -8%.
+
+Twoje zadanie: oceń ten BREAKOUT przez pryzmat CANSLIM — czy to autentyczne wybicie lidera?
+
+${dataBlock}
+
+═══════════════
+${jsonSchema}
+
+Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
+1. C — CURRENT EARNINGS — EPS/przychody kw/kw: ≥ +25% = silny sygnał
+2. A — ANNUAL EARNINGS — trend 3-letni: konsekwentny wzrost?
+3. N — NOVELTY — nowy produkt/rynek/management/52W high proximity?
+4. S — SUPPLY/DEMAND — wolumen na wybiciu: ≥ 1.5x = instytucjonalne zainteresowanie
+5. L — LEADER OR LAGGARD — siła relatywna vs sektor: top 15%?
+6. I — INSTITUTIONAL SPONSORSHIP — rekomendacje Kup vs Sprzedaj
+7. M — MARKET DIRECTION — indeks w uptrend? Nie kupuj podczas korekty rynku
+8. BAZA TECHNICZNA — jak długo konsolidacja przed wybieniem? (min. 3 tygodnie = lepsza baza)
+9. JAKOŚĆ WYBICIA — RSI > 60 + close blisko high dnia = siłowe wybicie
+10. BETA / ZMIENNOŚĆ — ryzyko specyficzne dla tego setup'u agresywnego
+11. MOMENTUM FUNDAMENTÓW — wzrost przychodów YoY: przyspiesza czy hamuje?
+12. REGUŁA SPRZEDAŻY O'NEIL — kiedy bezwarunkowo wychodzimy (-7-8% od wejścia lub specyficzne warunki)`
+  } else {
+    prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
+
+Twoje zadanie: profesjonalna ocena czy warto wejść w tę spółkę i jak to zrobić optymalnie. Horyzont: 4-8 tygodni.
+
+${dataBlock}
+
+═══════════════
+${jsonSchema}
+
+Punkty w "analysis" (12 kryteriów Buffett/Lynch):
+1. CIRCLE OF COMPETENCE — czy rozumiemy model biznesowy tej spółki?
+2. ECONOMIC MOAT — przewaga konkurencyjna: marka, sieć, koszty przełączenia?
+3. EARNINGS CONSISTENCY — zyski stabilne od 3+ lat?
+4. RETURN ON EQUITY — ROE: > 15% = dobry, > 20% = świetny
+5. FREE CASH FLOW — FCF Yield: > 5% = atrakcyjny
+6. DŁUG — Dług/Equity: < 0.5 bezpieczne, > 1.0 ryzykowne
+7. MANAGEMENT QUALITY — alokacja kapitału, historia decyzji
+8. MARGIN OF SAFETY — cena vs cel analityków: upside > 20%?
+9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
+10. LYNCH — WZROST vs WYCENA (PEG) — P/E / wzrost przych.: PEG < 1 tanie, > 2 drogie
+11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor
+12. RYZYKO SPECYFICZNE — 2-3 konkretne ryzyka dla tej spółki`
+  }
+
+  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić`
 
   const text = await callClaudeAPI(prompt, 2000)
   return parseJSON(text, {
@@ -230,30 +293,22 @@ buffettScore: skala 0-10 (proporcjonalnie z 12 punktów — zaokrąglij do 1 mie
   })
 }
 
-// AI position evaluation (Buffett thesis check) — returns { action, confidence, reason, urgency, modification }
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals }) {
+// AI position evaluation — returns { action, confidence, reason, urgency, modification }
+// strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
   const fundBlock = buildFundBlock(fundamentals)
   const staticStop  = entryPrice && stopLoss  ? (entryPrice * (1 - stopLoss / 100)).toFixed(2)  : null
   const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
+  const pnlNum      = Number(pnlPct)
+  const nearTarget  = target > 0 && pnlNum >= target * 0.7
 
-  const prompt = `Jesteś seniorem analitykiem inwestycyjnym. Oceniasz otwartą pozycję przez pryzmat Buffetta: czy teza inwestycyjna nadal obowiązuje, czy fundamenty się zmieniły, i jak optymalnie zarządzać pozycją.
-
-Odpowiedz TYLKO w JSON bez markdown (bez \`\`\`):
-{
-  "action": "TRZYMAJ" | "ZAMKNIJ" | "ZMODYFIKUJ",
-  "confidence": 0-100,
-  "reason": "2-3 zdania PL: czy teza inwestycyjna nadal obowiązuje? Co zmieniło się technicznie i fundamentalnie od wejścia?",
-  "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
-  "modification": "Wypełnij ZAWSZE: konkretny plan zarządzania pozycją — gdzie stop loss, kiedy realizować zysk/stratę częściowo, co monitorować. Buffett: 'trzymaj aż zmienią się fundamenty, nie cena'. Lynch: 'sprzedaj gdy historia się kończy'. Zastosuj odpowiednią filozofię do tej sytuacji."
-}
-
-DANE POZYCJI:
-- Ticker: ${ticker} (${exchange}) | Sygnał otwarcia: ${signal ?? 'brak'}
-- Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlPct > 0 ? '+' : ''}${pnlPct}%
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})
+  const posBlock = `DANE POZYCJI:
+- Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
+- Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlNum > 0 ? '+' : ''}${pnlNum}%
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
@@ -263,6 +318,30 @@ ${fundBlock}
 
 NEWSY:
 ${newsLines}`
+
+  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown:
+{
+  "action": "TRZYMAJ" | "ZAMKNIJ" | "ZMODYFIKUJ",
+  "confidence": <0-100>,
+  "reason": "<2-3 zdania PL: (1) czy teza nadal obowiązuje? (2) czy kupiłbyś tę spółkę DZISIAJ po obecnej cenie? (3) co zmieniło się od wejścia?>",
+  "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
+  "modification": "<ZAWSZE wypełnij: konkretny plan — stop loss, realizacja częściowa (jeśli blisko celu — rozważ sprzedaż 50%), co monitorować, następny przegląd>"
+}`
+
+  let persona
+  if (strategy === 'scalping') {
+    persona = `Jesteś traderem w stylu Paul Tudor Jones. Oceniasz krótkoterminową pozycję (target +5%, stop -3%, horyzont 2-5 dni). Twoja zasada: "Losers average losers" — jeśli setup jest zepsuty, wychodź natychmiast. Sprawdź: czy momentum nadal działa? R/R nadal korzystne? Czy trzymanie przez kolejny dzień ma sens?`
+  } else if (strategy === 'aggressive') {
+    persona = `Jesteś analitykiem w stylu William O'Neil. Oceniasz pozycję BREAKOUT (target +35%, stop -8%). Twoja zasada: "The whole secret to winning big in the stock market is not to be right all the time, but to lose the least amount possible when you're wrong." Sprawdź: czy wybicie nadal "działa poprawnie" (acting right)? Wolumen podtrzymuje ruch? Fundamenty (EPS) przyspieszyły czy zwolniły od wejścia?`
+  } else {
+    persona = `Jesteś seniorem analitykiem w stylu Buffett/Lynch. Oceniasz pozycję swing (target +15%, stop -5%, horyzont 4-8 tygodni). Buffett: "trzymaj aż zmienią się fundamenty, nie cena". Lynch: "sprzedaj gdy historia się kończy". Sprawdź integralność tezy: czy powód dla którego wszedłeś nadal obowiązuje?`
+  }
+
+  const prompt = `${persona}
+
+${posBlock}
+
+${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1000)
   return parseJSON(text, { action: 'TRZYMAJ', confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.' })

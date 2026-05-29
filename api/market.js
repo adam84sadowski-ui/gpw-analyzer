@@ -137,6 +137,7 @@ export default async function handler(req, res) {
       sma50Delta:  Number(sma50Delta ?? 0),
       signalPrice: spNum,
       livePrice:   lpNum,
+      strategy:    strategy ?? 'swing',
       ...sectorCtx,
       news,
       fundamentals,
@@ -166,6 +167,7 @@ export default async function handler(req, res) {
       stopLoss:       pos?.stopLoss        ?? Number(stopLoss ?? 0),
       target:         pos?.target          ?? Number(target ?? 0),
       trailingActive: pos?.trailingActive  ?? (trailingActive === 'true'),
+      strategy:       pos?.strategy        ?? strategy ?? 'swing',
       news,
       fundamentals,
     })
