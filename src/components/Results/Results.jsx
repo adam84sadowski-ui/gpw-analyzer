@@ -183,6 +183,7 @@ export default function Results() {
       try { msgs = JSON.parse(localStorage.getItem(`chat_pos_${pos.id}`) ?? '[]') } catch {}
       return { ...s, [pos.id]: { open: true, msgs, input: '', loading: false } }
     })
+    ensureIndics(pos)
   }
 
   async function sendChatMsg(pos, text) {
@@ -191,7 +192,21 @@ export default function Results() {
     const cp    = prices[pos.ticker]
     const cur   = posCurrency(pos)
     const pnlPct = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : null
-    const ci    = indics[pos.id]
+
+    let ci = indics[pos.id]
+    const [indicRes, newsRes] = await Promise.allSettled([
+      ci ? Promise.resolve(ci) : fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`).then(r => r.json()),
+      fetch(`/api/market?mode=news&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}`).then(r => r.json()),
+    ])
+    if (!ci && indicRes.status === 'fulfilled' && !indicRes.value?.error) {
+      ci = indicRes.value
+      setIndics(prev => ({ ...prev, [pos.id]: ci }))
+    }
+    const headlines = newsRes.status === 'fulfilled' ? (newsRes.value?.headlines ?? []) : []
+
+    const entryDay  = new Date(pos.entryDate.slice(0, 10))
+    const today     = new Date(new Date().toISOString().slice(0, 10))
+    const daysHeld  = Math.round((today - entryDay) / 86400000)
 
     const prevMsgs = chatState[posId]?.msgs ?? []
     const newMsgs  = [...prevMsgs, { role: 'user', content: text.trim() }]
@@ -206,15 +221,27 @@ Uzasadnienie: ${aiEval.reason}
 Plan działania: ${aiEval.modification}`
       : ''
 
-    const system = `Jesteś asystentem inwestycyjnym GPW Analyzer. Analizujesz otwartą pozycję.
+    const indicsBlock = ci ? `
+BIEŻĄCE WSKAŹNIKI:
+RSI: ${ci.rsi?.toFixed(1) ?? 'brak'} | Wolumen: ${ci.volMult != null ? ci.volMult + 'x' : 'brak'}
+vs SMA50: ${ci.sma50Delta != null ? (ci.sma50Delta > 0 ? '+' : '') + ci.sma50Delta + '%' : 'brak'}
+SMA150: ${ci.sma150trend ?? 'brak'} | Score: ${ci.score != null ? ci.score + '/100' : 'brak'}
+MACD: ${ci.macd?.trend ?? 'brak'} | Bollinger: ${ci.bollinger?.status ?? 'brak'}
+Dywergencja: ${ci.divergence ?? 'brak'} | Wsparcie: ${ci.nearSupport != null ? ci.nearSupport : 'brak'}` : ''
+
+    const newsBlock = headlines.length
+      ? `\nNAJNOWSZE NEWSY:\n${headlines.map((h, i) => `${i + 1}. ${h}`).join('\n')}`
+      : ''
+
+    const system = `Jesteś asystentem inwestycyjnym GPW Analyzer. Analizujesz otwartą pozycję. Masz dostęp do wszystkich bieżących wskaźników i newsów — używaj ich bezpośrednio w odpowiedziach, nie proś użytkownika o ich sprawdzenie.
 
 POZYCJA:
 Ticker: ${pos.ticker} | Strategia: ${pos.strategy}
 Cena wejścia: ${pos.entryPrice} ${cur} | Akcji: ${pos.shares}
 Cel: +${pos.target}% | Stop: -${pos.stopLoss}%
 Aktualna cena: ${cp ?? 'nieznana'} ${cur}
-P&L: ${pnlPct != null ? pnlPct + '%' : 'nieznany'}
-RSI wejście: ${pos.entryRsi ?? 'brak'} | RSI teraz: ${ci?.rsi?.toFixed(1) ?? 'brak'}${aiBlock}
+P&L: ${pnlPct != null ? pnlPct + '%' : 'nieznany'} | Dni trzymania: ${daysHeld}
+RSI przy wejściu: ${pos.entryRsi ?? 'brak'}${indicsBlock}${newsBlock}${aiBlock}
 
 Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`
 
