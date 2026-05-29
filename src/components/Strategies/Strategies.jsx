@@ -101,6 +101,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [amounts, setAmounts]         = useState({})
   const [done, setDone]               = useState({})
   const [eodhd, setEodhd]             = useState({})
+  const [livePrices, setLivePrices]   = useState({})
   const [interpretOpen, setInterpretOpen] = useState({})
   const [confirming, setConfirming]   = useState(null)
   const [validating, setValidating]   = useState(null)
@@ -129,11 +130,12 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
       .finally(() => setScanLoading(false))
   }
 
-  // Load signals; after completion kick off scan in background for Top RSI
+  // Load signals; after completion kick off scan + live price fetches in background
   useEffect(() => {
     setSigsLoading(true)
     setRecs([])
     setDone({})
+    setLivePrices({})
     scanStartedRef.current = false
     setScanData([])
     fetch(`/api/market?mode=signals&strategy=${strategy}&exchange=${exchange}`)
@@ -143,6 +145,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
         const init = {}
         data.forEach(r => { init[r.ticker] = Math.round(portfolio * maxPct / 100) })
         setAmounts(init)
+        // fetch live price for each signal independently of KV cache
+        data.forEach(r => {
+          fetch(`/api/market?mode=current&ticker=${r.ticker}&exchange=${r.exchange ?? exchange}`)
+            .then(res => res.json())
+            .then(d => { if (d?.close) setLivePrices(prev => ({ ...prev, [r.ticker]: d.close })) })
+            .catch(() => {})
+        })
         if (exchange === 'GPW') {
           data.forEach(r => {
             fetch(`/api/eodhd?ticker=${r.ticker}`)
@@ -399,7 +408,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           return (<>
               {confirming && (
                 <ConfirmTradeModal
-                  rec={confirming}
+                  rec={{ ...confirming, livePrice: livePrices[confirming.ticker] ?? confirming.livePrice }}
                   strategy={strategy}
                   exchange={exchange}
                   portfolio={portfolio}
@@ -420,7 +429,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               )}
               {visible.map(rec => {
             const amt       = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
-            const effectivePrice = rec.livePrice ?? rec.price
+            const effectivePrice = livePrices[rec.ticker] ?? rec.livePrice ?? rec.price
             const shares    = Math.floor(amt / effectivePrice)
             const targetPLN = (effectivePrice * (1 + rec.target / 100)).toFixed(2)
             const stopPLN   = (effectivePrice * (1 - rec.stopLoss / 100)).toFixed(2)
