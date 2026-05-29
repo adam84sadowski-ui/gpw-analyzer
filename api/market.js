@@ -397,12 +397,13 @@ export default async function handler(req, res) {
     if (!candles || candles.length < 25) return null
     const display = tickerDisplay(t, exchange)
     const companyName = data?.shortName ?? null
+    const livePrice = data?.livePrice ?? null
     if (mode === 'scan') {
       const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
       if (!ind) return null
       return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
         target: config.target, stopLoss: config.stopLoss,
-        timestamp: new Date().toISOString(), ...ind }
+        timestamp: new Date().toISOString(), livePrice, ...ind }
     } else {
       const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
       if (!sig) return null
@@ -418,7 +419,7 @@ export default async function handler(req, res) {
         stopLoss,
         timestamp: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        ...sig }
+        livePrice, ...sig }
     }
   }
 

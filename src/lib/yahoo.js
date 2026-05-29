@@ -41,6 +41,7 @@ async function fetchCandlesYahoo(ticker, exchange) {
   const result = json?.chart?.result?.[0]
   if (!result) return null
   const shortName = result.meta?.shortName ?? null
+  const livePrice = result.meta?.regularMarketPrice ?? null
   const ts = result.timestamp ?? []
   const q  = result.indicators.quote[0]
   const candles = ts
@@ -53,7 +54,7 @@ async function fetchCandlesYahoo(ticker, exchange) {
       volume: q.volume[i] ?? null,
     }))
     .filter(c => c.close !== null)
-  return { candles, shortName }
+  return { candles, shortName, livePrice }
 }
 
 export async function fetchCandlesExtended(ticker, exchange = 'GPW', range = '5y') {
@@ -80,10 +81,6 @@ export async function fetchCandlesExtended(ticker, exchange = 'GPW', range = '5y
 export async function fetchCandles(ticker, exchange = 'GPW') {
   if (exchange === 'GPW') {
     const data = await fetchCandlesStooq(ticker).catch(() => null)
-    if (data) return data
-  }
-  if (exchange === 'NYSE') {
-    const data = await fetchCandlesTwelveData(ticker).catch(() => null)
     if (data) return data
   }
   return fetchCandlesYahoo(ticker, exchange)
