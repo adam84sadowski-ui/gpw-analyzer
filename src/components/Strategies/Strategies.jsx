@@ -10,9 +10,10 @@ import EntryValidationModal from './ReboundRadar/EntryValidationModal.jsx'
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38, onConfirm, onCancel }) {
   const currency      = exchange === 'NYSE' ? 'USD' : 'PLN'
   const defaultAmt    = Math.round(portfolio * maxPct / 100)
-  const defaultPrice  = (rec.price * (1 + commission / 100)).toFixed(2)
+  const basePrice     = rec.livePrice ?? rec.price
+  const defaultPrice  = (basePrice * (1 + commission / 100)).toFixed(2)
   const [price,  setPrice]  = useState(String(defaultPrice))
-  const [shares, setShares] = useState(String(Math.floor(defaultAmt / rec.price)))
+  const [shares, setShares] = useState(String(Math.floor(defaultAmt / basePrice)))
 
   const p        = parseFloat(price)  || 0
   const s        = parseInt(shares)   || 0
@@ -39,7 +40,12 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38
             onChange={e => handlePriceChange(e.target.value)}
             className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
           />
-          <p className="text-xs text-gray-500 mt-1">Cena sygnału: {rec.price} + {commission}% prowizji</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {rec.livePrice && rec.livePrice !== rec.price
+              ? <>Aktualna: {rec.livePrice} · zam. {rec.price} + {commission}% prowizji</>
+              : <>Cena sygnału: {rec.price} + {commission}% prowizji</>
+            }
+          </p>
         </label>
         <label className="block">
           <span className="text-sm text-gray-400">Liczba akcji</span>
@@ -414,9 +420,10 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               )}
               {visible.map(rec => {
             const amt       = amounts[rec.ticker] ?? Math.round(portfolio * maxPct / 100)
-            const shares    = Math.floor(amt / rec.price)
-            const targetPLN = (rec.price * (1 + rec.target / 100)).toFixed(2)
-            const stopPLN   = (rec.price * (1 - rec.stopLoss / 100)).toFixed(2)
+            const effectivePrice = rec.livePrice ?? rec.price
+            const shares    = Math.floor(amt / effectivePrice)
+            const targetPLN = (effectivePrice * (1 + rec.target / 100)).toFixed(2)
+            const stopPLN   = (effectivePrice * (1 - rec.stopLoss / 100)).toFixed(2)
             const horizon   = STRATEGY_META[rec.strategy ?? strategy]?.time
             const currency  = rec.exchange === 'NYSE' ? 'USD' : 'PLN'
             return (
@@ -448,7 +455,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold">{rec.price} {currency}</div>
+                    {rec.livePrice && rec.livePrice !== rec.price
+                      ? <>
+                          <div className="font-semibold">{rec.livePrice} {currency}</div>
+                          <div className="text-xs text-yellow-400">zam. {rec.price}</div>
+                        </>
+                      : <div className="font-semibold">{rec.price} {currency}</div>
+                    }
                     <div className="text-xs text-gray-400">{new Date(rec.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
                 </div>
@@ -510,12 +523,12 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                     <div className="mt-2 bg-gpw-card rounded-lg p-2 text-xs flex justify-between items-center">
                       <div>
                         <div className="text-gray-400">📊 Wielkość pozycji</div>
-                        <div className="font-bold text-white">{shares} × {rec.price} = {(shares * rec.price).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} {currency}</div>
+                        <div className="font-bold text-white">{shares} × {effectivePrice} = {(shares * effectivePrice).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} {currency}</div>
                         <div className="text-gray-500">({(amt / portfolio * 100).toFixed(1)}% portfela)</div>
                       </div>
                       <div className="text-right space-y-0.5">
-                        <div className="text-gpw-green font-semibold">🎯 +{(shares * rec.price * rec.target / 100).toFixed(0)} {currency}</div>
-                        <div className="text-gpw-red font-semibold">🛑 -{(shares * rec.price * rec.stopLoss / 100).toFixed(0)} {currency}</div>
+                        <div className="text-gpw-green font-semibold">🎯 +{(shares * effectivePrice * rec.target / 100).toFixed(0)} {currency}</div>
+                        <div className="text-gpw-red font-semibold">🛑 -{(shares * effectivePrice * rec.stopLoss / 100).toFixed(0)} {currency}</div>
                       </div>
                     </div>
                   )}
