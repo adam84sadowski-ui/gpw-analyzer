@@ -25,11 +25,47 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
+  const [chatMsgs,    setChatMsgs]    = useState([])
+  const [chatInput,   setChatInput]   = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const sma50Delta = rec.sma50 && rec.price
     ? ((rec.price - rec.sma50) / rec.sma50 * 100).toFixed(1)
     : 0
+
+  async function sendFollowUp() {
+    if (!chatInput.trim() || !result) return
+    const userMsg = { role: 'user', content: chatInput.trim() }
+    const newMsgs = [...chatMsgs, userMsg]
+    setChatMsgs(newMsgs)
+    setChatInput('')
+    setChatLoading(true)
+
+    const system = `Jesteś asystentem inwestycyjnym GPW Analyzer. Właśnie przeprowadziłeś analizę Buffett/Lynch dla ${rec.tickerDisplay ?? rec.ticker}.
+
+WYNIK ANALIZY:
+Decyzja: ${result.decision}
+Wynik fundamentalny: ${result.buffettScore}/10
+Pewność AI: ${result.confidence}%
+Podsumowanie: ${result.summary}
+
+Odpowiadasz na pytania uzupełniające dotyczące tej analizy. Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`
+
+    try {
+      const res  = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ messages: newMsgs, system }),
+      })
+      const data = await res.json()
+      setChatMsgs(m => [...m, { role: 'assistant', content: data.content ?? 'Błąd AI.' }])
+    } catch {
+      setChatMsgs(m => [...m, { role: 'assistant', content: 'Błąd połączenia — spróbuj ponownie.' }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
 
   async function validate() {
     setState('loading')
@@ -167,6 +203,41 @@ export default function EntryValidationModal({ rec, strategy, exchange, onOpenPo
                   <pre className="text-sm text-white leading-relaxed whitespace-pre-wrap font-sans">{result.recommendation}</pre>
                 </div>
               )}
+
+              {/* Follow-up Q&A */}
+              <div className="bg-gpw-card border border-gpw-border rounded-lg p-3 space-y-2">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">💬 Pytania do analizy</p>
+                {chatMsgs.length === 0 && (
+                  <p className="text-xs text-gray-500 italic">Masz pytania dotyczące tej analizy? Zapytaj...</p>
+                )}
+                <div className="space-y-2 max-h-36 overflow-y-auto">
+                  {chatMsgs.map((m, i) => (
+                    <div key={i} className={`text-xs rounded p-2 leading-relaxed ${m.role === 'user' ? 'bg-gpw-blue/20 text-white' : 'bg-gpw-dark text-gray-300'}`}>
+                      <span className="text-gray-500 text-[10px] block mb-0.5">{m.role === 'user' ? 'Ty' : 'AI'}</span>
+                      {m.content}
+                    </div>
+                  ))}
+                  {chatLoading && <p className="text-xs text-gray-400 animate-pulse">AI odpowiada…</p>}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Zapytaj o tę analizę…"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) sendFollowUp() }}
+                    className="flex-1 bg-gpw-dark border border-gpw-border rounded px-2 py-1.5 text-xs outline-none focus:border-gpw-blue"
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={sendFollowUp}
+                    disabled={chatLoading || !chatInput.trim()}
+                    className="bg-gpw-blue hover:bg-blue-600 disabled:opacity-40 text-white px-3 rounded text-xs transition-colors"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
 
               {result.decision === 'WEJDŹ' ? (
                 <button

@@ -7,10 +7,11 @@ import { interpretSignal } from '../../lib/interpretSignal.js'
 import ReboundRadarPage from './ReboundRadar/ReboundRadarPage.jsx'
 import EntryValidationModal from './ReboundRadar/EntryValidationModal.jsx'
 
-function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCancel }) {
-  const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
-  const defaultAmt  = Math.round(portfolio * maxPct / 100)
-  const [price,  setPrice]  = useState(String(rec.price))
+function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38, onConfirm, onCancel }) {
+  const currency      = exchange === 'NYSE' ? 'USD' : 'PLN'
+  const defaultAmt    = Math.round(portfolio * maxPct / 100)
+  const defaultPrice  = (rec.price * (1 + commission / 100)).toFixed(2)
+  const [price,  setPrice]  = useState(String(defaultPrice))
   const [shares, setShares] = useState(String(Math.floor(defaultAmt / rec.price)))
 
   const p        = parseFloat(price)  || 0
@@ -38,6 +39,7 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, onConfirm, onCanc
             onChange={e => handlePriceChange(e.target.value)}
             className="mt-1 w-full bg-gpw-dark border border-gpw-border rounded px-3 py-2 text-sm"
           />
+          <p className="text-xs text-gray-500 mt-1">Cena sygnału: {rec.price} + {commission}% prowizji</p>
         </label>
         <label className="block">
           <span className="text-sm text-gray-400">Liczba akcji</span>
@@ -396,6 +398,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   exchange={exchange}
                   portfolio={portfolio}
                   maxPct={maxPct}
+                  commission={settings.commission ?? 0.38}
                   onConfirm={vals => confirmTrade(confirming, vals)}
                   onCancel={() => setConfirming(null)}
                 />
