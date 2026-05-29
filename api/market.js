@@ -306,6 +306,13 @@ export default async function handler(req, res) {
     return res.json(result)
   }
 
+  // ── News mode ────────────────────────────────────────────────────────
+  if (mode === 'news') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const headlines = await fetchNewsHeadlines(ticker, exchange).catch(() => [])
+    return res.json({ headlines })
+  }
+
   // ── Indicators mode ──────────────────────────────────────────────────
   if (mode === 'indicators') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
