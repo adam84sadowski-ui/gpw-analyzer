@@ -11,14 +11,14 @@ Możesz objaśniać wskaźniki techniczne (RSI, SMA, wolumen), strategie (scalpi
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { messages } = req.body
+  const { messages, system } = req.body
   if (!messages?.length) return res.status(400).json({ error: 'messages required' })
 
   try {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 512,
-      system: SYSTEM,
+      system: system ?? SYSTEM,
       messages,
     })
     res.json({ content: response.content[0].text })

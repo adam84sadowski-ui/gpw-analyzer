@@ -74,6 +74,7 @@ export default function Results() {
   const [deletingId, setDeletingId] = useState(null)
   const [aiEvals, setAiEvals]       = useState({})  // posId → { loading, result }
   const [progressOpen, setProgressOpen] = useState({})
+  const [chatState, setChatState]   = useState({})  // posId → { open, msgs, input, loading }
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -137,11 +138,14 @@ export default function Results() {
   }
 
   async function closePosition(exitPrice) {
+    const id = closing.id
     await fetch('/api/positions', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: closing.id, exitPrice }),
+      body: JSON.stringify({ id, exitPrice }),
     })
+    localStorage.removeItem(`chat_pos_${id}`)
+    setChatState(s => { const n = { ...s }; delete n[id]; return n })
     setClosing(null)
     load()
   }
@@ -169,6 +173,56 @@ export default function Results() {
   function toggleProgress(pos) {
     ensureIndics(pos)
     setProgressOpen(s => ({ ...s, [pos.id]: !s[pos.id] }))
+  }
+
+  function openChat(pos) {
+    setChatState(s => {
+      const prev = s[pos.id]
+      if (prev?.open) return { ...s, [pos.id]: { ...prev, open: false } }
+      let msgs = []
+      try { msgs = JSON.parse(localStorage.getItem(`chat_pos_${pos.id}`) ?? '[]') } catch {}
+      return { ...s, [pos.id]: { open: true, msgs, input: '', loading: false } }
+    })
+  }
+
+  async function sendChatMsg(pos, text) {
+    if (!text?.trim()) return
+    const posId = pos.id
+    const cp    = prices[pos.ticker]
+    const cur   = posCurrency(pos)
+    const pnlPct = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : null
+    const ci    = indics[pos.id]
+
+    const prevMsgs = chatState[posId]?.msgs ?? []
+    const newMsgs  = [...prevMsgs, { role: 'user', content: text.trim() }]
+    setChatState(s => ({ ...s, [posId]: { ...s[posId], msgs: newMsgs, input: '', loading: true } }))
+    localStorage.setItem(`chat_pos_${posId}`, JSON.stringify(newMsgs))
+
+    const system = `Jesteś asystentem inwestycyjnym GPW Analyzer. Analizujesz otwartą pozycję.
+
+POZYCJA:
+Ticker: ${pos.ticker} | Strategia: ${pos.strategy}
+Cena wejścia: ${pos.entryPrice} ${cur} | Akcji: ${pos.shares}
+Cel: +${pos.target}% | Stop: -${pos.stopLoss}%
+Aktualna cena: ${cp ?? 'nieznana'} ${cur}
+P&L: ${pnlPct != null ? pnlPct + '%' : 'nieznany'}
+RSI wejście: ${pos.entryRsi ?? 'brak'} | RSI teraz: ${ci?.rsi?.toFixed(1) ?? 'brak'}
+
+Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`
+
+    try {
+      const res  = await fetch('/api/chat', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ messages: newMsgs, system }),
+      })
+      const data = await res.json()
+      const updated = [...newMsgs, { role: 'assistant', content: data.content ?? 'Błąd AI.' }]
+      setChatState(s => ({ ...s, [posId]: { ...s[posId], msgs: updated, loading: false } }))
+      localStorage.setItem(`chat_pos_${posId}`, JSON.stringify(updated))
+    } catch {
+      setChatState(s => ({ ...s, [posId]: { ...s[posId], loading: false } }))
+    }
   }
 
   function signalComment(pos, cur, currentPrice) {
@@ -502,6 +556,55 @@ export default function Results() {
                         </div>
                       )
                     })()}
+                  </div>
+                )}
+
+                {/* ── Chat per pozycja ── */}
+                {pos.status === 'open' && (
+                  <div className="border-t border-gpw-border pt-2">
+                    <button
+                      onClick={() => openChat(pos)}
+                      className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+                    >
+                      <span>💬 Porozmawiaj z AI o tej pozycji</span>
+                      <span>{chatState[pos.id]?.open ? '▲' : '▼'}</span>
+                    </button>
+                    {chatState[pos.id]?.open && (
+                      <div className="mt-1 bg-gpw-card rounded-lg p-3 space-y-2">
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {(chatState[pos.id]?.msgs?.length ?? 0) === 0 && (
+                            <p className="text-xs text-gray-500 italic">Zapytaj AI o tę pozycję — kiedy wyjść, jak interpretować wskaźniki, co obserwować...</p>
+                          )}
+                          {chatState[pos.id]?.msgs?.map((m, i) => (
+                            <div key={i} className={`text-xs rounded p-2 leading-relaxed ${m.role === 'user' ? 'bg-gpw-blue/20 text-white' : 'bg-gpw-dark text-gray-300'}`}>
+                              <span className="text-gray-500 text-[10px] block mb-0.5">{m.role === 'user' ? 'Ty' : 'AI'}</span>
+                              {m.content}
+                            </div>
+                          ))}
+                          {chatState[pos.id]?.loading && (
+                            <p className="text-xs text-gray-400 animate-pulse">AI odpowiada…</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Zapytaj o tę pozycję…"
+                            value={chatState[pos.id]?.input ?? ''}
+                            onChange={e => setChatState(s => ({ ...s, [pos.id]: { ...s[pos.id], input: e.target.value } }))}
+                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) sendChatMsg(pos, chatState[pos.id]?.input ?? '') }}
+                            className="flex-1 bg-gpw-dark border border-gpw-border rounded px-2 py-1.5 text-xs outline-none focus:border-gpw-blue"
+                            disabled={chatState[pos.id]?.loading}
+                          />
+                          <button
+                            onClick={() => sendChatMsg(pos, chatState[pos.id]?.input ?? '')}
+                            disabled={chatState[pos.id]?.loading || !chatState[pos.id]?.input?.trim()}
+                            className="bg-gpw-blue hover:bg-blue-600 disabled:opacity-40 text-white px-3 rounded text-xs transition-colors"
+                          >
+                            →
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

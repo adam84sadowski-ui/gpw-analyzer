@@ -7,7 +7,6 @@ import Results from './components/Results/Results.jsx'
 import Settings from './components/Settings/Settings.jsx'
 import Backtesting from './components/Backtesting/Backtesting.jsx'
 import LongTermPage from './components/LongTerm/LongTermPage.jsx'
-import Chat from './components/Chat/Chat.jsx'
 import { ExchangeProvider } from './context/ExchangeContext.jsx'
 import ExchangeSwitcher from './components/ExchangeSwitcher/ExchangeSwitcher.jsx'
 
@@ -63,7 +62,6 @@ export default function App() {
           {tab === 'settings'   && <Settings />}
         </main>
 
-        <Chat />
       </div>
     </ExchangeProvider>
   )

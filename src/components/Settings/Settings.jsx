@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 const DEFAULTS = {
   capital: 10000,
   maxPositionPct: 15,
+  commission: 0.38,
   strategy: 'swing',
   customTickers: '',
 }
@@ -76,6 +77,17 @@ export default function Settings() {
             onChange={e => set('maxPositionPct', Number(e.target.value))}
             className="mt-1 block w-full"
           />
+        </label>
+        <label className="block">
+          <span className="text-sm text-gray-400">Prowizja brokera (%): {settings.commission ?? 0.38}%</span>
+          <input
+            type="range"
+            min="0" max="1" step="0.01"
+            value={settings.commission ?? 0.38}
+            onChange={e => set('commission', Number(e.target.value))}
+            className="mt-1 block w-full"
+          />
+          <span className="text-xs text-gray-500">Doliczana domyślnie do ceny wejścia przy potwierdzeniu pozycji</span>
         </label>
       </div>
 
