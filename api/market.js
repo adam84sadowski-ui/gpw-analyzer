@@ -116,17 +116,35 @@ export default async function handler(req, res) {
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
-    const [positions, news, fundamentals] = await Promise.all([
+    const [positions, news, fundamentals, candleData] = await Promise.all([
       kv.keys(`${ENV}:position:*`)
         .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
         .then(all => all.filter(Boolean))
         .catch(() => []),
       fetchNewsHeadlines(ticker, exchange).catch(() => []),
       fetchQuoteSummary(ticker, exchange).catch(() => null),
+      getCachedData(ticker, exchange, true).catch(() => null), // cache-only, no extra fetch
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
     const spNum = signalPrice ? Number(signalPrice) : null
     const lpNum = livePriceQ  ? Number(livePriceQ)  : null
+
+    // Recent price action indicators from candle history
+    let priceAction = null
+    const candles = candleData?.candles
+    if (candles && candles.length >= 6) {
+      const c = candles
+      const last = c.length - 1
+      const change1d = ((c[last].close - c[last - 1].close) / c[last - 1].close * 100)
+      const change5d = ((c[last].close - c[last - 5].close) / c[last - 5].close * 100)
+      const highVsClose = ((c[last].high - c[last].close) / c[last].close * 100)
+      priceAction = {
+        change1d: Math.round(change1d * 10) / 10,
+        change5d: Math.round(change5d * 10) / 10,
+        highVsClose: Math.round(highVsClose * 10) / 10,
+      }
+    }
+
     const result = await validateEntry({
       ticker,
       exchange,
@@ -138,6 +156,7 @@ export default async function handler(req, res) {
       signalPrice: spNum,
       livePrice:   lpNum,
       strategy:    strategy ?? 'swing',
+      priceAction,
       ...sectorCtx,
       news,
       fundamentals,

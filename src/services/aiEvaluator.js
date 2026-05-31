@@ -39,7 +39,41 @@ export async function fetchNewsHeadlines(ticker, exchange = 'GPW') {
   }
 }
 
-// Yahoo Finance quoteSummary — KV-cached 4h
+// Yahoo Finance crumb auth — cached 30 min in-memory
+let _crumbCache = null
+async function fetchYahooCrumb() {
+  if (_crumbCache && Date.now() - _crumbCache.ts < 30 * 60 * 1000) return _crumbCache
+
+  try {
+    // Step 1: get cookie from Yahoo consent page
+    const cookieRes = await fetch('https://fc.yahoo.com', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(5000),
+      redirect: 'follow',
+    })
+    const setCookie = cookieRes.headers.get('set-cookie') ?? ''
+    const cookie = setCookie.split(';')[0]
+
+    // Step 2: get crumb using cookie
+    const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Cookie': cookie,
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!crumbRes.ok) return null
+    const crumb = await crumbRes.text()
+    if (!crumb || crumb.includes('{')) return null
+
+    _crumbCache = { crumb: crumb.trim(), cookie, ts: Date.now() }
+    return _crumbCache
+  } catch {
+    return null
+  }
+}
+
+// Yahoo Finance quoteSummary — KV-cached 4h, crumb auth with knowledge fallback
 export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
   const cacheKey = `${ENV}:qsummary:${ticker}`
   const cached = await kv.get(cacheKey).catch(() => null)
@@ -48,11 +82,14 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
   try {
     const symbol = toYahooSymbol(ticker, exchange)
     const modules = 'financialData,summaryDetail,defaultKeyStatistics,recommendationTrend'
-    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(5000),
-    })
+    const auth = await fetchYahooCrumb().catch(() => null)
+    const crumbParam = auth?.crumb ? `&crumb=${encodeURIComponent(auth.crumb)}` : ''
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}${crumbParam}`
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      ...(auth?.cookie ? { 'Cookie': auth.cookie } : {}),
+    }
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(6000) })
     if (!res.ok) return null
     const json = await res.json()
     const r = json?.quoteSummary?.result?.[0]
@@ -155,8 +192,8 @@ function na(val, format) {
   return format ? format(val) : String(val)
 }
 
-function buildFundBlock(f) {
-  if (!f) return 'Brak danych fundamentalnych'
+function buildFundBlock(f, ticker) {
+  if (!f) return `BRAK DANYCH Z API — użyj wiedzy treningowej dla ${ticker ?? 'tej spółki'}. Podaj szacunkowe wartości oznaczone [~est.] i oceń je. Nie pisz "brak danych" — wiesz co to za spółka.`
   return [
     `P/E trailing: ${na(f.trailingPE, v => v.toFixed(1))} | Forward P/E: ${na(f.forwardPE, v => v.toFixed(1))}`,
     `ROE: ${na(f.returnOnEquity, v => v + '%')} | Marża operacyjna: ${na(f.operatingMargins, v => v + '%')}`,
@@ -176,11 +213,11 @@ function buildFundBlock(f) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, strategy = 'swing' }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
-  const fundBlock = buildFundBlock(fundamentals)
+  const fundBlock = buildFundBlock(fundamentals, ticker)
 
   const priceDriftPct = signalPrice && livePrice
     ? Math.round((livePrice - signalPrice) / signalPrice * 1000) / 10
@@ -189,9 +226,16 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
     ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryft od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie' : ''}`
     : null
 
+  const paWarning = priceAction && Math.abs(priceAction.change1d) >= 7
+    ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
+    : ''
+  const priceActionBlock = priceAction
+    ? `Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarning} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
+    : null
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
-RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}
+RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
 
 WSKAŹNIKI FUNDAMENTALNE:
@@ -299,7 +343,7 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
-  const fundBlock = buildFundBlock(fundamentals)
+  const fundBlock = buildFundBlock(fundamentals, ticker)
   const staticStop  = entryPrice && stopLoss  ? (entryPrice * (1 - stopLoss / 100)).toFixed(2)  : null
   const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
   const pnlNum      = Number(pnlPct)
