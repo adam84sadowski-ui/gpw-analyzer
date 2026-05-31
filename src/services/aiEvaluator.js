@@ -213,7 +213,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, strategy = 'swing' }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -226,9 +226,16 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
     ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryft od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie' : ''}`
     : null
 
+  const paWarning = priceAction && Math.abs(priceAction.change1d) >= 7
+    ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
+    : ''
+  const priceActionBlock = priceAction
+    ? `Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarning} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
+    : null
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
-RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}
+RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
 
 WSKAŹNIKI FUNDAMENTALNE:
