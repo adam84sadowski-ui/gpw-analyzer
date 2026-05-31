@@ -20,12 +20,40 @@ export default async function handler(req, res) {
   try {
     let msgs = [...messages]
     let finalText = null
-    const deadline = Date.now() + 25000
 
-    for (let i = 0; i < 6; i++) {
-      if (Date.now() > deadline) break
+    // Single API call — Anthropic's web_search_20250305 executes server-side:
+    // search + results are returned inline in the same response.
+    // If stop_reason is 'tool_use', we do ONE continuation to collect the final answer.
+    const response = await client.messages.create({
+      model:      MODEL,
+      max_tokens: 2048,
+      system:     system ?? SYSTEM,
+      tools:      TOOLS,
+      messages:   msgs,
+    })
 
-      const response = await client.messages.create({
+    if (response.stop_reason !== 'tool_use') {
+      finalText = response.content.find(b => b.type === 'text')?.text ?? ''
+    } else {
+      // Claude searched — pass full content back and get the written answer
+      msgs = [...msgs, { role: 'assistant', content: response.content }]
+
+      // For each open tool_use, use Anthropic's inline result if available,
+      // otherwise acknowledge with a minimal placeholder
+      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
+      const toolResults = toolUseBlocks.map(tb => {
+        // Anthropic may provide results as any block with matching tool_use_id
+        const inline = response.content.find(b => b.tool_use_id === tb.id)
+        return {
+          type:        'tool_result',
+          tool_use_id: tb.id,
+          content:     inline ? JSON.stringify(inline) : 'Wyniki wyszukiwania dostarczone.',
+        }
+      })
+
+      msgs = [...msgs, { role: 'user', content: toolResults }]
+
+      const response2 = await client.messages.create({
         model:      MODEL,
         max_tokens: 2048,
         system:     system ?? SYSTEM,
@@ -33,33 +61,7 @@ export default async function handler(req, res) {
         messages:   msgs,
       })
 
-      if (response.stop_reason !== 'tool_use') {
-        finalText = response.content.find(b => b.type === 'text')?.text ?? ''
-        break
-      }
-
-      // Anthropic's web_search provides results as part of response.content
-      // Pass full assistant content back so Claude sees its own search results
-      msgs = [...msgs, { role: 'assistant', content: response.content }]
-
-      // Build tool_result for every open tool_use — Anthropic fills content server-side
-      // If inline results already present (any block with tool_use_id), use them
-      // Otherwise send an empty acknowledgment to keep the conversation going
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
-      const toolResults = toolUseBlocks.map(tb => {
-        const inlineResult = response.content.find(
-          b => b.tool_use_id === tb.id && b.type !== 'tool_use'
-        )
-        return {
-          type:        'tool_result',
-          tool_use_id: tb.id,
-          content:     inlineResult?.content ?? inlineResult?.text ?? 'Kontynuuj analizę.',
-        }
-      })
-
-      if (toolResults.length > 0) {
-        msgs = [...msgs, { role: 'user', content: toolResults }]
-      }
+      finalText = response2.content.find(b => b.type === 'text')?.text ?? ''
     }
 
     res.json({ content: finalText ?? 'Błąd AI — spróbuj ponownie.' })
