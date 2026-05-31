@@ -53,11 +53,11 @@ export default async function handler(req, res) {
 
       msgs = [...msgs, { role: 'user', content: toolResults }]
 
+      // No tools in continuation — forces Claude to answer using search results already in context
       const response2 = await client.messages.create({
         model:      MODEL,
         max_tokens: 2048,
         system:     system ?? SYSTEM,
-        tools:      TOOLS,
         messages:   msgs,
       })
 
