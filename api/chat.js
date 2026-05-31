@@ -32,6 +32,10 @@ export default async function handler(req, res) {
       messages:   msgs,
     })
 
+    // DEBUG — remove after investigation
+    console.log('RESPONSE1 stop_reason:', response.stop_reason)
+    console.log('RESPONSE1 content types:', response.content.map(b => ({ type: b.type, tool_use_id: b.tool_use_id, id: b.id, name: b.name })))
+
     if (response.stop_reason !== 'tool_use') {
       finalText = response.content.find(b => b.type === 'text')?.text ?? ''
     } else {
