@@ -18,61 +18,22 @@ export default async function handler(req, res) {
   if (!messages?.length) return res.status(400).json({ error: 'messages required' })
 
   try {
-    let msgs = [...messages]
-    let finalText = null
-
-    // Single API call — Anthropic's web_search_20250305 executes server-side:
-    // search + results are returned inline in the same response.
-    // If stop_reason is 'tool_use', we do ONE continuation to collect the final answer.
     const response = await client.messages.create({
       model:      MODEL,
       max_tokens: 2048,
       system:     system ?? SYSTEM,
       tools:      TOOLS,
-      messages:   msgs,
+      messages,
     })
 
-    // DEBUG — return raw structure
-    if (req.query?.debug === '1') {
-      return res.json({
-        stop_reason: response.stop_reason,
-        content_types: response.content.map(b => ({ type: b.type, id: b.id, name: b.name, tool_use_id: b.tool_use_id, has_content: !!b.content, text_preview: b.text?.slice(0, 80) }))
-      })
-    }
+    // Anthropic web_search_20250305 is fully server-side: search + synthesis happen in ONE call.
+    // The answer is split across multiple text blocks — concatenate all of them.
+    const finalText = response.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('')
 
-    if (response.stop_reason !== 'tool_use') {
-      finalText = response.content.find(b => b.type === 'text')?.text ?? ''
-    } else {
-      // Claude searched — pass full content back and get the written answer
-      msgs = [...msgs, { role: 'assistant', content: response.content }]
-
-      // For each open tool_use, use Anthropic's inline result if available,
-      // otherwise acknowledge with a minimal placeholder
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
-      const toolResults = toolUseBlocks.map(tb => {
-        // Anthropic may provide results as any block with matching tool_use_id
-        const inline = response.content.find(b => b.tool_use_id === tb.id)
-        return {
-          type:        'tool_result',
-          tool_use_id: tb.id,
-          content:     inline ? JSON.stringify(inline) : 'Wyniki wyszukiwania dostarczone.',
-        }
-      })
-
-      msgs = [...msgs, { role: 'user', content: toolResults }]
-
-      // No tools in continuation — forces Claude to answer using search results already in context
-      const response2 = await client.messages.create({
-        model:      MODEL,
-        max_tokens: 2048,
-        system:     system ?? SYSTEM,
-        messages:   msgs,
-      })
-
-      finalText = response2.content.find(b => b.type === 'text')?.text ?? ''
-    }
-
-    res.json({ content: finalText ?? 'Błąd AI — spróbuj ponownie.' })
+    res.json({ content: finalText || 'Błąd AI — spróbuj ponownie.' })
   } catch (e) {
     console.error('Chat API error:', e)
     res.status(500).json({ error: e.message })
