@@ -7,7 +7,7 @@ const SYSTEM = `Jesteś asystentem edukacyjnym GPW Analyzer — aplikacji analiz
 Odpowiadasz WYŁĄCZNIE po polsku. Jesteś zwięzły, konkretny, pomocny.
 NIE dajesz porad inwestycyjnych. Zawsze przypominasz że to analiza edukacyjna.
 Możesz objaśniać wskaźniki techniczne (RSI, SMA, wolumen), strategie (scalping, swing, agresywna), i wyniki alertów.
-Gdy pytają o aktualne dane (earnings date, wyniki finansowe, komunikaty spółki) — wyszukaj je w internecie i podaj konkretne informacje.`
+Gdy pytają o aktualne dane (earnings date, wyniki finansowe, komunikaty spółki) — wyszukaj je i podaj konkretne informacje.`
 
 const TOOLS = [{ type: 'web_search_20250305', name: 'web_search' }]
 
@@ -38,28 +38,27 @@ export default async function handler(req, res) {
         break
       }
 
-      // Append full assistant content — Anthropic's web_search provides results inline
-      // as non-text/non-tool_use blocks (e.g. tool_result or web_search_tool_result)
+      // Anthropic's web_search provides results as part of response.content
+      // Pass full assistant content back so Claude sees its own search results
       msgs = [...msgs, { role: 'assistant', content: response.content }]
 
-      // Only add manual tool_result if Anthropic did NOT provide inline results
+      // Build tool_result for every open tool_use — Anthropic fills content server-side
+      // If inline results already present (any block with tool_use_id), use them
+      // Otherwise send an empty acknowledgment to keep the conversation going
       const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
-      const inlineResultIds = new Set(
-        response.content
-          .filter(b => b.type !== 'text' && b.type !== 'tool_use' && b.tool_use_id)
-          .map(b => b.tool_use_id)
-      )
-      const needsManualResult = toolUseBlocks.filter(tb => !inlineResultIds.has(tb.id))
+      const toolResults = toolUseBlocks.map(tb => {
+        const inlineResult = response.content.find(
+          b => b.tool_use_id === tb.id && b.type !== 'tool_use'
+        )
+        return {
+          type:        'tool_result',
+          tool_use_id: tb.id,
+          content:     inlineResult?.content ?? inlineResult?.text ?? 'Kontynuuj analizę.',
+        }
+      })
 
-      if (needsManualResult.length > 0) {
-        msgs = [...msgs, {
-          role: 'user',
-          content: needsManualResult.map(tb => ({
-            type:        'tool_result',
-            tool_use_id: tb.id,
-            content:     'Wyniki wyszukiwania niedostępne — odpowiedz na podstawie wiedzy treningowej.',
-          })),
-        }]
+      if (toolResults.length > 0) {
+        msgs = [...msgs, { role: 'user', content: toolResults }]
       }
     }
 
