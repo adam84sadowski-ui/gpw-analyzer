@@ -339,7 +339,7 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, strategy = 'swing' }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -349,10 +349,17 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
   const pnlNum      = Number(pnlPct)
   const nearTarget  = target > 0 && pnlNum >= target * 0.7
 
+  const paWarningEval = priceAction && Math.abs(priceAction.change1d) >= 7
+    ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
+    : ''
+  const priceActionLine = priceAction
+    ? `\n- Zachowanie kursu: Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarningEval} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
+    : ''
+
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlNum > 0 ? '+' : ''}${pnlNum}%
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${priceActionLine}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%

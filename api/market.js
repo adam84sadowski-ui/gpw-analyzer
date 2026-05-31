@@ -167,11 +167,25 @@ export default async function handler(req, res) {
   if (mode === 'ai-evaluate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive } = req.query
-    const [pos, news, fundamentals] = await Promise.all([
+    const [pos, news, fundamentals, candleDataEval] = await Promise.all([
       posId ? kv.get(posId).catch(() => null) : Promise.resolve(null),
       fetchNewsHeadlines(ticker, exchange).catch(() => []),
       fetchQuoteSummary(ticker, exchange).catch(() => null),
+      getCachedData(ticker, exchange, true).catch(() => null),
     ])
+
+    let priceActionEval = null
+    const candlesEval = candleDataEval?.candles
+    if (candlesEval && candlesEval.length >= 6) {
+      const c = candlesEval
+      const last = c.length - 1
+      priceActionEval = {
+        change1d:    Math.round((c[last].close - c[last - 1].close) / c[last - 1].close * 1000) / 10,
+        change5d:    Math.round((c[last].close - c[last - 5].close) / c[last - 5].close * 1000) / 10,
+        highVsClose: Math.round((c[last].high  - c[last].close)     / c[last].close     * 1000) / 10,
+      }
+    }
+
     const result = await evaluatePosition({
       ticker,
       exchange,
@@ -187,6 +201,7 @@ export default async function handler(req, res) {
       target:         pos?.target          ?? Number(target ?? 0),
       trailingActive: pos?.trailingActive  ?? (trailingActive === 'true'),
       strategy:       pos?.strategy        ?? strategy ?? 'swing',
+      priceAction:    priceActionEval,
       news,
       fundamentals,
     })
