@@ -7,7 +7,7 @@ const SYSTEM = `Jesteś asystentem edukacyjnym GPW Analyzer — aplikacji analiz
 Odpowiadasz WYŁĄCZNIE po polsku. Jesteś zwięzły, konkretny, pomocny.
 NIE dajesz porad inwestycyjnych. Zawsze przypominasz że to analiza edukacyjna.
 Możesz objaśniać wskaźniki techniczne (RSI, SMA, wolumen), strategie (scalping, swing, agresywna), i wyniki alertów.
-Gdy pytają o aktualne dane (earnings date, wyniki finansowe, komunikaty spółki) — wyszukaj je w internecie.`
+Gdy pytają o aktualne dane (earnings date, wyniki finansowe, komunikaty spółki) — wyszukaj je w internecie i podaj konkretne informacje.`
 
 const TOOLS = [{ type: 'web_search_20250305', name: 'web_search' }]
 
@@ -20,14 +20,14 @@ export default async function handler(req, res) {
   try {
     let msgs = [...messages]
     let finalText = null
-    const deadline = Date.now() + 18000
+    const deadline = Date.now() + 25000
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       if (Date.now() > deadline) break
 
       const response = await client.messages.create({
         model:      MODEL,
-        max_tokens: 1024,
+        max_tokens: 2048,
         system:     system ?? SYSTEM,
         tools:      TOOLS,
         messages:   msgs,
@@ -38,21 +38,26 @@ export default async function handler(req, res) {
         break
       }
 
-      // Append assistant turn (includes tool_use blocks + any inline tool_result from Anthropic)
+      // Append full assistant content — Anthropic's web_search provides results inline
+      // as non-text/non-tool_use blocks (e.g. tool_result or web_search_tool_result)
       msgs = [...msgs, { role: 'assistant', content: response.content }]
 
-      // For any tool_use blocks not already satisfied inline, send back tool_result
-      const toolUseIds = new Set(response.content.filter(b => b.type === 'tool_use').map(b => b.id))
-      const satisfiedIds = new Set(response.content.filter(b => b.type === 'tool_result').map(b => b.tool_use_id))
-      const unsatisfied = [...toolUseIds].filter(id => !satisfiedIds.has(id))
+      // Only add manual tool_result if Anthropic did NOT provide inline results
+      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
+      const inlineResultIds = new Set(
+        response.content
+          .filter(b => b.type !== 'text' && b.type !== 'tool_use' && b.tool_use_id)
+          .map(b => b.tool_use_id)
+      )
+      const needsManualResult = toolUseBlocks.filter(tb => !inlineResultIds.has(tb.id))
 
-      if (unsatisfied.length > 0) {
+      if (needsManualResult.length > 0) {
         msgs = [...msgs, {
           role: 'user',
-          content: unsatisfied.map(id => ({
+          content: needsManualResult.map(tb => ({
             type:        'tool_result',
-            tool_use_id: id,
-            content:     'Search results not available.',
+            tool_use_id: tb.id,
+            content:     'Wyniki wyszukiwania niedostępne — odpowiedz na podstawie wiedzy treningowej.',
           })),
         }]
       }
