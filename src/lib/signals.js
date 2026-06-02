@@ -12,13 +12,13 @@ import { calcScore } from '../indicators/scoring.js'
 
 export const SIGNAL_DEFAULTS = {
   GPW: {
-    scalping:   { rsiThreshold: 28, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
-    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 3, rsiPeriod: 14 },
+    scalping:   { rsiThreshold: 30, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
+    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 7, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 2.5, rsiPeriod: 14 },
   },
   NYSE: {
-    scalping:   { rsiThreshold: 28, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
-    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 3, rsiPeriod: 14 },
+    scalping:   { rsiThreshold: 32, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
+    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 7, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 1.5, rsiPeriod: 14 },
   },
 }
