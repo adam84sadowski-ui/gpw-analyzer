@@ -8,8 +8,9 @@ on:
     - cron: '35 15 * * 1-5'  # GPW swing + dividend
     - cron: '40 15 * * 1-5'  # GPW agresywna
     - cron: '35 19 * * 1-5'  # NYSE scalping (13:35 ET)
+    - cron: '30 19 * * 1-5'  # NYSE agresywna — pre-close (15:30 ET)
     - cron: '10 20 * * 1-5'  # NYSE swing + dividend
-    - cron: '15 20 * * 1-5'  # NYSE agresywna
+    - cron: '15 20 * * 1-5'  # NYSE agresywna — po zamknięciu
   workflow_dispatch:
     inputs:
       strategy:
@@ -89,6 +90,12 @@ jobs:
         run: |
           curl -sf --max-time 70 --retry 1 --retry-delay 10 \
             "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE agresywna — pre-close (15:30 ET)
+        if: github.event.schedule == '30 19 * * 1-5'
+        run: |
+          curl -sf --max-time 70 --retry 1 --retry-delay 10 \
+            "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE swing
         if: github.event.schedule == '10 20 * * 1-5'

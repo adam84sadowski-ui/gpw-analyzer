@@ -81,7 +81,7 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
 
   try {
     const symbol = toYahooSymbol(ticker, exchange)
-    const modules = 'financialData,summaryDetail,defaultKeyStatistics,recommendationTrend'
+    const modules = 'financialData,summaryDetail,defaultKeyStatistics,recommendationTrend,calendarEvents'
     const auth = await fetchYahooCrumb().catch(() => null)
     const crumbParam = auth?.crumb ? `&crumb=${encodeURIComponent(auth.crumb)}` : ''
     const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=${modules}${crumbParam}`
@@ -99,6 +99,9 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
     const sd = r.summaryDetail ?? {}
     const ks = r.defaultKeyStatistics ?? {}
     const rt = r.recommendationTrend?.trend?.[0] ?? {}
+    const ce = r.calendarEvents ?? {}
+    const earningsTs = ce.earnings?.earningsDate?.[0]?.raw ?? null
+    const earningsDate = earningsTs ? new Date(earningsTs * 1000).toISOString().slice(0, 10) : null
 
     const freeCashflow = fd.freeCashflow?.raw ?? null
     const marketCap    = sd.marketCap?.raw    ?? null
@@ -129,6 +132,7 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
       analystSell:       (rt.sell ?? 0) + (rt.strongSell ?? 0),
       beta:              sd.beta?.raw                ?? null,
       currency:          fd.financialCurrency        ?? null,
+      earningsDate,
     }
     await kv.set(cacheKey, summary, { ex: 4 * 3600 }).catch(() => {})
     return summary
@@ -339,7 +343,7 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, strategy = 'swing' }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -348,6 +352,16 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
   const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
   const pnlNum      = Number(pnlPct)
   const nearTarget  = target > 0 && pnlNum >= target * 0.7
+
+  let earningsLine = ''
+  if (earningsDate) {
+    const daysUntil = Math.ceil((new Date(earningsDate) - Date.now()) / (1000 * 60 * 60 * 24))
+    if (daysUntil >= 0 && daysUntil <= 7) {
+      earningsLine = `\n- ⚠️ WYNIKI ZA ${daysUntil} DNI (${earningsDate}) — ryzyko luki cenowej przez noc`
+    } else if (daysUntil > 7) {
+      earningsLine = `\n- Najbliższe wyniki: ${earningsDate} (za ${daysUntil} dni)`
+    }
+  }
 
   const paWarningEval = priceAction && Math.abs(priceAction.change1d) >= 7
     ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
@@ -359,7 +373,7 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlNum > 0 ? '+' : ''}${pnlNum}%
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${priceActionLine}
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${earningsLine}${priceActionLine}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
