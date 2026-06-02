@@ -38,8 +38,8 @@ describe('SIGNAL_DEFAULTS', () => {
     expect(SIGNAL_DEFAULTS.GPW.aggressive.volumeMultiplierMin).toBe(2.5)
   })
 
-  it('GPW scalping rsiThreshold is 28 (Learning Agent update)', () => {
-    expect(SIGNAL_DEFAULTS.GPW.scalping.rsiThreshold).toBe(28)
+  it('GPW scalping rsiThreshold is 30 (Learning Agent update)', () => {
+    expect(SIGNAL_DEFAULTS.GPW.scalping.rsiThreshold).toBe(30)
   })
 })
 
@@ -89,17 +89,17 @@ describe('detectSignal — null for insufficient data', () => {
   })
 })
 
-describe('detectSignal — scalping rsiThreshold = 28', () => {
-  it('does not fire RSI_OVERSOLD when RSI is 30 (above new threshold of 28)', () => {
+describe('detectSignal — scalping rsiThreshold = 30', () => {
+  it('does not fire RSI_OVERSOLD when RSI is 32 (above new threshold of 30)', () => {
     // Moderate downtrend — RSI around 30–40
     const candles = Array.from({ length: 60 }, (_, i) => {
       const close = 200 - i * 0.5
       return { open: close + 0.2, high: close + 0.3, low: close - 0.3, close, volume: 1_500_000 }
     })
-    // Override threshold to 28 explicitly — RSI ~30 should NOT trigger
-    const result = detectSignal(candles, 'scalping', { rsi_threshold: 28, volume_multiplier: 1.3 }, 'GPW')
+    // Override threshold to 30 explicitly — RSI ~32 should NOT trigger
+    const result = detectSignal(candles, 'scalping', { rsi_threshold: 30, volume_multiplier: 1.3 }, 'GPW')
     if (result !== null) {
-      expect(result.rsi).toBeLessThan(28)
+      expect(result.rsi).toBeLessThan(30)
     }
   })
 })
