@@ -159,10 +159,7 @@ export default async function handler(req, res) {
     ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
 
-  // Index filter: neutral NYSE → limit to 5 tickers to conserve TwelveData credits
-  const universe = (exchange === 'NYSE' && indexTrend === 'neutral')
-    ? rawUniverse.slice(0, 5)
-    : rawUniverse
+  const universe = rawUniverse
 
   const seasonalityMap = {}
   rawUniverse.forEach((t, i) => {
