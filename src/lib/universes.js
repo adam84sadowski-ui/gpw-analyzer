@@ -5,9 +5,12 @@ export const UNIVERSES = {
     aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl','mls.pl','grn.pl','mrc.pl','ten.pl'],
   },
   NYSE: {
-    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','TSLA','AMD','CRM','SNOW','PLTR','ACN','IBM','INFY','CTSH','EPAM','NFLX','AVGO','GS','MS','INTC','UBER','LYFT','ABNB','BKNG','SPOT','ZM','DOCU','PATH','MDB','DDOG','CRWD','NET','ZS','PANW','OKTA','HOOD','SOFI','AFRM','UPST','RIVN','LCID','NOW','GTLB','ORCL','ADBE'],
-    swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','JPM','BAC','JNJ','PG','V','MA','HD','UNH','WMT','ACN','EPAM','ORCL','SAP','CDNS','NFLX','AVGO','GS','LLY','COST','PFE','ABT','ABBV','TMO','CVX','XOM','RTX','LMT','CAT','DE','GE','HON','NEE','DUK','SO','NOW','ADBE','QCOM','TXN','MU','LRCX','IBM','MS','INTC','AXP'],
-    aggressive: ['TSLA','AMD','CRM','SNOW','PLTR','COIN','RBLX','ROKU','SQ','SHOP','MSTR','ARM','CRWD','NET','DDOG','SMCI','GME','MARA','RIOT','SOFI','IONQ','QBTS','RGTI','NVAX','NKLA','WOLF','LAZR','JOBY','ACHR','RIVN','LCID','PATH','GTLB','AFRM','UPST','HOOD','HIMS','OPEN','BLNK','CHPT'],
+    // Scalping: blue chips + large tech (vol >10M/day), defense, commodities
+    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','QCOM','TXN','INTU','NOW','IBM','ACN','AMD','NFLX','AMAT','LRCX','MU','LMT','RTX','NOC','GD','BA','CVX','XOM','FCX','NEM','COP','SLB','V','MA','JPM','GS','MS','TSLA','CRM','PANW'],
+    // Swing: mid/large cap, diverse sectors — tech, defense, space, commodities
+    swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','NOW','INTU','QCOM','TXN','CDNS','SNPS','IBM','ACN','EPAM','CTSH','SAP','AMD','NFLX','AMAT','LRCX','MU','KLAC','LMT','RTX','NOC','GD','BA','LHX','LDOS','BAH','AXON','KTOS','AVAV','RKLB','ASTS','LUNR','CVX','XOM','COP','FCX','NEM','GOLD','ALB','SQM','CCJ','MOS','MP','V','MA','JPM','GS','TSLA','CRM','PANW','CRWD','COST','UNH'],
+    // Aggressive: high beta, momentum — tech growth, defense/space speculative, commodities, crypto
+    aggressive: ['TSLA','AMD','NVDA','CRM','SNOW','PLTR','CRWD','NET','DDOG','ZS','PANW','SMCI','ARM','MSTR','PATH','GTLB','MDB','OKTA','AI','SOUN','BBAI','S','WOLF','KTOS','AVAV','AXON','RKLB','LUNR','ASTS','JOBY','ACHR','FCX','ALB','LAC','UEC','CCJ','DNN','MP','NEM','GOLD','COIN','MARA','RIOT','HOOD','SOFI','AFRM','UPST','IONQ','QBTS','RGTI','RIVN','LCID','NIO','BLNK','CHPT','HIMS','CELH','SHOP','RBLX','ROKU','SQ','ABNB','NVAX'],
   },
 }
 
