@@ -77,7 +77,7 @@ export default function Watchlist() {
   async function load() {
     setLoading(true)
     try {
-      const res  = await fetch('/api/watchlist')
+      const res  = await fetch('/api/positions?mode=watchlist')
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
     } catch { setItems([]) }
@@ -85,7 +85,7 @@ export default function Watchlist() {
   }
 
   async function remove(id) {
-    await fetch('/api/watchlist', {
+    await fetch('/api/positions?mode=watchlist', {
       method:  'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ id }),

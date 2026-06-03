@@ -274,7 +274,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                   disabled={saved}
                   onClick={async () => {
                     try {
-                      await fetch('/api/watchlist', {
+                      await fetch('/api/positions?mode=watchlist', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
