@@ -7,12 +7,14 @@ import Results from './components/Results/Results.jsx'
 import Settings from './components/Settings/Settings.jsx'
 import Backtesting from './components/Backtesting/Backtesting.jsx'
 import LongTermPage from './components/LongTerm/LongTermPage.jsx'
+import Watchlist from './components/Watchlist/Watchlist.jsx'
 import { ExchangeProvider } from './context/ExchangeContext.jsx'
 import ExchangeSwitcher from './components/ExchangeSwitcher/ExchangeSwitcher.jsx'
 
 const TABS = [
   { id: 'dashboard',   label: '📊 Dashboard' },
   { id: 'strategies',  label: '⚡ Strategie' },
+  { id: 'watchlist',   label: '👁️ Obserwowane' },
   { id: 'alerts',      label: '🔔 Historia alertów' },
   { id: 'results',     label: '📈 Moje wyniki' },
   { id: 'longterm',    label: '🏦 Długoterminowe' },
@@ -55,6 +57,7 @@ export default function App() {
         <main className="p-4 max-w-7xl mx-auto">
           {tab === 'dashboard'  && <Dashboard />}
           {tab === 'strategies' && <Strategies />}
+          {tab === 'watchlist'  && <Watchlist />}
           {tab === 'alerts'     && <Alerts />}
           {tab === 'results'    && <Results />}
           {tab === 'longterm'   && <LongTermPage />}

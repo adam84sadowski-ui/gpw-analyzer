@@ -405,5 +405,46 @@ export default async function handler(req, res) {
     console.error('GEM monthly review error:', e.message)
   }
 
+  // ── Watchlist zone alerts ─────────────────────────────────────────────
+  try {
+    const [, watchKeys] = await kv.scan(0, { match: `${ENV}:watch:*`, count: 200 })
+    const watchItems = watchKeys.length
+      ? (await Promise.all(watchKeys.map(k => kv.get(k).catch(() => null)))).filter(Boolean)
+      : []
+
+    for (const item of watchItems) {
+      if (item.status !== 'active') continue
+      if (item.entryZoneMin == null || item.entryZoneMax == null) continue
+
+      const price = await getCurrentPrice(item.ticker, item.exchange ?? 'NYSE').catch(() => null)
+      if (!price) continue
+
+      if (price >= item.entryZoneMin && price <= item.entryZoneMax) {
+        const dedupKey = `${ENV}:watch-alert:${item.id}:${new Date().toISOString().slice(0, 10)}`
+        const alreadySent = await kv.get(dedupKey).catch(() => null)
+        if (alreadySent) continue
+
+        const display = (item.exchange === 'NYSE' ? item.ticker.toUpperCase() : item.ticker.replace('.pl', '').toUpperCase())
+        const currency = item.exchange === 'NYSE' ? 'USD' : 'PLN'
+        const msg = [
+          `🎯 <b>WATCHLIST: ${display} w strefie wejścia</b>`,
+          '',
+          `💰 Cena: <b>${price} ${currency}</b>`,
+          `📊 Strefa wejścia: ${item.entryZoneMin}–${item.entryZoneMax} ${currency}`,
+          item.aiSummary ? `💡 ${item.aiSummary}` : '',
+          '',
+          `⚠️ Analiza edukacyjna. Zweryfikuj sygnał przed wejściem.`,
+          `📱 <a href="https://gpw-analyzer.vercel.app">Otwórz aplikację</a>`,
+        ].filter(l => l !== '').join('\n')
+
+        await sendTelegram(msg, IS_STAGING)
+        await kv.set(dedupKey, 1, { ex: 23 * 60 * 60 }).catch(() => {})
+        alertsSent++
+      }
+    }
+  } catch (e) {
+    console.error('Watchlist alert error:', e.message)
+  }
+
   res.json({ checked: positions.length, alerts: alertsSent })
 }
