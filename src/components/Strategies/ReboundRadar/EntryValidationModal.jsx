@@ -35,6 +35,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   const [chatMsgs,    setChatMsgs]    = useState([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [saved,       setSaved]       = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const sma50Delta = rec.sma50 && rec.price
@@ -265,6 +266,41 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                   className="w-full bg-gpw-card text-gray-400 hover:text-white py-2 rounded-lg text-sm transition-colors"
                 >
                   🔄 Sprawdź ponownie
+                </button>
+              )}
+
+              {result.decision === 'OBSERWUJ' && (
+                <button
+                  disabled={saved}
+                  onClick={async () => {
+                    try {
+                      await fetch('/api/watchlist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          ticker:           rec.ticker,
+                          exchange,
+                          strategy:         strategy ?? 'swing',
+                          signal:           rec.signal ?? '',
+                          priceAtAnalysis:  rec.price ?? livePrice,
+                          entryZoneMin:     result.entryZoneMin ?? null,
+                          entryZoneMax:     result.entryZoneMax ?? null,
+                          stopLoss:         rec.stopLoss ?? null,
+                          target:           rec.target   ?? null,
+                          aiDecision:       result.decision,
+                          aiSummary:        result.summary,
+                          aiRecommendation: result.recommendation,
+                          buffettScore:     result.buffettScore,
+                          confidence:       result.confidence,
+                          reviewDays:       result.reviewDays ?? 10,
+                        }),
+                      })
+                      setSaved(true)
+                    } catch { /* silent */ }
+                  }}
+                  className="w-full bg-yellow-600/20 hover:bg-yellow-600/40 disabled:opacity-50 border border-yellow-600/40 text-yellow-300 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {saved ? '✅ Zapisano do obserwowanych' : '💾 Zapisz do obserwowanych'}
                 </button>
               )}
             </div>

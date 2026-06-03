@@ -255,7 +255,10 @@ ${newsLines}`
   "confidence": <0-100>,
   "summary": "<jedno zdanie: najważniejsza rzecz o tym setupie>",
   "analysis": "<checklist 12 punktów z \\n, każdy: NAZWA\\n[✅/⚠️/❌] ocena + 1 zdanie/dane>",
-  "recommendation": "<KIEDY WEJŚĆ / dlaczego UNIKAJ | PARAMETRY: Stop -X%, Cel +X%, Horyzont X dni>"
+  "recommendation": "<KIEDY WEJŚĆ / dlaczego UNIKAJ | PARAMETRY: Stop -X%, Cel +X%, Horyzont X dni>",
+  "entryZoneMin": <liczba lub null — minimalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
+  "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
+  "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>
 }`
 
   let prompt
