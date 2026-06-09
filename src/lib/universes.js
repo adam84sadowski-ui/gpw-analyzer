@@ -5,12 +5,12 @@ export const UNIVERSES = {
     aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl','mls.pl','grn.pl','mrc.pl','ten.pl'],
   },
   NYSE: {
-    // Scalping: blue chips + large tech (vol >10M/day), defense, commodities
-    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','QCOM','TXN','INTU','NOW','IBM','ACN','AMD','NFLX','AMAT','LRCX','MU','LMT','RTX','NOC','GD','BA','CVX','XOM','FCX','NEM','COP','SLB','V','MA','JPM','GS','MS','TSLA','CRM','PANW'],
-    // Swing: mid/large cap, diverse sectors — tech, defense, space, commodities
-    swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','NOW','INTU','QCOM','TXN','CDNS','SNPS','IBM','ACN','EPAM','CTSH','SAP','AMD','NFLX','AMAT','LRCX','MU','KLAC','LMT','RTX','NOC','GD','BA','LHX','LDOS','BAH','AXON','KTOS','AVAV','RKLB','ASTS','LUNR','CVX','XOM','COP','FCX','NEM','GOLD','ALB','SQM','CCJ','MOS','MP','V','MA','JPM','GS','TSLA','CRM','PANW','CRWD','COST','UNH'],
-    // Aggressive: high beta, momentum — tech growth, defense/space speculative, commodities, crypto
-    aggressive: ['TSLA','AMD','NVDA','CRM','SNOW','PLTR','CRWD','NET','DDOG','ZS','PANW','SMCI','ARM','MSTR','PATH','GTLB','MDB','OKTA','AI','SOUN','BBAI','S','WOLF','KTOS','AVAV','AXON','RKLB','LUNR','ASTS','JOBY','ACHR','FCX','ALB','LAC','UEC','CCJ','DNN','MP','NEM','GOLD','COIN','MARA','RIOT','HOOD','SOFI','AFRM','UPST','IONQ','QBTS','RGTI','RIVN','LCID','NIO','BLNK','CHPT','HIMS','CELH','SHOP','RBLX','ROKU','SQ','ABNB','NVAX'],
+    // Scalping: blue chips + large tech (vol >10M/day), defense, energy, commodities
+    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','QCOM','TXN','INTU','NOW','IBM','ACN','AMD','NFLX','AMAT','LRCX','MU','MRVL','LMT','RTX','NOC','GD','BA','CVX','XOM','FCX','NEM','COP','SLB','OXY','HAL','MPC','V','MA','JPM','GS','MS','TSLA','CRM','PANW'],
+    // Swing: mid/large cap, diverse sectors — tech, defense, space, commodities, apparel, energy
+    swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','NOW','INTU','QCOM','TXN','CDNS','SNPS','IBM','ACN','EPAM','CTSH','SAP','AMD','NFLX','AMAT','LRCX','MU','KLAC','MRVL','LMT','RTX','NOC','GD','BA','LHX','LDOS','BAH','AXON','KTOS','AVAV','RKLB','ASTS','LUNR','IRDM','VSAT','BWXT','TDY','CVX','XOM','COP','OXY','EOG','CEG','FCX','NEM','GOLD','ALB','SQM','CCJ','MOS','MP','LULU','ONON','DECK','RL','TPR','V','MA','JPM','GS','TSLA','CRM','PANW','CRWD','COST','UNH'],
+    // Aggressive: high beta, momentum — tech, space, energy, apparel, crypto, quantum, EV
+    aggressive: ['TSLA','AMD','NVDA','CRM','SNOW','PLTR','CRWD','NET','DDOG','ZS','PANW','SMCI','ARM','MSTR','PATH','GTLB','MDB','OKTA','AI','SOUN','BBAI','S','WOLF','MRVL','KTOS','AVAV','AXON','RKLB','LUNR','ASTS','JOBY','ACHR','GSAT','RDW','CEG','VST','DVN','FCX','ALB','LAC','UEC','CCJ','DNN','MP','NEM','GOLD','LULU','CROX','ONON','COIN','MARA','RIOT','HOOD','SOFI','AFRM','UPST','IONQ','QBTS','RGTI','RIVN','LCID','NIO','BLNK','CHPT','HIMS','CELH','SHOP','RBLX','ROKU','SQ','ABNB','NVAX'],
   },
 }
 
