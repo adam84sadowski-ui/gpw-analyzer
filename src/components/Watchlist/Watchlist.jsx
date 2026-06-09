@@ -236,8 +236,7 @@ export default function Watchlist() {
 
   useEffect(() => { load() }, [])
 
-  const active  = items.filter(w => w.status === 'active')
-  const expired = items.filter(w => w.status === 'expired')
+  const active = items
 
   if (loading) return (
     <div className="text-center py-12 text-gray-500 text-sm animate-pulse">Ładowanie obserwowanych…</div>
@@ -268,22 +267,7 @@ export default function Watchlist() {
           </div>
         )}
 
-        {expired.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-gray-600 uppercase tracking-wide px-1">Wygasłe</p>
-            {expired.map(w => (
-              <WatchCard
-                key={w.id}
-                item={w}
-                onDelete={remove}
-                onPositionOpened={id => setItems(prev => prev.filter(x => x.id !== id))}
-                onValidate={handleValidate}
-              />
-            ))}
-          </div>
-        )}
-
-        {validating && (
+{validating && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
             <p className="text-white text-sm animate-pulse">Pobieranie wskaźników…</p>
           </div>

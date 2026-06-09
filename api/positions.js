@@ -67,21 +67,30 @@ export default async function handler(req, res) {
         }
       } while (cursor !== 0)
 
-      const active = items.filter(w => w.status === 'active')
+      // Auto-delete expired items from KV, return only active
+      const toDelete = items.filter(w => {
+        if (w.status === 'expired') return true
+        if (w.reviewDate) {
+          const expiry = new Date(w.reviewDate)
+          expiry.setDate(expiry.getDate() + 3)
+          if (new Date() > expiry) return true
+        }
+        return false
+      })
+      if (toDelete.length) {
+        await Promise.allSettled(toDelete.map(w => kv.del(w.id).catch(() => {})))
+      }
+
+      const active = items.filter(w => !toDelete.includes(w))
       const livePrices = await Promise.allSettled(
         active.map(w => fetchCurrent(w.ticker, w.exchange).catch(() => null))
       )
       active.forEach((w, i) => {
         const p = livePrices[i].status === 'fulfilled' ? livePrices[i].value : null
         w.livePrice = p?.close ?? null
-        if (w.reviewDate) {
-          const expiry = new Date(w.reviewDate)
-          expiry.setDate(expiry.getDate() + 3)
-          if (new Date() > expiry) w.status = 'expired'
-        }
       })
-      items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      return res.json(items)
+      active.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      return res.json(active)
     }
 
     return res.status(405).end()
