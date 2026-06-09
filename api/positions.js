@@ -25,15 +25,27 @@ export default async function handler(req, res) {
       const reviewDate = reviewDays
         ? new Date(Date.now() + reviewDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
         : null
+      const { rsi, volMult, score } = req.body
       const item = {
         id, ticker, exchange: exchange ?? 'NYSE', strategy, signal,
         priceAtAnalysis, entryZoneMin: entryZoneMin ?? null, entryZoneMax: entryZoneMax ?? null,
         stopLoss, target, aiDecision, aiSummary, aiRecommendation,
         buffettScore, confidence, reviewDate,
+        rsi: rsi ?? null, volMult: volMult ?? null, score: score ?? null,
         createdAt: new Date().toISOString(), status: 'active',
       }
       await kv.set(id, item, { ex: 60 * 24 * 60 * 60 })
       return res.json(item)
+    }
+
+    if (method === 'PATCH') {
+      const { id, status } = req.body
+      if (!id || !status) return res.status(400).json({ error: 'id and status required' })
+      const item = await kv.get(id).catch(() => null)
+      if (!item) return res.status(404).json({ error: 'not found' })
+      const updated = { ...item, status }
+      await kv.set(id, updated, { ex: 60 * 24 * 60 * 60 })
+      return res.json(updated)
     }
 
     if (method === 'DELETE') {

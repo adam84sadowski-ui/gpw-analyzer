@@ -293,6 +293,9 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                           buffettScore:     result.buffettScore,
                           confidence:       result.confidence,
                           reviewDays:       result.reviewDays ?? 10,
+                          rsi:              rec.rsi     ?? null,
+                          volMult:          rec.volMult ?? null,
+                          score:            rec.score   ?? null,
                         }),
                       })
                       setSaved(true)
