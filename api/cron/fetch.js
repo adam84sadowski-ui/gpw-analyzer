@@ -144,7 +144,7 @@ export default async function handler(req, res) {
   const currency    = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const seasonalityKeys = rawUniverse.map(t => `${ENV}:seasonality:${exchange}:${t}`)
-  const [thresholds, indexTrend, settings, positionKeys, macro, ...seasonalityValues] = await Promise.all([
+  const [rawThresholds, indexTrend, settings, positionKeys, macro, ...seasonalityValues] = await Promise.all([
     kv.get(`${ENV}:thresholds`).catch(() => null).then(v => v ?? {}),
     fetchIndexTrend(exchange).catch(() => 'neutral'),
     kv.get(`${ENV}:settings`).catch(() => null),
@@ -158,6 +158,9 @@ export default async function handler(req, res) {
     })(),
     ...seasonalityKeys.map(k => kv.get(k).catch(() => null)),
   ])
+
+  // Use per-exchange thresholds if available (new format), fall back to flat (old format)
+  const thresholds = rawThresholds[exchange] ?? rawThresholds
 
   const universe = rawUniverse
 
