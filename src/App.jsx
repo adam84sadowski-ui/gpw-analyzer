@@ -23,7 +23,8 @@ const TABS = [
 ]
 
 export default function App() {
-  const [tab, setTab] = useState('dashboard')
+  const [tab,        setTab]        = useState('dashboard')
+  const [refreshKey, setRefreshKey] = useState(0)
 
   return (
     <ExchangeProvider>
@@ -33,7 +34,14 @@ export default function App() {
           <span className="text-xs text-gray-300 bg-gpw-dark px-2 py-0.5 rounded">
             {window.location.hostname !== 'gpw-analyzer.vercel.app' ? `🟣 STAGING v${APP_VERSION}` : `🔵 PROD v${APP_VERSION}`}
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setRefreshKey(k => k + 1)}
+              className="text-gray-400 hover:text-white transition-colors p-1.5 rounded hover:bg-gpw-border"
+              title="Odśwież dane"
+            >
+              🔄
+            </button>
             <ExchangeSwitcher />
           </div>
         </header>
@@ -55,14 +63,14 @@ export default function App() {
         </nav>
 
         <main className="p-4 max-w-7xl mx-auto">
-          {tab === 'dashboard'  && <Dashboard />}
-          {tab === 'strategies' && <Strategies />}
-          {tab === 'watchlist'  && <Watchlist />}
-          {tab === 'alerts'     && <Alerts />}
-          {tab === 'results'    && <Results />}
-          {tab === 'longterm'   && <LongTermPage />}
-          {tab === 'backtest'   && <Backtesting />}
-          {tab === 'settings'   && <Settings />}
+          {tab === 'dashboard'  && <Dashboard   key={refreshKey} />}
+          {tab === 'strategies' && <Strategies  key={refreshKey} />}
+          {tab === 'watchlist'  && <Watchlist   key={refreshKey} />}
+          {tab === 'alerts'     && <Alerts      key={refreshKey} />}
+          {tab === 'results'    && <Results     key={refreshKey} />}
+          {tab === 'longterm'   && <LongTermPage key={refreshKey} />}
+          {tab === 'backtest'   && <Backtesting key={refreshKey} />}
+          {tab === 'settings'   && <Settings    key={refreshKey} />}
         </main>
 
       </div>
