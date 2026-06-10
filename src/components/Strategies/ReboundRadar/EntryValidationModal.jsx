@@ -269,7 +269,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 </button>
               )}
 
-              {result.decision === 'OBSERWUJ' && (
+              {result.decision && (
                 <button
                   disabled={saved}
                   onClick={async () => {
@@ -301,7 +301,13 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                       setSaved(true)
                     } catch { /* silent */ }
                   }}
-                  className="w-full bg-yellow-600/20 hover:bg-yellow-600/40 disabled:opacity-50 border border-yellow-600/40 text-yellow-300 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className={`w-full disabled:opacity-50 border py-2 rounded-lg text-sm font-medium transition-colors ${
+                    saved
+                      ? 'bg-gpw-green/20 border-gpw-green/40 text-gpw-green'
+                      : result.decision === 'OBSERWUJ'
+                        ? 'bg-yellow-600/20 hover:bg-yellow-600/40 border-yellow-600/40 text-yellow-300'
+                        : 'bg-gpw-card hover:bg-gpw-border border-gpw-border text-gray-400 hover:text-white'
+                  }`}
                 >
                   {saved ? '✅ Zapisano do obserwowanych' : '💾 Zapisz do obserwowanych'}
                 </button>
