@@ -27,7 +27,7 @@ const FRAMEWORK_LABEL = {
   swing:      'Buffett/Lynch',
 }
 
-export default function EntryValidationModal({ rec, strategy, exchange, livePrice, onOpenPosition, onClose }) {
+export default function EntryValidationModal({ rec, strategy, exchange, livePrice, watchlistItemId, onOpenPosition, onClose }) {
   const frameworkLabel = FRAMEWORK_LABEL[strategy] ?? 'Fundamentalna'
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
@@ -274,30 +274,51 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                   disabled={saved}
                   onClick={async () => {
                     try {
-                      await fetch('/api/positions?mode=watchlist', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          ticker:           rec.ticker,
-                          exchange,
-                          strategy:         strategy ?? 'swing',
-                          signal:           rec.signal ?? '',
-                          priceAtAnalysis:  rec.price ?? livePrice,
-                          entryZoneMin:     result.entryZoneMin ?? null,
-                          entryZoneMax:     result.entryZoneMax ?? null,
-                          stopLoss:         rec.stopLoss ?? null,
-                          target:           rec.target   ?? null,
-                          aiDecision:       result.decision,
-                          aiSummary:        result.summary,
-                          aiRecommendation: result.recommendation,
-                          buffettScore:     result.buffettScore,
-                          confidence:       result.confidence,
-                          reviewDays:       result.reviewDays ?? 10,
-                          rsi:              rec.rsi     ?? null,
-                          volMult:          rec.volMult ?? null,
-                          score:            rec.score   ?? null,
-                        }),
-                      })
+                      if (watchlistItemId) {
+                        await fetch('/api/positions?mode=watchlist', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            id:               watchlistItemId,
+                            aiDecision:       result.decision,
+                            aiSummary:        result.summary,
+                            aiRecommendation: result.recommendation,
+                            buffettScore:     result.buffettScore,
+                            confidence:       result.confidence,
+                            entryZoneMin:     result.entryZoneMin ?? null,
+                            entryZoneMax:     result.entryZoneMax ?? null,
+                            reviewDays:       result.reviewDays ?? 10,
+                            rsi:              rec.rsi     ?? null,
+                            volMult:          rec.volMult ?? null,
+                            score:            rec.score   ?? null,
+                          }),
+                        })
+                      } else {
+                        await fetch('/api/positions?mode=watchlist', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            ticker:           rec.ticker,
+                            exchange,
+                            strategy:         strategy ?? 'swing',
+                            signal:           rec.signal ?? '',
+                            priceAtAnalysis:  rec.price ?? livePrice,
+                            entryZoneMin:     result.entryZoneMin ?? null,
+                            entryZoneMax:     result.entryZoneMax ?? null,
+                            stopLoss:         rec.stopLoss ?? null,
+                            target:           rec.target   ?? null,
+                            aiDecision:       result.decision,
+                            aiSummary:        result.summary,
+                            aiRecommendation: result.recommendation,
+                            buffettScore:     result.buffettScore,
+                            confidence:       result.confidence,
+                            reviewDays:       result.reviewDays ?? 10,
+                            rsi:              rec.rsi     ?? null,
+                            volMult:          rec.volMult ?? null,
+                            score:            rec.score   ?? null,
+                          }),
+                        })
+                      }
                       setSaved(true)
                     } catch { /* silent */ }
                   }}
@@ -309,7 +330,10 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                         : 'bg-gpw-card hover:bg-gpw-border border-gpw-border text-gray-400 hover:text-white'
                   }`}
                 >
-                  {saved ? '✅ Zapisano do obserwowanych' : '💾 Zapisz do obserwowanych'}
+                  {saved
+                    ? (watchlistItemId ? '✅ Zaktualizowano' : '✅ Zapisano do obserwowanych')
+                    : (watchlistItemId ? '🔄 Aktualizuj obserwowaną' : '💾 Zapisz do obserwowanych')
+                  }
                 </button>
               )}
             </div>
