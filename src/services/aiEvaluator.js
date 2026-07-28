@@ -141,6 +141,26 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
   }
 }
 
+function buildSectorEventContext(sector) {
+  const map = {
+    'Energy':         'EIA oil inventory (środa 10:30 ET), decyzje OPEC, Henry Hub gas prices, sezonowość: Q4 popyt ogrzewania',
+    'Technology':     'Wyniki kwartalne FAANG/MAANG, konferencje: CES (styczeń), COMPUTEX (maj), AI capex surveys, ogłoszenia produktowe',
+    'Semiconductors': 'TSMC miesięczne wyniki sprzedaży, SEMI book-to-bill, fab utilization reports, konferencje: SEMICON, Hot Chips',
+    'Financials':     'Decyzje FOMC (8x rocznie), CPI/PPI (ok. 10-15 każdego miesiąca), stress-testy Fed (Q2), wyniki banków (pocz. kwartału)',
+    'Defense':        'Budżet DoD/Kongres (NDAA), przetargi rządowe, eskalacje/deeskalacje geopolityczne, posiedzenia NATO',
+    'Aerospace':      'Okna startowe, kontrakty NASA/DoD, FCC spectrum auctions, FAA regulatory milestones',
+    'Space':          'Okna startowe, kontrakty NASA/DoD, FCC spectrum auctions, FAA regulatory milestones',
+    'Materials':      'Ceny LME (Cu, Al, Li), chińskie PMI przemysłowe (1. dzień miesiąca), OPEC production cuts, mining output',
+    'Healthcare':     'FDA approvals / PDUFA dates, wyniki kliniczne Phase 2/3, CMS pricing decisions, FDA AdCom meetings',
+    'Consumer':       'Retail sales (co miesiąc), consumer confidence (Conference Board), sezonowość: Q4 holiday, Q1 post-holiday',
+    'Utilities':      'Decyzje FERC, temperatura (heating/cooling degree days), natural gas storage reports',
+    'Real Estate':    'Decyzje Fed (stopy), housing starts/permits (miesięcznie), Case-Shiller index',
+    'Industrials':    'ISM Manufacturing PMI (1. dzień roboczy miesiąca), durable goods orders, infrastructure spending bills',
+  }
+  const key = Object.keys(map).find(k => sector?.toLowerCase().includes(k.toLowerCase()))
+  return key ? map[key] : 'Monitoruj: CPI, decyzje Fed, PMI przemysłowy oraz eventy specyficzne dla tej branży'
+}
+
 // Sector context for prompt building
 export function buildSectorContext(ticker, exchange, openPositions = []) {
   const sector = getSector(ticker, exchange)
@@ -237,10 +257,32 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
     ? `Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarning} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
     : null
 
+  const earningsDate = fundamentals?.earningsDate ?? null
+  let earningsLine = ''
+  if (earningsDate) {
+    const daysUntil = Math.ceil((new Date(earningsDate) - Date.now()) / (1000 * 60 * 60 * 24))
+    if (daysUntil >= 0 && daysUntil <= 3) {
+      earningsLine = strategy === 'scalping'
+        ? `⚠️ DEALBREAKER EARNINGS: Wyniki za ${daysUntil} ${daysUntil === 1 ? 'dzień' : 'dni'} (${earningsDate}) — gap risk niszczy R/R 1.67x.`
+        : `⚠️ WYNIKI ZA ${daysUntil} ${daysUntil === 1 ? 'DZIEŃ' : 'DNI'} (${earningsDate}) — ekstremalne ryzyko luki cenowej przez noc.`
+    } else if (daysUntil > 3 && daysUntil <= 7) {
+      earningsLine = strategy === 'aggressive'
+        ? `📈 EARNINGS PROXIMITY: Wyniki za ${daysUntil} dni (${earningsDate}) — potencjał run-up przed publikacją. Zaplanuj wyjście przed wynikami lub trzymaj z tight stopem.`
+        : `⚠️ Wyniki za ${daysUntil} dni (${earningsDate}) — uwzględnij jako granicę horyzontu.`
+    } else if (daysUntil > 7) {
+      earningsLine = `Najbliższe wyniki: ${earningsDate} (za ${daysUntil} dni).`
+    }
+  }
+
+  const sectorEvents = buildSectorEventContext(sector)
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
-RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}
+RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}${earningsLine ? `\n${earningsLine}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
+
+📅 EVENTY SEKTOROWE — uwzględnij w analizie:
+${sectorEvents}
 
 WSKAŹNIKI FUNDAMENTALNE:
 ${fundBlock}
@@ -248,13 +290,13 @@ ${fundBlock}
 NEWSY (ostatnie 5):
 ${newsLines}`
 
-  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 12 kryteriów × 10/12, zaokrąglij do 1 miejsca).
+  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca).
 {
   "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
   "buffettScore": <0-10>,
   "confidence": <0-100>,
   "summary": "<jedno zdanie: najważniejsza rzecz o tym setupie>",
-  "analysis": "<checklist 12 punktów z \\n, każdy: NAZWA\\n[✅/⚠️/❌] ocena + 1 zdanie/dane>",
+  "analysis": "<checklist 13 punktów z \\n, każdy: NAZWA\\n[✅/⚠️/❌] ocena + 1 zdanie/dane>",
   "recommendation": "<KIEDY WEJŚĆ / dlaczego UNIKAJ | PARAMETRY: Stop -X%, Cel +X%, Horyzont X dni>",
   "entryZoneMin": <liczba lub null — minimalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
@@ -284,7 +326,8 @@ Punkty w "analysis" (12 kryteriów PTJ):
 9. SENTIMENT NEWSOWY — newsy neutralne/pozytywne? Negatywne to dealbreaker
 10. JAKOŚĆ SYGNAŁU TECHNICZNEGO — score/100: wiarygodność setupu
 11. KORELACJA PORTFELOWA — ile otwartych pozycji w tym sektorze?
-12. PLAN WYJŚCIA — jasny trigger take-profit i stop-loss bez emocji`
+12. PLAN WYJŚCIA — jasny trigger take-profit i stop-loss bez emocji
+13. MACRO CALENDAR — czy w ciągu 5 sesji jest decyzja Fed, CPI, PPI, NFP lub earnings tej spółki? Gap risk przy takim evencie niszczy R/R 1.67x → rekomenduj UNIKAJ lub drastycznie redukuj size`
   } else if (strategy === 'aggressive') {
     prompt = `Jesteś analitykiem w stylu William O'Neil (CANSLIM). Szukasz spółek z przyspieszającymi zyski, wybijającymi się z prawidłowych baz z wolumenem ≥ 1.5x. Filozofia: "Cut losses at 7-8%, let winners run." Horyzont: 1-4 tygodnie. Target +35%, Stop -8%.
 
@@ -307,7 +350,8 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 9. JAKOŚĆ WYBICIA — RSI > 60 + close blisko high dnia = siłowe wybicie
 10. BETA / ZMIENNOŚĆ — ryzyko specyficzne dla tego setup'u agresywnego
 11. MOMENTUM FUNDAMENTÓW — wzrost przychodów YoY: przyspiesza czy hamuje?
-12. REGUŁA SPRZEDAŻY O'NEIL — kiedy bezwarunkowo wychodzimy (-7-8% od wejścia lub specyficzne warunki)`
+12. REGUŁA SPRZEDAŻY O'NEIL — kiedy bezwarunkowo wychodzimy (-7-8% od wejścia lub specyficzne warunki)
+13. EARNINGS RUN-UP — wyniki za 3-7 dni: czy historycznie spółka rośnie przed publikacją (earnings whisper)? Czy konsensus EPS rośnie? Jeśli tak: czyste momentum play — zaplanuj wyjście przed wynikami + tight stop`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
 
@@ -330,7 +374,8 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
 10. LYNCH — WZROST vs WYCENA (PEG) — P/E / wzrost przych.: PEG < 1 tanie, > 2 drogie
 11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor
-12. RYZYKO SPECYFICZNE — 2-3 konkretne ryzyka dla tej spółki`
+12. RYZYKO SPECYFICZNE — 2-3 konkretne ryzyka dla tej spółki
+13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych (rosnące = presja na growth/P/E, malejące = sprzyjające). Rotacja sektorowa instytucji: czy ten sektor jest w favor? Sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
   }
 
   prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić`
