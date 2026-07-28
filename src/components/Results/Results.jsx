@@ -104,6 +104,12 @@ export default function Results() {
           }))
           setNames(nameMap)
           setPrices(priceMap)
+          data.forEach(pos => {
+            fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
+              .then(r => r.json())
+              .then(d => { if (d && !d.error) setIndics(prev => ({ ...prev, [pos.id]: d })) })
+              .catch(() => {})
+          })
         }
       })
       .catch(() => setPositions([]))
@@ -448,6 +454,29 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 </div>
 
+                {pos.status === 'open' && (() => {
+                  const ind = indics[pos.id]
+                  const macdLabel = t => !t ? '—' : t.includes('bull') ? '↑ bull' : t.includes('bear') ? '↓ bear' : '→'
+                  const tiles = [
+                    { label: 'RSI teraz',  val: ind ? (ind.rsi?.toFixed(1) ?? '—')                                                          : null },
+                    { label: 'Wolumen',    val: ind ? (ind.volMult != null ? `${ind.volMult}x` : '—')                                       : null },
+                    { label: 'vs SMA50',   val: ind ? (ind.sma50Delta != null ? `${ind.sma50Delta > 0 ? '+' : ''}${ind.sma50Delta}%` : '—') : null },
+                    { label: 'MACD',       val: ind ? macdLabel(ind.macd?.trend)                                                            : null },
+                  ]
+                  return (
+                    <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
+                      {tiles.map(({ label, val }) => (
+                        <div key={label} className="bg-gpw-dark rounded p-1.5">
+                          <div className="text-gray-500 text-[10px]">{label}</div>
+                          <div className={`font-bold ${val == null ? 'text-gray-600 animate-pulse' : 'text-gray-200'}`}>
+                            {val ?? '…'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Akcji: {pos.shares} × {pos.entryPrice} {cur} = {pos.positionSize.toLocaleString('pl-PL')} {cur}</span>
                   <span>{new Date(pos.entryDate).toLocaleDateString('pl-PL')}</span>
@@ -456,6 +485,21 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                 {pos.entryRsi != null && (
                   <div className="text-xs text-gray-500">
                     RSI przy wejściu: <span className={`font-semibold ${pos.entryRsi < 30 ? 'text-gpw-green' : pos.entryRsi > 70 ? 'text-gpw-red' : 'text-gray-300'}`}>{pos.entryRsi.toFixed(1)}</span>
+                  </div>
+                )}
+
+                {pos.status === 'closed' && (pos.entryVolMult != null || pos.entryScore != null) && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {pos.entryVolMult != null && (
+                      <span className="bg-gpw-dark text-xs rounded px-2 py-1 text-gray-400">
+                        Vol wejścia: <span className="text-gray-200 font-bold">{pos.entryVolMult}x</span>
+                      </span>
+                    )}
+                    {pos.entryScore != null && (
+                      <span className="bg-gpw-dark text-xs rounded px-2 py-1 text-gray-400">
+                        Score: <span className="text-yellow-400 font-bold">{pos.entryScore}/100</span>
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -522,6 +566,10 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                       const rsiNow      = cur?.rsi
                       const rsiEntry    = pos.entryRsi
                       const rsiDelta    = rsiEntry != null && rsiNow != null ? rsiNow - rsiEntry : null
+                      const volNow      = cur?.volMult
+                      const volDelta    = pos.entryVolMult != null && volNow != null ? +(volNow - pos.entryVolMult).toFixed(2) : null
+                      const sma50Now    = cur?.sma50Delta
+                      const sma50Prog   = pos.entrySma50Delta != null && sma50Now != null ? +(sma50Now - pos.entrySma50Delta).toFixed(1) : null
                       const verdict     = signalComment(pos, cur, cp)
 
                       const pnlCls = pnlPct == null ? 'text-gray-400'
@@ -576,6 +624,40 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 {rsiDelta != null && (
                                   <span className={`ml-1 ${rsiDelta > 0 ? 'text-gpw-green' : rsiDelta < 0 ? 'text-gpw-red' : 'text-gray-400'}`}>
                                     ({rsiDelta > 0 ? '+' : ''}{rsiDelta.toFixed(1)} {rsiDelta > 0 ? '↑' : '↓'})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Volume delta */}
+                          {(pos.entryVolMult != null || volNow != null) && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Wolumen przy wejściu → teraz</span>
+                              <span>
+                                {pos.entryVolMult != null ? `${pos.entryVolMult}x` : '—'}
+                                {' → '}
+                                {cur ? (volNow != null ? `${volNow}x` : '—') : <span className="animate-pulse">…</span>}
+                                {volDelta != null && (
+                                  <span className={`ml-1 ${volDelta > 0 ? 'text-gpw-green' : volDelta < 0 ? 'text-gpw-red' : 'text-gray-400'}`}>
+                                    ({volDelta > 0 ? '+' : ''}{volDelta}x {volDelta > 0 ? '↑' : '↓'})
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* vs SMA50 delta */}
+                          {(pos.entrySma50Delta != null || sma50Now != null) && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">vs SMA50 przy wejściu → teraz</span>
+                              <span>
+                                {pos.entrySma50Delta != null ? `${pos.entrySma50Delta > 0 ? '+' : ''}${pos.entrySma50Delta}%` : '—'}
+                                {' → '}
+                                {cur ? (sma50Now != null ? `${sma50Now > 0 ? '+' : ''}${sma50Now}%` : '—') : <span className="animate-pulse">…</span>}
+                                {sma50Prog != null && (
+                                  <span className={`ml-1 ${sma50Prog > 0 ? 'text-gpw-green' : sma50Prog < 0 ? 'text-gpw-red' : 'text-gray-400'}`}>
+                                    ({sma50Prog > 0 ? '+' : ''}{sma50Prog}pp {sma50Prog > 0 ? '↑' : '↓'})
                                   </span>
                                 )}
                               </span>
