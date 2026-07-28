@@ -39,11 +39,28 @@ export default async function handler(req, res) {
     }
 
     if (method === 'PATCH') {
-      const { id, status } = req.body
-      if (!id || !status) return res.status(400).json({ error: 'id and status required' })
+      const { id, status, aiDecision, aiSummary, aiRecommendation,
+              buffettScore, confidence, entryZoneMin, entryZoneMax,
+              reviewDays, rsi, volMult, score } = req.body
+      if (!id) return res.status(400).json({ error: 'id required' })
       const item = await kv.get(id).catch(() => null)
       if (!item) return res.status(404).json({ error: 'not found' })
-      const updated = { ...item, status }
+      const updated = { ...item }
+      if (status)     updated.status = status
+      if (aiDecision) {
+        updated.aiDecision       = aiDecision
+        updated.aiSummary        = aiSummary        ?? item.aiSummary
+        updated.aiRecommendation = aiRecommendation ?? item.aiRecommendation
+        updated.buffettScore     = buffettScore     ?? item.buffettScore
+        updated.confidence       = confidence       ?? item.confidence
+        if (entryZoneMin  !== undefined) updated.entryZoneMin  = entryZoneMin
+        if (entryZoneMax  !== undefined) updated.entryZoneMax  = entryZoneMax
+        if (rsi     !== undefined) updated.rsi     = rsi
+        if (volMult !== undefined) updated.volMult = volMult
+        if (score   !== undefined) updated.score   = score
+        if (reviewDays) updated.reviewDate = new Date(Date.now() + reviewDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+        updated.lastValidatedAt = new Date().toISOString()
+      }
       await kv.set(id, updated, { ex: 60 * 24 * 60 * 60 })
       return res.json(updated)
     }

@@ -120,6 +120,22 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
         <p className="text-xs text-yellow-300/80 leading-relaxed">💡 {item.aiSummary}</p>
       )}
 
+      {/* AI recommendation — plan wejścia / dlaczego unikać */}
+      {item.aiRecommendation && (
+        <div className="bg-gpw-dark rounded-lg p-2.5 text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
+          <span className="text-gray-500 text-[10px] font-semibold uppercase tracking-wide block mb-1">
+            {item.aiDecision === 'UNIKAJ' ? '🚫 Dlaczego unikać' : '🎯 Plan wejścia'}
+          </span>
+          {item.aiRecommendation}
+        </div>
+      )}
+
+      {item.lastValidatedAt && (
+        <div className="text-xs text-gray-600">
+          Ostatnia walidacja: {new Date(item.lastValidatedAt).toLocaleDateString('pl-PL')}
+        </div>
+      )}
+
       {item.reviewDate && !isExpired && (
         <div className="text-xs text-gray-500">Przegląd: {new Date(item.reviewDate).toLocaleDateString('pl-PL')}</div>
       )}
@@ -180,8 +196,9 @@ export default function Watchlist() {
   const [items,    setItems]    = useState([])
   const [loading,  setLoading]  = useState(true)
   const [modalRec, setModalRec] = useState(null)
-  const [modalStrategy, setModalStrategy] = useState(null)
-  const [modalExchange, setModalExchange] = useState(null)
+  const [modalStrategy,    setModalStrategy]    = useState(null)
+  const [modalExchange,    setModalExchange]    = useState(null)
+  const [modalWatchlistId, setModalWatchlistId] = useState(null)
   const [validating, setValidating] = useState(null)
 
   async function load() {
@@ -230,6 +247,7 @@ export default function Watchlist() {
       })
       setModalStrategy(item.strategy)
       setModalExchange(item.exchange)
+      setModalWatchlistId(item.id)
     } catch { /* silent */ }
     setValidating(null)
   }
@@ -280,8 +298,9 @@ export default function Watchlist() {
           strategy={modalStrategy}
           exchange={modalExchange}
           livePrice={modalRec.livePrice}
+          watchlistItemId={modalWatchlistId}
           onOpenPosition={() => {}}
-          onClose={() => { setModalRec(null); load() }}
+          onClose={() => { setModalRec(null); setModalWatchlistId(null); load() }}
         />
       )}
     </>
