@@ -434,9 +434,11 @@ ${fundBlock}
 NEWSY:
 ${newsLines}`
 
-  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown:
+  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. compositeScore = siła tezy pozycji 0-100: fundamenty nadal obowiązują (40%) + stan techniczny (35%) + P&L vs cel/makro (25%). signalStrength: SŁABY (<40 — rozważ wyjście), UMIARKOWANY (40-54 — trzymaj ostrożnie), SILNY (55-74 — teza działa), BARDZO SILNY (≥75 — mocna pozycja).
 {
   "action": "TRZYMAJ" | "ZAMKNIJ" | "ZMODYFIKUJ",
+  "compositeScore": <0-100>,
+  "signalStrength": "SŁABY" | "UMIARKOWANY" | "SILNY" | "BARDZO SILNY",
   "confidence": <0-100>,
   "reason": "<2-3 zdania PL: (1) czy teza nadal obowiązuje? (2) czy kupiłbyś tę spółkę DZISIAJ po obecnej cenie? (3) co zmieniło się od wejścia?>",
   "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
@@ -458,6 +460,6 @@ ${posBlock}
 
 ${jsonSchema}`
 
-  const text = await callClaudeAPI(prompt, 1000)
-  return parseJSON(text, { action: 'TRZYMAJ', confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.' })
+  const text = await callClaudeAPI(prompt, 1200)
+  return parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.' })
 }
