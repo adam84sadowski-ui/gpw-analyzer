@@ -161,7 +161,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
           {state === 'loading' && (
             <div className="text-center py-8 space-y-2">
               <div className="text-sm text-gray-400 animate-pulse">Analizuję z Claude AI…</div>
-              <div className="text-xs text-gray-600">Sprawdzam 12 punktów — {frameworkLabel}</div>
+              <div className="text-xs text-gray-600">Sprawdzam 13 punktów — {frameworkLabel}</div>
             </div>
           )}
 
@@ -182,6 +182,33 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     style={{ width: `${result.confidence}%` }}
                   />
                 </div>
+
+                {/* Composite score — synteza techniczna + AI */}
+                {result.compositeScore != null && (
+                  <div className="bg-gpw-dark rounded-lg px-3 py-2 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-gray-400">
+                        Sygnał tech:&nbsp;
+                        <span className="font-mono text-gray-300">{rec.score ?? '—'}/100</span>
+                        <span className="text-gray-600 mx-1.5">→</span>
+                        <span className="font-bold text-white">Wynik AI: {result.compositeScore}/100</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        result.signalStrength === 'BARDZO SILNY' ? 'bg-gpw-green/20 text-gpw-green' :
+                        result.signalStrength === 'SILNY'        ? 'bg-green-900/40 text-green-400' :
+                        result.signalStrength === 'UMIARKOWANY'  ? 'bg-yellow-700/30 text-yellow-400' :
+                        'bg-gpw-red/20 text-gpw-red'
+                      }`}>{result.signalStrength ?? '—'}</span>
+                    </div>
+                    <div className="bg-gpw-border rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${result.compositeScore >= 70 ? 'bg-gpw-green' : result.compositeScore >= 50 ? 'bg-yellow-500' : 'bg-gpw-red'}`}
+                        style={{ width: `${result.compositeScore}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {result.buffettScore != null && (
                   <div className="space-y-1">
                     <div className="text-xs text-gray-400">Wynik Analizy ({frameworkLabel})</div>
@@ -284,6 +311,8 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             aiSummary:        result.summary,
                             aiRecommendation: result.recommendation,
                             buffettScore:     result.buffettScore,
+                            compositeScore:   result.compositeScore  ?? null,
+                            signalStrength:   result.signalStrength  ?? null,
                             confidence:       result.confidence,
                             entryZoneMin:     result.entryZoneMin ?? null,
                             entryZoneMax:     result.entryZoneMax ?? null,
@@ -311,6 +340,8 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             aiSummary:        result.summary,
                             aiRecommendation: result.recommendation,
                             buffettScore:     result.buffettScore,
+                            compositeScore:   result.compositeScore  ?? null,
+                            signalStrength:   result.signalStrength  ?? null,
                             confidence:       result.confidence,
                             reviewDays:       result.reviewDays ?? 10,
                             rsi:              rec.rsi     ?? null,

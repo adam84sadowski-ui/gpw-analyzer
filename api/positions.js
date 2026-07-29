@@ -40,7 +40,8 @@ export default async function handler(req, res) {
 
     if (method === 'PATCH') {
       const { id, status, aiDecision, aiSummary, aiRecommendation,
-              buffettScore, confidence, entryZoneMin, entryZoneMax,
+              buffettScore, compositeScore, signalStrength, confidence,
+              entryZoneMin, entryZoneMax,
               reviewDays, rsi, volMult, score } = req.body
       if (!id) return res.status(400).json({ error: 'id required' })
       const item = await kv.get(id).catch(() => null)
@@ -53,8 +54,10 @@ export default async function handler(req, res) {
         updated.aiRecommendation = aiRecommendation ?? item.aiRecommendation
         updated.buffettScore     = buffettScore     ?? item.buffettScore
         updated.confidence       = confidence       ?? item.confidence
-        if (entryZoneMin  !== undefined) updated.entryZoneMin  = entryZoneMin
-        if (entryZoneMax  !== undefined) updated.entryZoneMax  = entryZoneMax
+        if (compositeScore  !== undefined) updated.compositeScore  = compositeScore
+        if (signalStrength  !== undefined) updated.signalStrength  = signalStrength
+        if (entryZoneMin    !== undefined) updated.entryZoneMin    = entryZoneMin
+        if (entryZoneMax    !== undefined) updated.entryZoneMax    = entryZoneMax
         if (rsi     !== undefined) updated.rsi     = rsi
         if (volMult !== undefined) updated.volMult = volMult
         if (score   !== undefined) updated.score   = score
