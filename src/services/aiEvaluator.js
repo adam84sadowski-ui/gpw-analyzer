@@ -290,10 +290,12 @@ ${fundBlock}
 NEWSY (ostatnie 5):
 ${newsLines}`
 
-  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca).
+  const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca). compositeScore = synteza końcowa 0-100: techniczny score (waga 40%) + buffettScore×10 (waga 35%) + potwierdzenie analitykami/makro (waga 25%). signalStrength: SŁABY (<40), UMIARKOWANY (40-54), SILNY (55-74), BARDZO SILNY (≥75).
 {
   "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
   "buffettScore": <0-10>,
+  "compositeScore": <0-100>,
+  "signalStrength": "SŁABY" | "UMIARKOWANY" | "SILNY" | "BARDZO SILNY",
   "confidence": <0-100>,
   "summary": "<jedno zdanie: najważniejsza rzecz o tym setupie>",
   "analysis": "<checklist 13 punktów z \\n, każdy: NAZWA\\n[✅/⚠️/❌] ocena + 1 zdanie/dane>",
@@ -378,11 +380,11 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych (rosnące = presja na growth/P/E, malejące = sprzyjające). Rotacja sektorowa instytucji: czy ten sektor jest w favor? Sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
   }
 
-  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić`
+  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.`
 
-  const text = await callClaudeAPI(prompt, 2000)
+  const text = await callClaudeAPI(prompt, 2200)
   return parseJSON(text, {
-    decision: 'OBSERWUJ', buffettScore: 5, confidence: 50,
+    decision: 'OBSERWUJ', buffettScore: 5, compositeScore: null, signalStrength: null, confidence: 50,
     summary: 'Błąd AI — spróbuj ponownie.',
     analysis: 'Analiza niedostępna.',
     recommendation: 'Brak rekomendacji — spróbuj ponownie.',

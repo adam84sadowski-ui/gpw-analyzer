@@ -106,6 +106,9 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [confirming, setConfirming]   = useState(null)
   const [validating, setValidating]   = useState(null)
   const [expandedRsi, setExpandedRsi] = useState(new Set())
+  const [topRsiModal, setTopRsiModal]           = useState(null)
+  const [topRsiValidating, setTopRsiValidating] = useState(null)
+  const [radarSearch, setRadarSearch]           = useState('')
   const scanStartedRef                = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
 
@@ -211,6 +214,29 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
 
   function skip(ticker) {
     setDone(d => ({ ...d, [ticker]: 'skipped' }))
+  }
+
+  async function handleTopRsiValidate(r) {
+    setTopRsiValidating(r.ticker)
+    try {
+      const params = new URLSearchParams({ mode: 'indicators', ticker: r.ticker, exchange, strategy })
+      const data = await fetch(`/api/market?${params}`).then(res => res.json())
+      setTopRsiModal({
+        ticker:       r.ticker,
+        tickerDisplay: r.tickerDisplay ?? r.ticker,
+        companyName:  r.companyName ?? null,
+        signal:       r.signal ?? '',
+        price:        r.price,
+        livePrice:    r.price,
+        rsi:          data.rsi   ?? r.rsi,
+        volMult:      data.volMult ?? r.volMult,
+        score:        data.score   ?? r.score,
+        sma50:        r.sma50,
+        stopLoss:     r.stopLoss ?? null,
+        target:       r.target   ?? null,
+      })
+    } catch { /* silent */ }
+    setTopRsiValidating(null)
   }
 
   return (
@@ -351,6 +377,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                       {r.nearSupport != null && (
                         <div className="text-xs text-blue-400">🔵 Blisko wsparcia: {r.nearSupport}</div>
                       )}
+                      <button
+                        disabled={topRsiValidating === r.ticker}
+                        onClick={e => { e.stopPropagation(); handleTopRsiValidate(r) }}
+                        className="w-full mt-1 bg-gpw-blue/20 hover:bg-gpw-blue/40 border border-gpw-blue/40 text-blue-300 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {topRsiValidating === r.ticker ? '⏳ Pobieranie…' : '🤖 Waliduj z AI'}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -359,6 +392,21 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           </div>
         )}
       </div>
+
+      {topRsiModal && (
+        <EntryValidationModal
+          rec={topRsiModal}
+          strategy={strategy}
+          exchange={exchange}
+          livePrice={topRsiModal.livePrice}
+          onOpenPosition={(rec, aiResult) => {
+            if (aiResult) rec._aiValidation = aiResult
+            setConfirming(rec)
+            setTopRsiModal(null)
+          }}
+          onClose={() => setTopRsiModal(null)}
+        />
+      )}
 
       {/* View toggle */}
       <div className="flex border border-gpw-border rounded-lg overflow-hidden text-sm">
@@ -637,16 +685,89 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
 
       {/* Radar view */}
       {viewMode === 'radar' && (
-        <ReboundRadarPage
-          scanData={scanData}
-          scanLoading={scanLoading}
-          strategy={strategy}
-          exchange={exchange}
-          onOpenPosition={(rec, aiResult) => {
-            if (aiResult) rec._aiValidation = aiResult
-            setConfirming(rec)
-          }}
-        />
+        <div className="space-y-2">
+          {/* Search input */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="🔍 Szukaj spółki w universum (np. NVDA, AAPL)…"
+              value={radarSearch}
+              onChange={e => setRadarSearch(e.target.value)}
+              className="w-full bg-gpw-dark border border-gpw-border rounded-lg px-3 py-2 text-sm outline-none focus:border-gpw-blue placeholder-gray-600"
+            />
+            {radarSearch && (
+              <button
+                onClick={() => setRadarSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-lg leading-none"
+              >✕</button>
+            )}
+          </div>
+
+          {radarSearch.trim() ? (() => {
+            const q = radarSearch.trim().toLowerCase()
+            const filtered = scanData.filter(r =>
+              r.ticker.toLowerCase().includes(q) ||
+              (r.tickerDisplay ?? '').toLowerCase().includes(q) ||
+              (r.companyName ?? '').toLowerCase().includes(q)
+            )
+            if (scanLoading) return (
+              <div className="text-gray-400 text-sm py-4 text-center animate-pulse">Ładowanie danych universum…</div>
+            )
+            if (filtered.length === 0) return (
+              <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-500 text-center">
+                Nie znaleziono &bdquo;{radarSearch}&rdquo; w universum strategii.
+              </div>
+            )
+            return (
+              <div className="space-y-2">
+                <div className="text-xs text-gray-500 px-1">{filtered.length} {filtered.length === 1 ? 'wynik' : 'wyniki/ów'} dla &bdquo;{radarSearch}&rdquo;</div>
+                {filtered.map(r => {
+                  const cur = exchange === 'NYSE' ? 'USD' : 'PLN'
+                  const rsiColor = r.rsi == null ? 'text-gray-400' : r.rsi < 30 ? 'text-gpw-green font-bold' : r.rsi > 70 ? 'text-gpw-red font-bold' : 'text-white'
+                  return (
+                    <div key={r.ticker} className={`bg-gpw-dark border rounded-lg p-3 space-y-2 ${r.hasSignal ? 'border-gpw-green' : 'border-gpw-border'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold">{r.tickerDisplay ?? r.ticker}</span>
+                          {r.companyName && <span className="text-xs text-gray-500">({r.companyName})</span>}
+                          {r.hasSignal
+                            ? <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded">⚡ {r.signal}</span>
+                            : <span className="text-xs text-gray-600">brak sygnału</span>
+                          }
+                        </div>
+                        <span className="text-sm font-semibold">{r.price} {cur}</span>
+                      </div>
+                      <div className="flex gap-3 text-xs text-gray-400 flex-wrap">
+                        <span>RSI: <span className={rsiColor}>{r.rsi?.toFixed(1) ?? '—'}</span></span>
+                        <span>Vol: <span className="text-white">{r.volMult ? `${r.volMult}x` : '—'}</span></span>
+                        <span>Score: <span className="text-white">{r.score ?? '—'}/100</span></span>
+                        {r.sma50 && <span>SMA50: <span className="text-white">{r.sma50.toFixed(2)}</span></span>}
+                      </div>
+                      <button
+                        disabled={topRsiValidating === r.ticker}
+                        onClick={() => handleTopRsiValidate(r)}
+                        className="w-full bg-gpw-blue/20 hover:bg-gpw-blue/40 border border-gpw-blue/40 text-blue-300 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {topRsiValidating === r.ticker ? '⏳ Pobieranie…' : '🤖 Waliduj z AI'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })() : (
+            <ReboundRadarPage
+              scanData={scanData}
+              scanLoading={scanLoading}
+              strategy={strategy}
+              exchange={exchange}
+              onOpenPosition={(rec, aiResult) => {
+                if (aiResult) rec._aiValidation = aiResult
+                setConfirming(rec)
+              }}
+            />
+          )}
+        </div>
       )}
 
       {/* Scan view — all stocks with indicators */}

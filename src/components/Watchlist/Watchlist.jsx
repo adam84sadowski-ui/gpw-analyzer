@@ -93,16 +93,39 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
       <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
         {[
           { label: 'RSI', val: item.rsi != null ? item.rsi.toFixed(1) : '—' },
-          { label: 'Wolumen', val: item.volMult != null ? `${item.volMult}x` : '—' },
-          { label: 'Score', val: item.score != null ? `${item.score}/100` : '—' },
-          { label: 'AI', val: item.buffettScore != null ? `${item.buffettScore}/10` : '—' },
+          { label: 'Vol', val: item.volMult != null ? `${item.volMult}x` : '—' },
+          { label: 'Tech', val: item.score != null ? `${item.score}/100` : '—' },
+          { label: 'AI score', val: item.compositeScore != null ? `${item.compositeScore}/100` : item.buffettScore != null ? `${item.buffettScore}/10` : '—' },
         ].map(({ label, val }) => (
-          <div key={label} className="bg-gpw-dark rounded p-1.5">
+          <div key={label} className={`bg-gpw-dark rounded p-1.5 ${label === 'AI score' && item.compositeScore != null ? 'ring-1 ring-gpw-blue/40' : ''}`}>
             <div className="text-gray-500 text-[10px]">{label}</div>
-            <div className="font-bold text-gray-200">{val}</div>
+            <div className={`font-bold ${label === 'AI score' && item.compositeScore != null ? (item.compositeScore >= 70 ? 'text-gpw-green' : item.compositeScore >= 50 ? 'text-yellow-400' : 'text-gpw-red') : 'text-gray-200'}`}>{val}</div>
           </div>
         ))}
       </div>
+
+      {/* Composite score bar */}
+      {item.compositeScore != null && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Tech {item.score ?? '—'} → AI <span className="font-bold text-white">{item.compositeScore}/100</span></span>
+            {item.signalStrength && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                item.signalStrength === 'BARDZO SILNY' ? 'bg-gpw-green/20 text-gpw-green' :
+                item.signalStrength === 'SILNY'        ? 'bg-green-900/40 text-green-400' :
+                item.signalStrength === 'UMIARKOWANY'  ? 'bg-yellow-700/30 text-yellow-400' :
+                'bg-gpw-red/20 text-gpw-red'
+              }`}>{item.signalStrength}</span>
+            )}
+          </div>
+          <div className="bg-gpw-border rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${item.compositeScore >= 70 ? 'bg-gpw-green' : item.compositeScore >= 50 ? 'bg-yellow-500' : 'bg-gpw-red'}`}
+              style={{ width: `${item.compositeScore}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Entry zone */}
       {(item.entryZoneMin != null || item.entryZoneMax != null) && (
