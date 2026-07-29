@@ -876,6 +876,27 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 style={{ width: `${r.confidence}%` }}
                               />
                             </div>
+                            {r.compositeScore != null && (
+                              <div className="bg-gpw-card rounded-lg px-3 py-2 space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400">Siła tezy: <span className="font-bold text-white">{r.compositeScore}/100</span></span>
+                                  {r.signalStrength && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                      r.signalStrength === 'BARDZO SILNY' ? 'bg-gpw-green/20 text-gpw-green' :
+                                      r.signalStrength === 'SILNY'        ? 'bg-green-900/40 text-green-400' :
+                                      r.signalStrength === 'UMIARKOWANY'  ? 'bg-yellow-700/30 text-yellow-400' :
+                                      'bg-gpw-red/20 text-gpw-red'
+                                    }`}>{r.signalStrength}</span>
+                                  )}
+                                </div>
+                                <div className="bg-gpw-border rounded-full h-1.5 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${r.compositeScore >= 70 ? 'bg-gpw-green' : r.compositeScore >= 50 ? 'bg-yellow-500' : 'bg-gpw-red'}`}
+                                    style={{ width: `${r.compositeScore}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
                             <p className="text-xs text-gray-300 leading-relaxed">{r.reason}</p>
                             {r.modification && (
                               <div className="border-t border-gpw-border pt-2">
