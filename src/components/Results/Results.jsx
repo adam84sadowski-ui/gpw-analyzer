@@ -302,6 +302,14 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
+      if (data.suggestedTargetPct != null) {
+        fetch('/api/positions', {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ id: pos.id, target: data.suggestedTargetPct }),
+        }).catch(() => {})
+        setPositions(prev => prev.map(p => p.id === pos.id ? { ...p, target: data.suggestedTargetPct } : p))
+      }
     } catch {
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
     }
@@ -507,6 +515,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   <div className="flex gap-2 text-xs">
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🎯 Cel: <span className="text-gpw-green">+{pos.target}%</span>
+                      {aiEvals[pos.id]?.result?.suggestedTargetPct != null && <span className="text-[10px] text-gpw-blue ml-0.5">🤖</span>}
                       <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 + pos.target / 100)).toFixed(2)} {cur})</span>
                     </div>
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">

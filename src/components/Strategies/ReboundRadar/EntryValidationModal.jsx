@@ -220,6 +220,38 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     </div>
                   </div>
                 )}
+                {result.targetMeanPrice != null && (
+                  <div className="bg-gpw-dark rounded-lg px-3 py-2 space-y-1.5">
+                    <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide">📊 Konsensus analityków</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-300">
+                        Mediana: <span className="font-bold text-white">{result.targetMeanPrice} {currency}</span>
+                      </span>
+                      <span className={`text-sm font-bold ${result.targetUpside > 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+                        {result.targetUpside > 0 ? '+' : ''}{result.targetUpside}%
+                      </span>
+                    </div>
+                    {result.analystBuy != null && (
+                      <div className="flex gap-3 text-[10px]">
+                        <span className="text-gpw-green font-semibold">{result.analystBuy} Kup</span>
+                        <span className="text-gray-400">{result.analystHold ?? 0} Trzymaj</span>
+                        <span className="text-gpw-red">{result.analystSell ?? 0} Sprzedaj</span>
+                        {result.recommendationKey && (
+                          <span className="text-gray-500 ml-auto">{result.recommendationKey.toUpperCase()}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {result.suggestedTargetPct != null && (
+                  <div className="flex items-center gap-2 text-xs bg-gpw-dark rounded px-3 py-1.5">
+                    <span className="text-gray-400">Cel AI:</span>
+                    <span className="font-bold text-gpw-green">+{result.suggestedTargetPct}% 🤖</span>
+                    {rec.target != null && rec.target !== result.suggestedTargetPct && (
+                      <span className="text-gray-600 line-through text-[10px]">+{rec.target}%</span>
+                    )}
+                  </div>
+                )}
                 {result.summary && (
                   <p className="text-xs text-yellow-300 leading-relaxed border-t border-gpw-border pt-2">
                     💡 {result.summary}
@@ -320,6 +352,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             rsi:              rec.rsi     ?? null,
                             volMult:          rec.volMult ?? null,
                             score:            rec.score   ?? null,
+                            ...(result.suggestedTargetPct != null ? { target: result.suggestedTargetPct } : {}),
                           }),
                         })
                       } else {
@@ -335,7 +368,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             entryZoneMin:     result.entryZoneMin ?? null,
                             entryZoneMax:     result.entryZoneMax ?? null,
                             stopLoss:         rec.stopLoss ?? null,
-                            target:           rec.target   ?? null,
+                            target:           result.suggestedTargetPct ?? rec.target ?? null,
                             aiDecision:       result.decision,
                             aiSummary:        result.summary,
                             aiRecommendation: result.recommendation,

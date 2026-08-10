@@ -1,6 +1,6 @@
 {
   "name": "gpw-analyzer",
-  "version": "1.48.0",
+  "version": "1.49.1",
   "private": true,
   "type": "module",
   "scripts": {

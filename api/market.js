@@ -161,7 +161,15 @@ export default async function handler(req, res) {
       news,
       fundamentals,
     })
-    return res.json(result)
+    return res.json({
+      ...result,
+      targetMeanPrice:   fundamentals?.targetMeanPrice   ?? null,
+      targetUpside:      fundamentals?.targetUpside      ?? null,
+      analystBuy:        fundamentals?.analystBuy        ?? null,
+      analystHold:       fundamentals?.analystHold       ?? null,
+      analystSell:       fundamentals?.analystSell       ?? null,
+      recommendationKey: fundamentals?.recommendationKey ?? null,
+    })
   }
 
   if (mode === 'ai-evaluate') {
