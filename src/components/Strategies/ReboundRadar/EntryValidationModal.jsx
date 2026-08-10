@@ -220,6 +220,15 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     </div>
                   </div>
                 )}
+                {result.suggestedTargetPct != null && (
+                  <div className="flex items-center gap-2 text-xs bg-gpw-dark rounded px-3 py-1.5">
+                    <span className="text-gray-400">Cel AI:</span>
+                    <span className="font-bold text-gpw-green">+{result.suggestedTargetPct}% 🤖</span>
+                    {rec.target != null && rec.target !== result.suggestedTargetPct && (
+                      <span className="text-gray-600 line-through text-[10px]">+{rec.target}%</span>
+                    )}
+                  </div>
+                )}
                 {result.summary && (
                   <p className="text-xs text-yellow-300 leading-relaxed border-t border-gpw-border pt-2">
                     💡 {result.summary}
@@ -320,6 +329,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             rsi:              rec.rsi     ?? null,
                             volMult:          rec.volMult ?? null,
                             score:            rec.score   ?? null,
+                            ...(result.suggestedTargetPct != null ? { target: result.suggestedTargetPct } : {}),
                           }),
                         })
                       } else {
@@ -335,7 +345,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                             entryZoneMin:     result.entryZoneMin ?? null,
                             entryZoneMax:     result.entryZoneMax ?? null,
                             stopLoss:         rec.stopLoss ?? null,
-                            target:           rec.target   ?? null,
+                            target:           result.suggestedTargetPct ?? rec.target ?? null,
                             aiDecision:       result.decision,
                             aiSummary:        result.summary,
                             aiRecommendation: result.recommendation,

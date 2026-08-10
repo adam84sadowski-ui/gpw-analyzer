@@ -134,7 +134,7 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
             {item.entryZoneMin ?? '?'} – {item.entryZoneMax ?? '?'} {currency}
           </span>
           {item.stopLoss && <span className="ml-2 text-gray-500">Stop -{item.stopLoss}%</span>}
-          {item.target    && <span className="ml-1 text-gray-500">Cel +{item.target}%</span>}
+          {item.target   && <span className="ml-1 text-gray-500">Cel +{item.target}%{item.compositeScore != null ? ' 🤖' : ''}</span>}
         </div>
       )}
 

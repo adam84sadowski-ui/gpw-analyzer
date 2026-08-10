@@ -211,6 +211,12 @@ function parseJSON(text, fallback) {
   }
 }
 
+function clampSuggestedTarget(pct, strategy) {
+  if (pct == null || typeof pct !== 'number' || !isFinite(pct)) return null
+  const max = { scalping: 15, swing: 45, aggressive: 100 }[strategy] ?? 45
+  return Math.max(1, Math.min(Math.round(pct), max))
+}
+
 function na(val, format) {
   if (val == null) return 'niedostępne'
   return format ? format(val) : String(val)
@@ -302,7 +308,8 @@ ${newsLines}`
   "recommendation": "<KIEDY WEJŚĆ / dlaczego UNIKAJ | PARAMETRY: Stop -X%, Cel +X%, Horyzont X dni>",
   "entryZoneMin": <liczba lub null — minimalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
-  "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>
+  "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>,
+  "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>
 }`
 
   let prompt
@@ -380,15 +387,18 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych (rosnące = presja na growth/P/E, malejące = sprzyjające). Rotacja sektorowa instytucji: czy ten sektor jest w favor? Sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
   }
 
-  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.`
+  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
 
   const text = await callClaudeAPI(prompt, 2200)
-  return parseJSON(text, {
+  const parsed = parseJSON(text, {
     decision: 'OBSERWUJ', buffettScore: 5, compositeScore: null, signalStrength: null, confidence: 50,
     summary: 'Błąd AI — spróbuj ponownie.',
     analysis: 'Analiza niedostępna.',
     recommendation: 'Brak rekomendacji — spróbuj ponownie.',
+    suggestedTargetPct: null,
   })
+  parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
+  return parsed
 }
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
@@ -442,7 +452,8 @@ ${newsLines}`
   "confidence": <0-100>,
   "reason": "<2-3 zdania PL: (1) czy teza nadal obowiązuje? (2) czy kupiłbyś tę spółkę DZISIAJ po obecnej cenie? (3) co zmieniło się od wejścia?>",
   "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
-  "modification": "<ZAWSZE wypełnij: konkretny plan — stop loss, realizacja częściowa (jeśli blisko celu — rozważ sprzedaż 50%), co monitorować, następny przegląd>"
+  "modification": "<ZAWSZE wypełnij: konkretny plan — stop loss, realizacja częściowa (jeśli blisko celu — rozważ sprzedaż 50%), co monitorować, następny przegląd>",
+  "suggestedTargetPct": <liczba całkowita % od ceny WEJŚCIA lub null — zaktualizowany cel jeśli fundBlock pokazuje cel analityków istotnie różny od obecnego; null jeśli cel bez zmian lub action=ZAMKNIJ>
 }`
 
   let persona
@@ -461,5 +472,7 @@ ${posBlock}
 ${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1200)
-  return parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.' })
+  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null })
+  parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
+  return parsed
 }

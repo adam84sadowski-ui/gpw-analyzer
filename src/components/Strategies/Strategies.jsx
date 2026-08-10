@@ -400,7 +400,10 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           exchange={exchange}
           livePrice={topRsiModal.livePrice}
           onOpenPosition={(rec, aiResult) => {
-            if (aiResult) rec._aiValidation = aiResult
+            if (aiResult) {
+              rec._aiValidation = aiResult
+              if (aiResult.suggestedTargetPct != null) rec.target = aiResult.suggestedTargetPct
+            }
             setConfirming(rec)
             setTopRsiModal(null)
           }}
@@ -472,7 +475,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   strategy={strategy}
                   exchange={exchange}
                   livePrice={livePrices[validating.ticker] ?? validating.livePrice}
-                  onOpenPosition={() => { setValidating(null); setConfirming(validating) }}
+                  onOpenPosition={(_, aiResult) => {
+                    const updatedRec = aiResult?.suggestedTargetPct != null
+                      ? { ...validating, target: aiResult.suggestedTargetPct }
+                      : validating
+                    setValidating(null)
+                    setConfirming(updatedRec)
+                  }}
                   onClose={() => setValidating(null)}
                 />
               )}
@@ -762,7 +771,10 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               strategy={strategy}
               exchange={exchange}
               onOpenPosition={(rec, aiResult) => {
-                if (aiResult) rec._aiValidation = aiResult
+                if (aiResult) {
+                  rec._aiValidation = aiResult
+                  if (aiResult.suggestedTargetPct != null) rec.target = aiResult.suggestedTargetPct
+                }
                 setConfirming(rec)
               }}
             />
