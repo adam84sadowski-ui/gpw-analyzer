@@ -282,11 +282,21 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
 
   const sectorEvents = buildSectorEventContext(sector)
 
+  const f = fundamentals
+  const totalAnalysts = (f?.analystBuy ?? 0) + (f?.analystHold ?? 0) + (f?.analystSell ?? 0)
+  const buyPct = totalAnalysts > 0 ? Math.round((f.analystBuy ?? 0) / totalAnalysts * 100) : null
+  const analystVerBlock = f?.targetMeanPrice != null
+    ? `\n🎯 WERYFIKACJA CELU ANALITYKÓW — sprawdź jako PIERWSZE:
+Mediana celu: ${f.targetMeanPrice} ${f.currency ?? ''} | Potencjał vs bieżąca cena: ${f.targetUpside > 0 ? '+' : ''}${f.targetUpside}%
+Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0} Kup / ${f.analystHold ?? 0} Trzymaj / ${f.analystSell ?? 0} Sprzedaj (${buyPct ?? '?'}% Kup)
+→ Jeśli Kup ≥60% i potencjał > 2× domyślny cel strategii → suggestedTargetPct = targetUpside. Uzasadnij w recommendation.\n`
+    : `\n🎯 WERYFIKACJA CELU ANALITYKÓW: brak danych → suggestedTargetPct = domyślny cel strategii.\n`
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
 RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}${earningsLine ? `\n${earningsLine}` : ''}
 Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', ') || 'brak'}
-
+${analystVerBlock}
 📅 EVENTY SEKTOROWE — uwzględnij w analizie:
 ${sectorEvents}
 
