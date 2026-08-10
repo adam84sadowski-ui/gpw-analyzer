@@ -109,7 +109,12 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [topRsiModal, setTopRsiModal]           = useState(null)
   const [topRsiValidating, setTopRsiValidating] = useState(null)
   const [radarSearch, setRadarSearch]           = useState('')
-  const scanStartedRef                = useRef(false)
+  const [batchRsiLimit,    setBatchRsiLimit]    = useState(10)
+  const [batchRsiRunning,  setBatchRsiRunning]  = useState(false)
+  const [batchRsiProgress, setBatchRsiProgress] = useState(null)
+  const [batchRsiResults,  setBatchRsiResults]  = useState([])
+  const scanStartedRef    = useRef(false)
+  const batchRsiStoppedRef = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
 
   useEffect(() => {
@@ -214,6 +219,44 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
 
   function skip(ticker) {
     setDone(d => ({ ...d, [ticker]: 'skipped' }))
+  }
+
+  async function runBatchRsi() {
+    const items = topRsi.slice(0, batchRsiLimit)
+    batchRsiStoppedRef.current = false
+    setBatchRsiRunning(true)
+    setBatchRsiResults([])
+    setBatchRsiProgress({ current: 0, total: items.length })
+
+    for (let i = 0; i < items.length; i++) {
+      if (batchRsiStoppedRef.current) break
+      const r = items[i]
+      setBatchRsiProgress({ current: i + 1, total: items.length })
+      try {
+        const sma50Delta = r.sma50 && r.price
+          ? Math.round((r.price - r.sma50) / r.sma50 * 10000) / 100 : 0
+        const params = new URLSearchParams({
+          mode: 'ai-validate', ticker: r.ticker,
+          exchange: r.exchange ?? exchange, strategy,
+          signal: r.signal ?? '', score: r.score ?? 0,
+          rsi: r.rsi ?? 50, volMult: r.volMult ?? 1,
+          sma50Delta, signalPrice: r.price ?? '',
+        })
+        const data = await fetch(`/api/market?${params}`).then(res => res.json())
+        setBatchRsiResults(prev => [...prev, {
+          ticker: r.ticker, tickerDisplay: r.tickerDisplay ?? r.ticker,
+          decision: data.decision, compositeScore: data.compositeScore,
+          suggestedTargetPct: data.suggestedTargetPct, signalStrength: data.signalStrength,
+          targetMeanPrice: data.targetMeanPrice, targetUpside: data.targetUpside,
+        }])
+      } catch {
+        setBatchRsiResults(prev => [...prev, { ticker: r.ticker, tickerDisplay: r.tickerDisplay ?? r.ticker, decision: 'BŁĄD', compositeScore: null, suggestedTargetPct: null, signalStrength: null }])
+      }
+      if (i < items.length - 1 && !batchRsiStoppedRef.current) {
+        await new Promise(res => setTimeout(res, 500))
+      }
+    }
+    setBatchRsiRunning(false)
   }
 
   async function handleTopRsiValidate(r) {
@@ -392,6 +435,70 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           </div>
         )}
       </div>
+
+      {/* Batch RSI controls */}
+      {!scanLoading && topRsi.length > 0 && (
+        <div className="bg-gpw-dark rounded-lg p-3 space-y-2">
+          {!batchRsiRunning ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Batch Top:</span>
+              {[5, 10, 15].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setBatchRsiLimit(n)}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${batchRsiLimit === n ? 'bg-gpw-blue text-white' : 'bg-gpw-card text-gray-400 hover:text-white'}`}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                onClick={runBatchRsi}
+                className="ml-auto bg-gpw-blue/20 hover:bg-gpw-blue/40 border border-gpw-blue/40 text-blue-300 px-3 py-1 rounded text-xs font-medium transition-colors"
+              >
+                🤖 Uruchom batch
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="flex-1 space-y-1">
+                <div className="text-xs text-gray-300 animate-pulse">{batchRsiProgress?.current ?? 0}/{batchRsiProgress?.total} walidowanych…</div>
+                <div className="bg-gpw-border rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-full bg-gpw-blue rounded-full transition-all"
+                    style={{ width: `${batchRsiProgress ? batchRsiProgress.current / batchRsiProgress.total * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <button onClick={() => { batchRsiStoppedRef.current = true }} className="text-gpw-red text-xs hover:text-red-400 shrink-0">⏹ Stop</button>
+            </div>
+          )}
+
+          {batchRsiResults.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-gpw-border">
+              {batchRsiResults.map(r => (
+                <div key={r.ticker} className="flex items-center gap-2 text-xs bg-gpw-card rounded px-2 py-1.5">
+                  <span className="font-bold w-12 shrink-0">{r.tickerDisplay}</span>
+                  <span className={`font-bold w-16 shrink-0 ${r.decision === 'WEJDŹ' ? 'text-gpw-green' : r.decision === 'UNIKAJ' ? 'text-gpw-red' : r.decision === 'BŁĄD' ? 'text-gray-500' : 'text-yellow-400'}`}>{r.decision}</span>
+                  {r.compositeScore != null && <span className="text-gray-400">{r.compositeScore}/100</span>}
+                  {r.suggestedTargetPct != null && <span className="text-gpw-green ml-auto">+{r.suggestedTargetPct}% 🤖</span>}
+                  {r.signalStrength && <span className={`text-[10px] px-1 py-0.5 rounded shrink-0 ${r.signalStrength === 'BARDZO SILNY' || r.signalStrength === 'SILNY' ? 'bg-gpw-green/20 text-gpw-green' : r.signalStrength === 'UMIARKOWANY' ? 'bg-yellow-700/30 text-yellow-400' : 'bg-gpw-red/20 text-gpw-red'}`}>{r.signalStrength}</span>}
+                </div>
+              ))}
+              {!batchRsiRunning && (() => {
+                const c = { WEJDŹ: 0, OBSERWUJ: 0, UNIKAJ: 0 }
+                batchRsiResults.forEach(r => { if (r.decision in c) c[r.decision]++ })
+                return (
+                  <div className="text-xs pt-1 flex gap-3">
+                    {c['WEJDŹ']   > 0 && <span className="text-gpw-green font-semibold">{c['WEJDŹ']}× WEJDŹ</span>}
+                    {c['OBSERWUJ'] > 0 && <span className="text-yellow-400">{c['OBSERWUJ']}× OBSERWUJ</span>}
+                    {c['UNIKAJ']  > 0 && <span className="text-gpw-red">{c['UNIKAJ']}× UNIKAJ</span>}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+        </div>
+      )}
 
       {topRsiModal && (
         <EntryValidationModal

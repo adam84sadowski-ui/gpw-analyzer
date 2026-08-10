@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import EntryValidationModal from '../Strategies/ReboundRadar/EntryValidationModal.jsx'
 
 function zoneStatus(item) {
@@ -223,6 +223,9 @@ export default function Watchlist() {
   const [modalExchange,    setModalExchange]    = useState(null)
   const [modalWatchlistId, setModalWatchlistId] = useState(null)
   const [validating, setValidating] = useState(null)
+  const [batchRunning,  setBatchRunning]  = useState(false)
+  const [batchProgress, setBatchProgress] = useState(null)
+  const batchStoppedRef = useRef(false)
 
   async function load() {
     setLoading(true)
@@ -275,6 +278,59 @@ export default function Watchlist() {
     setValidating(null)
   }
 
+  async function runBatch(filterFn) {
+    const targets = items.filter(filterFn)
+    if (targets.length === 0) return
+    batchStoppedRef.current = false
+    setBatchRunning(true)
+    setBatchProgress({ current: 0, total: targets.length })
+
+    for (let i = 0; i < targets.length; i++) {
+      if (batchStoppedRef.current) break
+      const item = targets[i]
+      setBatchProgress({ current: i + 1, total: targets.length })
+      try {
+        const indParams = new URLSearchParams({ mode: 'indicators', ticker: item.ticker, exchange: item.exchange ?? 'GPW', strategy: item.strategy })
+        const indData = await fetch(`/api/market?${indParams}`).then(r => r.json())
+
+        const aiParams = new URLSearchParams({
+          mode: 'ai-validate', ticker: item.ticker,
+          exchange: item.exchange ?? 'GPW', strategy: item.strategy ?? 'swing',
+          signal: item.signal ?? '', score: indData.score ?? 0,
+          rsi: indData.rsi ?? 50, volMult: indData.volMult ?? 1,
+          sma50Delta: indData.sma50Delta ?? 0,
+          signalPrice: item.priceAtAnalysis ?? '',
+          ...(item.livePrice != null ? { livePrice: item.livePrice } : {}),
+        })
+        const aiData = await fetch(`/api/market?${aiParams}`).then(r => r.json())
+
+        const patch = {
+          id: item.id,
+          aiDecision: aiData.decision, aiSummary: aiData.summary,
+          aiRecommendation: aiData.recommendation,
+          buffettScore: aiData.buffettScore ?? null,
+          compositeScore: aiData.compositeScore ?? null,
+          signalStrength: aiData.signalStrength ?? null,
+          confidence: aiData.confidence ?? null,
+          rsi: indData.rsi ?? null, volMult: indData.volMult ?? null, score: indData.score ?? null,
+          lastValidatedAt: new Date().toISOString(),
+          ...(aiData.suggestedTargetPct != null ? { target: aiData.suggestedTargetPct } : {}),
+        }
+        await fetch('/api/positions?mode=watchlist', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        setItems(prev => prev.map(w => w.id === item.id ? { ...w, ...patch } : w))
+      } catch { /* continue */ }
+
+      if (i < targets.length - 1 && !batchStoppedRef.current) {
+        await new Promise(res => setTimeout(res, 500))
+      }
+    }
+    setBatchRunning(false)
+    setBatchProgress(null)
+  }
+
   useEffect(() => { load() }, [])
 
   const active = items
@@ -296,6 +352,37 @@ export default function Watchlist() {
       <div className="space-y-4 pb-6">
         {active.length > 0 && (
           <div className="space-y-3">
+            {/* Batch controls */}
+            {!batchRunning ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => runBatch(w => w.status !== 'expired' && (zoneStatus(w) === 'in' || zoneStatus(w) === 'below'))}
+                  className="flex-1 bg-gpw-blue/20 hover:bg-gpw-blue/40 border border-gpw-blue/40 text-blue-300 py-2 rounded-lg text-xs font-medium transition-colors"
+                >
+                  🤖 Waliduj w strefie
+                </button>
+                <button
+                  onClick={() => runBatch(w => w.status !== 'expired')}
+                  className="flex-1 bg-gpw-card border border-gpw-border text-gray-400 hover:text-white py-2 rounded-lg text-xs font-medium transition-colors"
+                >
+                  Waliduj wszystkie
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 bg-gpw-card border border-gpw-border rounded-lg px-3 py-2">
+                <div className="flex-1 space-y-1">
+                  <div className="text-xs text-gray-300">{batchProgress?.current ?? 0}/{batchProgress?.total} zwalidowanych</div>
+                  <div className="bg-gpw-border rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-full bg-gpw-blue rounded-full transition-all"
+                      style={{ width: `${batchProgress ? batchProgress.current / batchProgress.total * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+                <button onClick={() => { batchStoppedRef.current = true }} className="text-gpw-red text-xs hover:text-red-400 shrink-0">⏹ Stop</button>
+              </div>
+            )}
+
             {active.map(w => (
               <WatchCard
                 key={w.id}
