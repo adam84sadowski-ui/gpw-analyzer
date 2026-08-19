@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { HORIZON, interpretPositionState } from '../../lib/interpretSignal.js'
+import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function pct(v)          { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` }
@@ -75,6 +76,7 @@ export default function Results() {
   const [aiEvals, setAiEvals]       = useState({})  // posId → { loading, result }
   const [progressOpen, setProgressOpen] = useState({})
   const [chatState, setChatState]   = useState({})  // posId → { open, msgs, input, loading }
+  const [techPanelOpen, setTechPanelOpen] = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -840,9 +842,39 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                       {comment && (
                         <div className="text-xs text-gray-300 bg-gpw-dark rounded-lg px-3 py-2">{comment}</div>
                       )}
+
                     </div>
                   )
                 })()}
+
+                {/* ── Wskaźniki techniczne ── */}
+                <div className="border-t border-gpw-border pt-2">
+                  <button
+                    onClick={() => {
+                      const next = !techPanelOpen[pos.id]
+                      setTechPanelOpen(s => ({ ...s, [pos.id]: next }))
+                      if (next && !indics[pos.id]) {
+                        fetch(`/api/market?mode=indicators&ticker=${pos.ticker}&exchange=${pos.exchange ?? 'GPW'}&strategy=${pos.strategy}`)
+                          .then(r => r.json())
+                          .then(d => { if (d && !d.error) setIndics(prev => ({ ...prev, [pos.id]: d })) })
+                          .catch(() => {})
+                      }
+                    }}
+                    className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+                  >
+                    <span>📊 Wskaźniki techniczne</span>
+                    <span>{techPanelOpen[pos.id] ? '▲' : '▼'}</span>
+                  </button>
+                  {techPanelOpen[pos.id] && (
+                    <div className="pt-2">
+                      <TechnicalPanel
+                        data={indics[pos.id]}
+                        price={prices[pos.ticker]}
+                        loading={!indics[pos.id]}
+                      />
+                    </div>
+                  )}
+                </div>
 
                 {pos.status === 'open' && (() => {
                   const ev = aiEvals[pos.id]
