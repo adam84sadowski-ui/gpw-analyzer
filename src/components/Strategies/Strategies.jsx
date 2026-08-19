@@ -6,6 +6,7 @@ import { useExchange } from '../../context/ExchangeContext.jsx'
 import { interpretSignal } from '../../lib/interpretSignal.js'
 import ReboundRadarPage from './ReboundRadar/ReboundRadarPage.jsx'
 import EntryValidationModal from './ReboundRadar/EntryValidationModal.jsx'
+import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38, onConfirm, onCancel }) {
   const currency      = exchange === 'NYSE' ? 'USD' : 'PLN'
@@ -113,6 +114,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const [batchRsiRunning,  setBatchRsiRunning]  = useState(false)
   const [batchRsiProgress, setBatchRsiProgress] = useState(null)
   const [batchRsiResults,  setBatchRsiResults]  = useState([])
+  const [expandedSignalIndics, setExpandedSignalIndics] = useState(new Set())
   const scanStartedRef    = useRef(false)
   const batchRsiStoppedRef = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
@@ -762,6 +764,26 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   >
                     Pomiń
                   </button>
+                </div>
+
+                {/* Technical indicators panel */}
+                <div className="border-t border-gpw-border pt-2">
+                  <button
+                    onClick={() => setExpandedSignalIndics(s => {
+                      const next = new Set(s)
+                      next.has(rec.ticker) ? next.delete(rec.ticker) : next.add(rec.ticker)
+                      return next
+                    })}
+                    className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+                  >
+                    <span>📊 Wskaźniki techniczne</span>
+                    <span>{expandedSignalIndics.has(rec.ticker) ? '▲' : '▼'}</span>
+                  </button>
+                  {expandedSignalIndics.has(rec.ticker) && (
+                    <div className="pt-2">
+                      <TechnicalPanel data={rec} price={effectivePrice} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Interpretacja sygnału */}

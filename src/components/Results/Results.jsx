@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useExchange } from '../../context/ExchangeContext.jsx'
 import { HORIZON, interpretPositionState } from '../../lib/interpretSignal.js'
+import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function pct(v)          { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` }
@@ -839,6 +840,13 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                       </div>
                       {comment && (
                         <div className="text-xs text-gray-300 bg-gpw-dark rounded-lg px-3 py-2">{comment}</div>
+                      )}
+
+                      {cur && (
+                        <div className="border-t border-gpw-border pt-3">
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Aktualne wskaźniki techniczne</p>
+                          <TechnicalPanel data={cur} price={prices[pos.ticker]} />
+                        </div>
                       )}
                     </div>
                   )

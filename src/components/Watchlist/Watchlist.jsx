@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import EntryValidationModal from '../Strategies/ReboundRadar/EntryValidationModal.jsx'
+import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function zoneStatus(item) {
   if (!item.livePrice) return null
@@ -12,8 +13,11 @@ function zoneStatus(item) {
 }
 
 function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
-  const [confirming, setConfirming] = useState(false)
-  const [opening,    setOpening]    = useState(false)
+  const [confirming,    setConfirming]    = useState(false)
+  const [opening,       setOpening]       = useState(false)
+  const [indicsOpen,    setIndicsOpen]    = useState(false)
+  const [indicsData,    setIndicsData]    = useState(null)
+  const [indicsLoading, setIndicsLoading] = useState(false)
 
   const status  = item.status === 'expired' ? 'expired' : zoneStatus(item)
   const currency = item.exchange === 'NYSE' ? 'USD' : 'PLN'
@@ -66,6 +70,21 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
   }
 
   const isExpired = item.status === 'expired'
+
+  async function toggleIndics() {
+    const next = !indicsOpen
+    setIndicsOpen(next)
+    if (next && !indicsData && !indicsLoading) {
+      setIndicsLoading(true)
+      try {
+        const d = await fetch(
+          `/api/market?mode=indicators&ticker=${item.ticker}&exchange=${item.exchange ?? 'GPW'}&strategy=${item.strategy}`
+        ).then(r => r.json())
+        if (d && !d.error) setIndicsData(d)
+      } catch { /* silent */ }
+      setIndicsLoading(false)
+    }
+  }
 
   return (
     <div className={`bg-gpw-card border rounded-xl p-4 space-y-3 ${isExpired ? 'opacity-50 border-gpw-border' : 'border-gpw-border'}`}>
@@ -162,6 +181,22 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
       {item.reviewDate && !isExpired && (
         <div className="text-xs text-gray-500">Przegląd: {new Date(item.reviewDate).toLocaleDateString('pl-PL')}</div>
       )}
+
+      {/* Technical indicators panel */}
+      <div className="border-t border-gpw-border pt-2">
+        <button
+          onClick={toggleIndics}
+          className="w-full text-left text-xs text-gray-400 hover:text-white flex items-center justify-between py-1 transition-colors"
+        >
+          <span>📊 Wskaźniki techniczne</span>
+          <span>{indicsOpen ? '▲' : '▼'}</span>
+        </button>
+        {indicsOpen && (
+          <div className="pt-2">
+            <TechnicalPanel data={indicsData} price={item.livePrice ?? item.priceAtAnalysis} loading={indicsLoading} />
+          </div>
+        )}
+      </div>
 
       {/* Actions */}
       {!isExpired && (
