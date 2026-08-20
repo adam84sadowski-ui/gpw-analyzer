@@ -105,20 +105,91 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
 
   const ds = DECISION_STYLE[result?.decision] ?? { icon: '—', cls: 'text-gray-400' }
 
-  async function shareResult() {
+  function buildShareText() {
+    const stratLabel = FRAMEWORK_LABEL[selectedStrategy] ?? selectedStrategy
     const ICON = { 'WEJDŹ': '✅', 'OBSERWUJ': '👁', 'UNIKAJ': '❌' }
-    const lines = [
-      `📊 ${rec.tickerDisplay ?? rec.ticker} · ${(selectedStrategy ?? strategy).toUpperCase()}`,
-      `${ICON[result.decision] ?? '📊'} ${result.decision} | Score: ${result.compositeScore ?? result.buffettScore ?? '—'} | Pewność: ${result.confidence}%`,
-      result.suggestedTargetPct ? `Cel AI: +${result.suggestedTargetPct}%` : null,
-      result.summary ? `💡 ${result.summary.slice(0, 120)}${result.summary.length > 120 ? '…' : ''}` : null,
-      '— GPW Analyzer (analiza edukacyjna)',
-    ].filter(Boolean).join('\n')
+    const lines = []
+
+    lines.push(`📊 ${rec.tickerDisplay ?? rec.ticker}${rec.companyName ? ` (${rec.companyName})` : ''} · ${stratLabel}`)
+    if (selectedStrategy !== strategy) lines.push(`↳ Sygnał z: ${FRAMEWORK_LABEL[strategy] ?? strategy}`)
+    lines.push(`${ICON[result.decision] ?? '📊'} ${result.decision} | Score: ${result.compositeScore ?? result.buffettScore ?? '—'}/100 | Pewność: ${result.confidence}%`)
+    if (result.signalStrength) lines.push(`Siła sygnału: ${result.signalStrength}`)
+    lines.push('')
+
+    // Technical indicators
+    const hasIndics = rec.rsi != null || rec.volMult != null || rec.sma50 != null
+    if (hasIndics) {
+      lines.push('📈 WSKAŹNIKI TECHNICZNE:')
+      if (rec.rsi != null) {
+        const rsiI = rec.rsi >= 70 ? 'wykupiony' : rec.rsi <= 30 ? 'wyprzedany' : rec.rsi >= 60 ? 'silny' : rec.rsi <= 40 ? 'słaby' : 'neutralny'
+        lines.push(`RSI(14): ${rec.rsi.toFixed(1)} — ${rsiI}`)
+      }
+      if (rec.macd?.trend) {
+        const macdI = rec.macd.trend === 'bullish' ? 'byczy' : rec.macd.trend === 'bearish' ? 'niedźwiedzi' : 'neutralny'
+        lines.push(`MACD: ${macdI}${rec.macd.histogram != null ? ` (hist: ${rec.macd.histogram.toFixed(3)})` : ''}`)
+      }
+      if (rec.bollinger?.status) {
+        const bbI = { above_upper: 'powyżej górnej wstęgi', below_lower: 'poniżej dolnej wstęgi', consolidation: 'konsolidacja' }[rec.bollinger.status] ?? 'środek kanału'
+        lines.push(`Bollinger: ${bbI}${rec.bollingerScore != null ? ` | Score: ${rec.bollingerScore}/100` : ''}`)
+      }
+      const smaParts = []
+      if (rec.sma20  != null) smaParts.push(`SMA20: ${rec.sma20.toFixed(2)}`)
+      if (rec.sma50  != null) smaParts.push(`SMA50: ${rec.sma50.toFixed(2)}`)
+      if (rec.sma150 != null) smaParts.push(`SMA150: ${rec.sma150.toFixed(2)} ${rec.sma150trend === 'above' ? '✅' : '⚠️'}`)
+      if (smaParts.length) lines.push(smaParts.join(' | '))
+      if (rec.volMult != null) {
+        const volI = rec.volMult >= 2.5 ? 'bardzo wysoki' : rec.volMult >= 1.5 ? 'wysoki' : rec.volMult >= 1 ? 'normalny' : 'niski'
+        lines.push(`Wolumen: ${rec.volMult}x — ${volI}`)
+      }
+      if (rec.atrPct != null) {
+        const atrI = rec.atrPct > 3 ? 'wysoka zmienność' : rec.atrPct > 1.5 ? 'umiarkowana' : 'niska zmienność'
+        lines.push(`ATR: ${rec.atrPct}% — ${atrI}`)
+      }
+      if (rec.nearSupport != null) lines.push(`Wsparcie: ${rec.nearSupport} ${currency}`)
+      if (rec.divergence === 'bullish') lines.push('Dywergencja RSI: 🟢 bycza')
+      if (rec.divergence === 'bearish') lines.push('Dywergencja RSI: 🔴 niedźwiedzia')
+      if (rec.indexTrend) {
+        const idxI = { up: 'wzrostowy', down: 'spadkowy', neutral: 'neutralny' }[rec.indexTrend] ?? rec.indexTrend
+        lines.push(`Indeks rynkowy: ${idxI}`)
+      }
+      lines.push('')
+    }
+
+    // Fundamentals / AI result
+    if (result.buffettScore != null) lines.push(`📊 ANALIZA ${stratLabel.toUpperCase()}: ${result.buffettScore}/10`)
+    if (result.targetMeanPrice != null) {
+      lines.push(`🎯 Konsensus analityków: ${result.targetMeanPrice} ${currency} | ${result.targetUpside > 0 ? '+' : ''}${result.targetUpside}% potencjał`)
+      const totalA = (result.analystBuy ?? 0) + (result.analystHold ?? 0) + (result.analystSell ?? 0)
+      if (totalA > 0) lines.push(`   ${result.analystBuy ?? 0} Kup / ${result.analystHold ?? 0} Trzymaj / ${result.analystSell ?? 0} Sprzedaj${result.recommendationKey ? ` (${result.recommendationKey.toUpperCase()})` : ''}`)
+    }
+    if (result.suggestedTargetPct != null) lines.push(`Cel AI: +${result.suggestedTargetPct}%`)
+    lines.push('')
+
+    if (result.summary) { lines.push(`💡 ${result.summary}`); lines.push('') }
+
+    if (result.analysis) {
+      lines.push(result.decision === 'UNIKAJ' ? '📋 CHECKLIST:' : '📋 ANALIZA:')
+      lines.push(result.analysis)
+      lines.push('')
+    }
+
+    if (result.recommendation) {
+      lines.push(result.decision === 'UNIKAJ' ? '🚫 DLACZEGO UNIKAĆ:' : '🎯 PLAN WEJŚCIA:')
+      lines.push(result.recommendation)
+      lines.push('')
+    }
+
+    lines.push('— GPW Analyzer (analiza edukacyjna)')
+    return lines.join('\n')
+  }
+
+  async function shareResult() {
+    const text = buildShareText()
     try {
       if (navigator.share) {
-        await navigator.share({ title: `GPW Analyzer — ${rec.tickerDisplay ?? rec.ticker}`, text: lines })
+        await navigator.share({ title: `GPW Analyzer — ${rec.tickerDisplay ?? rec.ticker}`, text })
       } else {
-        await navigator.clipboard.writeText(lines)
+        await navigator.clipboard.writeText(text)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
       }
