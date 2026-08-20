@@ -77,6 +77,7 @@ export default function Results() {
   const [progressOpen, setProgressOpen] = useState({})
   const [chatState, setChatState]   = useState({})  // posId → { open, msgs, input, loading }
   const [techPanelOpen, setTechPanelOpen] = useState({})
+  const [copiedEval,    setCopiedEval]    = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -945,12 +946,45 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-sm text-white leading-relaxed">{r.modification}</p>
                               </div>
                             )}
-                            <button
-                              onClick={() => setAiEvals(prev => ({ ...prev, [pos.id]: undefined }))}
-                              className="w-full text-xs text-gray-500 hover:text-gray-300 py-1 transition-colors"
-                            >
-                              🔄 Odśwież ocenę
-                            </button>
+                            {r.longTermPerspective && (
+                              <div className="border-t border-gpw-border pt-2">
+                                <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">🕰️ Perspektywa 6-12 mies.</p>
+                                <p className="text-xs text-gray-400 italic leading-relaxed">{r.longTermPerspective}</p>
+                              </div>
+                            )}
+                            <div className="flex gap-2 border-t border-gpw-border pt-2">
+                              <button
+                                onClick={async () => {
+                                  const ICON = { 'TRZYMAJ': '✅', 'ZAMKNIJ': '⛔', 'ZMODYFIKUJ': '⚙️' }
+                                  const curr = (pos.exchange ?? 'GPW') === 'NYSE' ? 'USD' : 'PLN'
+                                  const lines = [
+                                    `📊 ${pos.tickerDisplay ?? pos.ticker} · ${pos.strategy?.toUpperCase()}`,
+                                    `${ICON[r.action] ?? '📊'} ${r.action} | Siła: ${r.compositeScore ?? '—'}/100 | Pewność: ${r.confidence}%`,
+                                    r.suggestedTargetPct ? `Cel AI: +${r.suggestedTargetPct}% ${curr}` : null,
+                                    r.reason ? r.reason.slice(0, 120) + (r.reason.length > 120 ? '…' : '') : null,
+                                    '— GPW Analyzer (analiza edukacyjna)',
+                                  ].filter(Boolean).join('\n')
+                                  try {
+                                    if (navigator.share) {
+                                      await navigator.share({ title: `GPW Analyzer — ${pos.tickerDisplay ?? pos.ticker}`, text: lines })
+                                    } else {
+                                      await navigator.clipboard.writeText(lines)
+                                      setCopiedEval(s => ({ ...s, [pos.id]: true }))
+                                      setTimeout(() => setCopiedEval(s => ({ ...s, [pos.id]: false })), 2000)
+                                    }
+                                  } catch { /* user cancelled */ }
+                                }}
+                                className="flex-1 text-xs text-gray-400 hover:text-white bg-gpw-card hover:bg-gpw-border border border-gpw-border py-1.5 rounded transition-colors"
+                              >
+                                {copiedEval[pos.id] ? '✅ Skopiowano!' : '🔗 Udostępnij'}
+                              </button>
+                              <button
+                                onClick={() => setAiEvals(prev => ({ ...prev, [pos.id]: undefined }))}
+                                className="flex-1 text-xs text-gray-500 hover:text-gray-300 py-1.5 transition-colors"
+                              >
+                                🔄 Odśwież ocenę
+                              </button>
+                            </div>
                           </div>
                         )
                       })()}

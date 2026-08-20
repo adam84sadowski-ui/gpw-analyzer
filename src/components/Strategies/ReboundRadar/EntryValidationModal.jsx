@@ -28,7 +28,8 @@ const FRAMEWORK_LABEL = {
 }
 
 export default function EntryValidationModal({ rec, strategy, exchange, livePrice, watchlistItemId, onOpenPosition, onClose }) {
-  const frameworkLabel = FRAMEWORK_LABEL[strategy] ?? 'Fundamentalna'
+  const [selectedStrategy, setSelectedStrategy] = useState(strategy)
+  const frameworkLabel = FRAMEWORK_LABEL[selectedStrategy] ?? 'Fundamentalna'
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
@@ -36,6 +37,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const [copied,      setCopied]      = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const sma50Delta = rec.sma50 && rec.price
@@ -55,7 +57,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
       aggressive: `Jesteś asystentem inwestycyjnym GPW Analyzer w stylu William O'Neil (CANSLIM).\nWłaśnie przeprowadziłeś analizę O'Neil CANSLIM dla ${rec.tickerDisplay ?? rec.ticker}.\n\nWYNIK: ${result.decision} | Score CANSLIM: ${result.buffettScore}/10 | Pewność: ${result.confidence}%\n${result.summary}\n\nOdpowiadasz na pytania o ten setup BREAKOUT (horyzont 1-4 tygodnie).\nTwój styl: szukasz liderów z przyspieszającymi zyski, wybijającymi się z bazy z wolumenem.\nZasada nadrzędna: cut losses at -8%, no exceptions.\nOdpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`,
       swing: `Jesteś asystentem inwestycyjnym GPW Analyzer w stylu Buffett/Lynch.\nWłaśnie przeprowadziłeś analizę Buffett/Lynch dla ${rec.tickerDisplay ?? rec.ticker}.\n\nWYNIK: ${result.decision} | Score fundamentalny: ${result.buffettScore}/10 | Pewność: ${result.confidence}%\n${result.summary}\n\nOdpowiadasz na pytania o tę pozycję SWING (horyzont 4-8 tygodni).\nTwój styl: inwestujesz w biznesy, nie tickery. Trzymasz gdy fundamenty silne, sprzedajesz gdy historia się kończy.\nOdpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`,
     }
-    const system = CHAT_PERSONA[strategy] ?? CHAT_PERSONA.swing
+    const system = CHAT_PERSONA[selectedStrategy] ?? CHAT_PERSONA.swing
 
     try {
       const res  = await fetch('/api/chat', {
@@ -81,7 +83,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
         mode:        'ai-validate',
         ticker:      rec.ticker,
         exchange,
-        strategy:    strategy ?? 'swing',
+        strategy:    selectedStrategy ?? 'swing',
         signal:      rec.signal  ?? '',
         score:       rec.score   ?? 0,
         rsi:         rec.rsi     ?? 50,
@@ -102,6 +104,26 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   }
 
   const ds = DECISION_STYLE[result?.decision] ?? { icon: '—', cls: 'text-gray-400' }
+
+  async function shareResult() {
+    const ICON = { 'WEJDŹ': '✅', 'OBSERWUJ': '👁', 'UNIKAJ': '❌' }
+    const lines = [
+      `📊 ${rec.tickerDisplay ?? rec.ticker} · ${(selectedStrategy ?? strategy).toUpperCase()}`,
+      `${ICON[result.decision] ?? '📊'} ${result.decision} | Score: ${result.compositeScore ?? result.buffettScore ?? '—'} | Pewność: ${result.confidence}%`,
+      result.suggestedTargetPct ? `Cel AI: +${result.suggestedTargetPct}%` : null,
+      result.summary ? `💡 ${result.summary.slice(0, 120)}${result.summary.length > 120 ? '…' : ''}` : null,
+      '— GPW Analyzer (analiza edukacyjna)',
+    ].filter(Boolean).join('\n')
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `GPW Analyzer — ${rec.tickerDisplay ?? rec.ticker}`, text: lines })
+      } else {
+        await navigator.clipboard.writeText(lines)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    } catch { /* user cancelled share */ }
+  }
 
   return (
     <div
@@ -148,6 +170,33 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
           {/* CTA / result */}
           {state === 'idle' && (
             <>
+              <div className="space-y-1.5">
+                <p className="text-xs text-gray-500">Strategia walidacji</p>
+                <div className="flex gap-1.5">
+                  {[
+                    { key: 'scalping',   label: '⚡ Scalping' },
+                    { key: 'swing',      label: '📈 Swing' },
+                    { key: 'aggressive', label: '🚀 Agresywna' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedStrategy(key)}
+                      className={`flex-1 py-1.5 rounded text-xs font-medium border transition-colors ${
+                        selectedStrategy === key
+                          ? 'bg-gpw-blue border-gpw-blue text-white'
+                          : 'bg-gpw-card border-gpw-border text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedStrategy !== strategy && (
+                  <p className="text-[10px] text-yellow-400">
+                    ⚠️ Sygnał z {FRAMEWORK_LABEL[strategy] ?? strategy} — walidacja przez pryzmat {FRAMEWORK_LABEL[selectedStrategy]}
+                  </p>
+                )}
+              </div>
               {error && <p className="text-xs text-gpw-red text-center">{error}</p>}
               <button
                 onClick={validate}
@@ -170,7 +219,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
               {/* Decision header */}
               <div className="bg-gpw-card rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className={`text-xl font-bold ${ds.cls}`}>{ds.icon} {result.decision}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl font-bold ${ds.cls}`}>{ds.icon} {result.decision}</span>
+                    {selectedStrategy !== strategy && (
+                      <span className="text-[10px] bg-gpw-blue/20 text-blue-300 px-2 py-0.5 rounded border border-gpw-blue/30">
+                        {FRAMEWORK_LABEL[selectedStrategy]}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-right">
                     <div className="text-xs text-gray-500">Pewność AI</div>
                     <div className="text-sm font-bold text-white">{result.confidence}%</div>
@@ -277,6 +333,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 </div>
               )}
 
+              {/* Share */}
+              <button
+                onClick={shareResult}
+                className="w-full flex items-center justify-center gap-2 bg-gpw-card hover:bg-gpw-border border border-gpw-border text-gray-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-colors"
+              >
+                {copied ? '✅ Skopiowano!' : '🔗 Udostępnij wynik'}
+              </button>
+
               {/* Follow-up Q&A */}
               <div className="bg-gpw-card border border-gpw-border rounded-lg p-3 space-y-2">
                 <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">💬 Pytania do analizy</p>
@@ -362,7 +426,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                           body: JSON.stringify({
                             ticker:           rec.ticker,
                             exchange,
-                            strategy:         strategy ?? 'swing',
+                            strategy:         selectedStrategy ?? 'swing',
                             signal:           rec.signal ?? '',
                             priceAtAnalysis:  rec.price ?? livePrice,
                             entryZoneMin:     result.entryZoneMin ?? null,

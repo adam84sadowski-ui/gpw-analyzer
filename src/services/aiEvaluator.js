@@ -463,7 +463,8 @@ ${newsLines}`
   "reason": "<2-3 zdania PL: (1) czy teza nadal obowiązuje? (2) czy kupiłbyś tę spółkę DZISIAJ po obecnej cenie? (3) co zmieniło się od wejścia?>",
   "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
   "modification": "<ZAWSZE wypełnij: konkretny plan — stop loss, realizacja częściowa (jeśli blisko celu — rozważ sprzedaż 50%), co monitorować, następny przegląd>",
-  "suggestedTargetPct": <liczba całkowita % od ceny WEJŚCIA lub null — zaktualizowany cel jeśli fundBlock pokazuje cel analityków istotnie różny od obecnego; null jeśli cel bez zmian lub action=ZAMKNIJ>
+  "suggestedTargetPct": <liczba całkowita % od ceny WEJŚCIA lub null — zaktualizowany cel jeśli fundBlock pokazuje cel analityków istotnie różny od obecnego; null jeśli cel bez zmian lub action=ZAMKNIJ>,
+  "longTermPerspective": <string po polsku max 2 zdania lub null — oceń TYLKO jeśli spółka ma silny fundament uzasadniający trzymanie 6-12 miesięcy niezależnie od horyzontu strategii (np. przyspieszający EPS, dominacja rynkowa, strukturalny wzrost popytu). Null jeśli brak przekonujących podstaw lub action=ZAMKNIJ>
 }`
 
   let persona
@@ -482,7 +483,7 @@ ${posBlock}
 ${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1200)
-  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null })
+  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, longTermPerspective: null })
   parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   return parsed
 }
