@@ -28,7 +28,8 @@ const FRAMEWORK_LABEL = {
 }
 
 export default function EntryValidationModal({ rec, strategy, exchange, livePrice, watchlistItemId, onOpenPosition, onClose }) {
-  const frameworkLabel = FRAMEWORK_LABEL[strategy] ?? 'Fundamentalna'
+  const [selectedStrategy, setSelectedStrategy] = useState(strategy)
+  const frameworkLabel = FRAMEWORK_LABEL[selectedStrategy] ?? 'Fundamentalna'
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
@@ -36,6 +37,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const [copied,      setCopied]      = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
   const sma50Delta = rec.sma50 && rec.price
@@ -55,7 +57,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
       aggressive: `Jesteś asystentem inwestycyjnym GPW Analyzer w stylu William O'Neil (CANSLIM).\nWłaśnie przeprowadziłeś analizę O'Neil CANSLIM dla ${rec.tickerDisplay ?? rec.ticker}.\n\nWYNIK: ${result.decision} | Score CANSLIM: ${result.buffettScore}/10 | Pewność: ${result.confidence}%\n${result.summary}\n\nOdpowiadasz na pytania o ten setup BREAKOUT (horyzont 1-4 tygodnie).\nTwój styl: szukasz liderów z przyspieszającymi zyski, wybijającymi się z bazy z wolumenem.\nZasada nadrzędna: cut losses at -8%, no exceptions.\nOdpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`,
       swing: `Jesteś asystentem inwestycyjnym GPW Analyzer w stylu Buffett/Lynch.\nWłaśnie przeprowadziłeś analizę Buffett/Lynch dla ${rec.tickerDisplay ?? rec.ticker}.\n\nWYNIK: ${result.decision} | Score fundamentalny: ${result.buffettScore}/10 | Pewność: ${result.confidence}%\n${result.summary}\n\nOdpowiadasz na pytania o tę pozycję SWING (horyzont 4-8 tygodni).\nTwój styl: inwestujesz w biznesy, nie tickery. Trzymasz gdy fundamenty silne, sprzedajesz gdy historia się kończy.\nOdpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.`,
     }
-    const system = CHAT_PERSONA[strategy] ?? CHAT_PERSONA.swing
+    const system = CHAT_PERSONA[selectedStrategy] ?? CHAT_PERSONA.swing
 
     try {
       const res  = await fetch('/api/chat', {
@@ -81,7 +83,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
         mode:        'ai-validate',
         ticker:      rec.ticker,
         exchange,
-        strategy:    strategy ?? 'swing',
+        strategy:    selectedStrategy ?? 'swing',
         signal:      rec.signal  ?? '',
         score:       rec.score   ?? 0,
         rsi:         rec.rsi     ?? 50,
@@ -102,6 +104,97 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   }
 
   const ds = DECISION_STYLE[result?.decision] ?? { icon: '—', cls: 'text-gray-400' }
+
+  function buildShareText() {
+    const stratLabel = FRAMEWORK_LABEL[selectedStrategy] ?? selectedStrategy
+    const ICON = { 'WEJDŹ': '✅', 'OBSERWUJ': '👁', 'UNIKAJ': '❌' }
+    const lines = []
+
+    lines.push(`📊 ${rec.tickerDisplay ?? rec.ticker}${rec.companyName ? ` (${rec.companyName})` : ''} · ${stratLabel}`)
+    if (selectedStrategy !== strategy) lines.push(`↳ Sygnał z: ${FRAMEWORK_LABEL[strategy] ?? strategy}`)
+    lines.push(`${ICON[result.decision] ?? '📊'} ${result.decision} | Score: ${result.compositeScore ?? result.buffettScore ?? '—'}/100 | Pewność: ${result.confidence}%`)
+    if (result.signalStrength) lines.push(`Siła sygnału: ${result.signalStrength}`)
+    lines.push('')
+
+    // Technical indicators
+    const hasIndics = rec.rsi != null || rec.volMult != null || rec.sma50 != null
+    if (hasIndics) {
+      lines.push('📈 WSKAŹNIKI TECHNICZNE:')
+      if (rec.rsi != null) {
+        const rsiI = rec.rsi >= 70 ? 'wykupiony' : rec.rsi <= 30 ? 'wyprzedany' : rec.rsi >= 60 ? 'silny' : rec.rsi <= 40 ? 'słaby' : 'neutralny'
+        lines.push(`RSI(14): ${rec.rsi.toFixed(1)} — ${rsiI}`)
+      }
+      if (rec.macd?.trend) {
+        const macdI = rec.macd.trend === 'bullish' ? 'byczy' : rec.macd.trend === 'bearish' ? 'niedźwiedzi' : 'neutralny'
+        lines.push(`MACD: ${macdI}${rec.macd.histogram != null ? ` (hist: ${rec.macd.histogram.toFixed(3)})` : ''}`)
+      }
+      if (rec.bollinger?.status) {
+        const bbI = { above_upper: 'powyżej górnej wstęgi', below_lower: 'poniżej dolnej wstęgi', consolidation: 'konsolidacja' }[rec.bollinger.status] ?? 'środek kanału'
+        lines.push(`Bollinger: ${bbI}${rec.bollingerScore != null ? ` | Score: ${rec.bollingerScore}/100` : ''}`)
+      }
+      const smaParts = []
+      if (rec.sma20  != null) smaParts.push(`SMA20: ${rec.sma20.toFixed(2)}`)
+      if (rec.sma50  != null) smaParts.push(`SMA50: ${rec.sma50.toFixed(2)}`)
+      if (rec.sma150 != null) smaParts.push(`SMA150: ${rec.sma150.toFixed(2)} ${rec.sma150trend === 'above' ? '✅' : '⚠️'}`)
+      if (smaParts.length) lines.push(smaParts.join(' | '))
+      if (rec.volMult != null) {
+        const volI = rec.volMult >= 2.5 ? 'bardzo wysoki' : rec.volMult >= 1.5 ? 'wysoki' : rec.volMult >= 1 ? 'normalny' : 'niski'
+        lines.push(`Wolumen: ${rec.volMult}x — ${volI}`)
+      }
+      if (rec.atrPct != null) {
+        const atrI = rec.atrPct > 3 ? 'wysoka zmienność' : rec.atrPct > 1.5 ? 'umiarkowana' : 'niska zmienność'
+        lines.push(`ATR: ${rec.atrPct}% — ${atrI}`)
+      }
+      if (rec.nearSupport != null) lines.push(`Wsparcie: ${rec.nearSupport} ${currency}`)
+      if (rec.divergence === 'bullish') lines.push('Dywergencja RSI: 🟢 bycza')
+      if (rec.divergence === 'bearish') lines.push('Dywergencja RSI: 🔴 niedźwiedzia')
+      if (rec.indexTrend) {
+        const idxI = { up: 'wzrostowy', down: 'spadkowy', neutral: 'neutralny' }[rec.indexTrend] ?? rec.indexTrend
+        lines.push(`Indeks rynkowy: ${idxI}`)
+      }
+      lines.push('')
+    }
+
+    // Fundamentals / AI result
+    if (result.buffettScore != null) lines.push(`📊 ANALIZA ${stratLabel.toUpperCase()}: ${result.buffettScore}/10`)
+    if (result.targetMeanPrice != null) {
+      lines.push(`🎯 Konsensus analityków: ${result.targetMeanPrice} ${currency} | ${result.targetUpside > 0 ? '+' : ''}${result.targetUpside}% potencjał`)
+      const totalA = (result.analystBuy ?? 0) + (result.analystHold ?? 0) + (result.analystSell ?? 0)
+      if (totalA > 0) lines.push(`   ${result.analystBuy ?? 0} Kup / ${result.analystHold ?? 0} Trzymaj / ${result.analystSell ?? 0} Sprzedaj${result.recommendationKey ? ` (${result.recommendationKey.toUpperCase()})` : ''}`)
+    }
+    if (result.suggestedTargetPct != null) lines.push(`Cel AI: +${result.suggestedTargetPct}%`)
+    lines.push('')
+
+    if (result.summary) { lines.push(`💡 ${result.summary}`); lines.push('') }
+
+    if (result.analysis) {
+      lines.push(result.decision === 'UNIKAJ' ? '📋 CHECKLIST:' : '📋 ANALIZA:')
+      lines.push(result.analysis)
+      lines.push('')
+    }
+
+    if (result.recommendation) {
+      lines.push(result.decision === 'UNIKAJ' ? '🚫 DLACZEGO UNIKAĆ:' : '🎯 PLAN WEJŚCIA:')
+      lines.push(result.recommendation)
+      lines.push('')
+    }
+
+    lines.push('— GPW Analyzer (analiza edukacyjna)')
+    return lines.join('\n')
+  }
+
+  async function shareResult() {
+    const text = buildShareText()
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `GPW Analyzer — ${rec.tickerDisplay ?? rec.ticker}`, text })
+      } else {
+        await navigator.clipboard.writeText(text)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    } catch { /* user cancelled share */ }
+  }
 
   return (
     <div
@@ -148,6 +241,33 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
           {/* CTA / result */}
           {state === 'idle' && (
             <>
+              <div className="space-y-1.5">
+                <p className="text-xs text-gray-500">Strategia walidacji</p>
+                <div className="flex gap-1.5">
+                  {[
+                    { key: 'scalping',   label: '⚡ Scalping' },
+                    { key: 'swing',      label: '📈 Swing' },
+                    { key: 'aggressive', label: '🚀 Agresywna' },
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedStrategy(key)}
+                      className={`flex-1 py-1.5 rounded text-xs font-medium border transition-colors ${
+                        selectedStrategy === key
+                          ? 'bg-gpw-blue border-gpw-blue text-white'
+                          : 'bg-gpw-card border-gpw-border text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedStrategy !== strategy && (
+                  <p className="text-[10px] text-yellow-400">
+                    ⚠️ Sygnał z {FRAMEWORK_LABEL[strategy] ?? strategy} — walidacja przez pryzmat {FRAMEWORK_LABEL[selectedStrategy]}
+                  </p>
+                )}
+              </div>
               {error && <p className="text-xs text-gpw-red text-center">{error}</p>}
               <button
                 onClick={validate}
@@ -170,7 +290,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
               {/* Decision header */}
               <div className="bg-gpw-card rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className={`text-xl font-bold ${ds.cls}`}>{ds.icon} {result.decision}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xl font-bold ${ds.cls}`}>{ds.icon} {result.decision}</span>
+                    {selectedStrategy !== strategy && (
+                      <span className="text-[10px] bg-gpw-blue/20 text-blue-300 px-2 py-0.5 rounded border border-gpw-blue/30">
+                        {FRAMEWORK_LABEL[selectedStrategy]}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-right">
                     <div className="text-xs text-gray-500">Pewność AI</div>
                     <div className="text-sm font-bold text-white">{result.confidence}%</div>
@@ -277,6 +404,14 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 </div>
               )}
 
+              {/* Share */}
+              <button
+                onClick={shareResult}
+                className="w-full flex items-center justify-center gap-2 bg-gpw-card hover:bg-gpw-border border border-gpw-border text-gray-300 hover:text-white py-2 rounded-lg text-xs font-medium transition-colors"
+              >
+                {copied ? '✅ Skopiowano!' : '🔗 Udostępnij wynik'}
+              </button>
+
               {/* Follow-up Q&A */}
               <div className="bg-gpw-card border border-gpw-border rounded-lg p-3 space-y-2">
                 <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">💬 Pytania do analizy</p>
@@ -362,7 +497,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                           body: JSON.stringify({
                             ticker:           rec.ticker,
                             exchange,
-                            strategy:         strategy ?? 'swing',
+                            strategy:         selectedStrategy ?? 'swing',
                             signal:           rec.signal ?? '',
                             priceAtAnalysis:  rec.price ?? livePrice,
                             entryZoneMin:     result.entryZoneMin ?? null,

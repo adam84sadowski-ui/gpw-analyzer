@@ -6,6 +6,64 @@ import TechnicalPanel from '../TechnicalPanel.jsx'
 function pct(v)          { return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` }
 function fmtCur(v, curr) { return `${v >= 0 ? '+' : ''}${v.toFixed(2)} ${curr}` }
 
+function buildPositionShareText(pos, r, cur) {
+  const ICON = { 'TRZYMAJ': '✅', 'ZAMKNIJ': '⛔', 'ZMODYFIKUJ': '⚙️' }
+  const curr = (pos.exchange ?? 'GPW') === 'NYSE' ? 'USD' : 'PLN'
+  const lines = []
+
+  lines.push(`📊 ${pos.tickerDisplay ?? pos.ticker} · ${pos.strategy?.toUpperCase()}`)
+  lines.push(`${ICON[r.action] ?? '📊'} ${r.action} | Siła tezy: ${r.compositeScore ?? '—'}/100 | Pewność: ${r.confidence}% | Pilność: ${r.urgency}`)
+  if (r.signalStrength) lines.push(`Siła sygnału: ${r.signalStrength}`)
+  if (r.suggestedTargetPct != null) lines.push(`Cel AI: +${r.suggestedTargetPct}% ${curr}`)
+  lines.push('')
+
+  // Technical indicators from indics
+  if (cur) {
+    lines.push('📈 WSKAŹNIKI TECHNICZNE (aktualne):')
+    if (cur.rsi != null) {
+      const rsiI = cur.rsi >= 70 ? 'wykupiony' : cur.rsi <= 30 ? 'wyprzedany' : cur.rsi >= 60 ? 'silny' : cur.rsi <= 40 ? 'słaby' : 'neutralny'
+      lines.push(`RSI(14): ${cur.rsi.toFixed(1)} — ${rsiI}`)
+    }
+    if (cur.macd?.trend) {
+      const macdI = cur.macd.trend === 'bullish' ? 'byczy' : cur.macd.trend === 'bearish' ? 'niedźwiedzi' : 'neutralny'
+      lines.push(`MACD: ${macdI}${cur.macd.histogram != null ? ` (hist: ${cur.macd.histogram.toFixed(3)})` : ''}`)
+    }
+    if (cur.bollinger?.status) {
+      const bbI = { above_upper: 'powyżej górnej wstęgi', below_lower: 'poniżej dolnej wstęgi', consolidation: 'konsolidacja' }[cur.bollinger.status] ?? 'środek kanału'
+      lines.push(`Bollinger: ${bbI}${cur.bollingerScore != null ? ` | Score: ${cur.bollingerScore}/100` : ''}`)
+    }
+    const smaParts = []
+    if (cur.sma20  != null) smaParts.push(`SMA20: ${cur.sma20.toFixed(2)}`)
+    if (cur.sma50  != null) smaParts.push(`SMA50: ${cur.sma50.toFixed(2)}`)
+    if (cur.sma150 != null) smaParts.push(`SMA150: ${cur.sma150.toFixed(2)} ${cur.sma150trend === 'above' ? '✅' : '⚠️'}`)
+    if (smaParts.length) lines.push(smaParts.join(' | '))
+    if (cur.volMult != null) {
+      const volI = cur.volMult >= 2.5 ? 'bardzo wysoki' : cur.volMult >= 1.5 ? 'wysoki' : cur.volMult >= 1 ? 'normalny' : 'niski'
+      lines.push(`Wolumen: ${cur.volMult}x — ${volI}`)
+    }
+    if (cur.atrPct != null) {
+      const atrI = cur.atrPct > 3 ? 'wysoka zmienność' : cur.atrPct > 1.5 ? 'umiarkowana' : 'niska zmienność'
+      lines.push(`ATR: ${cur.atrPct}% — ${atrI}`)
+    }
+    if (cur.nearSupport != null) lines.push(`Wsparcie: ${cur.nearSupport} ${curr}`)
+    if (cur.divergence === 'bullish') lines.push('Dywergencja RSI: 🟢 bycza')
+    if (cur.divergence === 'bearish') lines.push('Dywergencja RSI: 🔴 niedźwiedzia')
+    if (cur.indexTrend) {
+      const idxI = { up: 'wzrostowy', down: 'spadkowy', neutral: 'neutralny' }[cur.indexTrend] ?? cur.indexTrend
+      lines.push(`Indeks rynkowy: ${idxI}`)
+    }
+    if (cur.score != null) lines.push(`Score techniczny: ${cur.score}/100`)
+    lines.push('')
+  }
+
+  if (r.reason) { lines.push('💬 OCENA AI:'); lines.push(r.reason); lines.push('') }
+  if (r.modification) { lines.push('📋 PLAN DZIAŁANIA:'); lines.push(r.modification); lines.push('') }
+  if (r.longTermPerspective) { lines.push('🕰️ PERSPEKTYWA 6-12 MIES.:'); lines.push(r.longTermPerspective); lines.push('') }
+
+  lines.push('— GPW Analyzer (analiza edukacyjna)')
+  return lines.join('\n')
+}
+
 function CloseModal({ position, onClose, onConfirm, currency }) {
   const [exitPrice, setExitPrice] = useState(String(position.entryPrice))
   const [priceLoading, setPriceLoading] = useState(true)
@@ -77,6 +135,7 @@ export default function Results() {
   const [progressOpen, setProgressOpen] = useState({})
   const [chatState, setChatState]   = useState({})  // posId → { open, msgs, input, loading }
   const [techPanelOpen, setTechPanelOpen] = useState({})
+  const [copiedEval,    setCopiedEval]    = useState({})
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -945,12 +1004,37 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-sm text-white leading-relaxed">{r.modification}</p>
                               </div>
                             )}
-                            <button
-                              onClick={() => setAiEvals(prev => ({ ...prev, [pos.id]: undefined }))}
-                              className="w-full text-xs text-gray-500 hover:text-gray-300 py-1 transition-colors"
-                            >
-                              🔄 Odśwież ocenę
-                            </button>
+                            {r.longTermPerspective && (
+                              <div className="border-t border-gpw-border pt-2">
+                                <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">🕰️ Perspektywa 6-12 mies.</p>
+                                <p className="text-xs text-gray-400 italic leading-relaxed">{r.longTermPerspective}</p>
+                              </div>
+                            )}
+                            <div className="flex gap-2 border-t border-gpw-border pt-2">
+                              <button
+                                onClick={async () => {
+                                  const text = buildPositionShareText(pos, r, indics[pos.id])
+                                  try {
+                                    if (navigator.share) {
+                                      await navigator.share({ title: `GPW Analyzer — ${pos.tickerDisplay ?? pos.ticker}`, text })
+                                    } else {
+                                      await navigator.clipboard.writeText(text)
+                                      setCopiedEval(s => ({ ...s, [pos.id]: true }))
+                                      setTimeout(() => setCopiedEval(s => ({ ...s, [pos.id]: false })), 2000)
+                                    }
+                                  } catch { /* user cancelled */ }
+                                }}
+                                className="flex-1 text-xs text-gray-400 hover:text-white bg-gpw-card hover:bg-gpw-border border border-gpw-border py-1.5 rounded transition-colors"
+                              >
+                                {copiedEval[pos.id] ? '✅ Skopiowano!' : '🔗 Udostępnij'}
+                              </button>
+                              <button
+                                onClick={() => setAiEvals(prev => ({ ...prev, [pos.id]: undefined }))}
+                                className="flex-1 text-xs text-gray-500 hover:text-gray-300 py-1.5 transition-colors"
+                              >
+                                🔄 Odśwież ocenę
+                              </button>
+                            </div>
                           </div>
                         )
                       })()}
