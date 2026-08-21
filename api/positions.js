@@ -166,11 +166,21 @@ export default async function handler(req, res) {
   }
 
   if (method === 'PATCH') {
-    // Zamknij pozycję
-    const { id, exitPrice } = req.body
-    if (!id || !exitPrice) return res.status(400).json({ error: 'id, exitPrice required' })
+    const { id, exitPrice, target, stopLoss } = req.body
+    if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
+
+    // AI-revised target or stop loss for open position
+    if (!exitPrice && (target != null || stopLoss != null)) {
+      const updated = { ...position }
+      if (target   != null) updated.target   = target
+      if (stopLoss != null) updated.stopLoss = stopLoss
+      await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json(updated)
+    }
+
+    if (!exitPrice) return res.status(400).json({ error: 'id, exitPrice required' })
     const exitDate = new Date().toISOString()
     const pnlPct   = Math.round(((exitPrice - position.entryPrice) / position.entryPrice) * 10000) / 100
     const pnlPln   = Math.round((exitPrice - position.entryPrice) * position.shares * 100) / 100
