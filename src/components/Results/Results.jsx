@@ -14,7 +14,8 @@ function buildPositionShareText(pos, r, cur) {
   lines.push(`📊 ${pos.tickerDisplay ?? pos.ticker} · ${pos.strategy?.toUpperCase()}`)
   lines.push(`${ICON[r.action] ?? '📊'} ${r.action} | Siła tezy: ${r.compositeScore ?? '—'}/100 | Pewność: ${r.confidence}% | Pilność: ${r.urgency}`)
   if (r.signalStrength) lines.push(`Siła sygnału: ${r.signalStrength}`)
-  if (r.suggestedTargetPct != null) lines.push(`Cel AI: +${r.suggestedTargetPct}% ${curr}`)
+  if (r.suggestedTargetPct   != null) lines.push(`Cel AI: +${r.suggestedTargetPct}% ${curr}`)
+  if (r.suggestedStopLossPct != null) lines.push(`Stop AI: -${r.suggestedStopLossPct}% ${curr} (rozszerzony — silne fundamenty)`)
   lines.push('')
 
   // Technical indicators from indics
@@ -363,13 +364,22 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
-      if (data.suggestedTargetPct != null) {
+      if (data.suggestedTargetPct != null || data.suggestedStopLossPct != null) {
+        const patch = { id: pos.id }
+        if (data.suggestedTargetPct   != null) patch.target   = data.suggestedTargetPct
+        if (data.suggestedStopLossPct != null) patch.stopLoss = data.suggestedStopLossPct
         fetch('/api/positions', {
           method:  'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ id: pos.id, target: data.suggestedTargetPct }),
+          body:    JSON.stringify(patch),
         }).catch(() => {})
-        setPositions(prev => prev.map(p => p.id === pos.id ? { ...p, target: data.suggestedTargetPct } : p))
+        setPositions(prev => prev.map(p => {
+          if (p.id !== pos.id) return p
+          const updates = {}
+          if (data.suggestedTargetPct   != null) updates.target   = data.suggestedTargetPct
+          if (data.suggestedStopLossPct != null) updates.stopLoss = data.suggestedStopLossPct
+          return { ...p, ...updates }
+        }))
       }
     } catch {
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
@@ -582,7 +592,9 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                     <div className="flex-1 text-center bg-gpw-dark rounded p-1.5">
                       🛑 Stop: {pos.trailingActive
                         ? <><span className="text-yellow-400 font-semibold">{pos.trailingStopPrice?.toFixed(2)} {cur}</span><span className="text-yellow-500 ml-1">(trailing)</span></>
-                        : <><span className="text-gpw-red">-{pos.stopLoss}%</span><span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span></>
+                        : <><span className="text-gpw-red">-{pos.stopLoss}%</span>
+                           {aiEvals[pos.id]?.result?.suggestedStopLossPct != null && <span className="text-[10px] text-gpw-blue ml-0.5">🤖</span>}
+                           <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span></>
                       }
                     </div>
                   </div>
@@ -964,6 +976,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                             <div className="flex justify-between items-center">
                               <span className={`text-base font-bold ${as.cls}`}>{as.icon} {r.action}</span>
                               <div className="flex items-center gap-2">
+                                {r.suggestedStopLossPct != null && (
+                                  <span className="text-[10px] bg-gpw-blue/20 text-gpw-blue px-1.5 py-0.5 rounded font-semibold">
+                                    🤖 Stop −{r.suggestedStopLossPct}%
+                                  </span>
+                                )}
                                 <span className={`text-xs font-semibold ${URGENCY_STYLE[r.urgency] ?? 'text-gray-400'}`}>
                                   Pilność: {r.urgency}
                                 </span>

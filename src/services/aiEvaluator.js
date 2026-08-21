@@ -217,6 +217,15 @@ function clampSuggestedTarget(pct, strategy) {
   return Math.max(1, Math.min(Math.round(pct), max))
 }
 
+const DEFAULT_STOP = { scalping: 3, swing: 5, aggressive: 8 }
+function clampSuggestedStopLoss(pct, strategy) {
+  if (pct == null || typeof pct !== 'number' || !isFinite(pct) || pct <= 0) return null
+  const def = DEFAULT_STOP[strategy] ?? 5
+  const max = def * 2
+  if (pct <= def) return null  // don't return default — null means "no change"
+  return Math.min(Math.round(pct), max)
+}
+
 function na(val, format) {
   if (val == null) return 'niedostępne'
   return format ? format(val) : String(val)
@@ -418,6 +427,7 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
   const fundBlock = buildFundBlock(fundamentals, ticker)
+  const defaultStop = DEFAULT_STOP[strategy] ?? 5
   const staticStop  = entryPrice && stopLoss  ? (entryPrice * (1 - stopLoss / 100)).toFixed(2)  : null
   const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
   const pnlNum      = Number(pnlPct)
@@ -440,10 +450,11 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     ? `\n- Zachowanie kursu: Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarningEval} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
     : ''
 
+  const stopBreached = !trailingActive && pnlNum < -defaultStop
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlNum > 0 ? '+' : ''}${pnlNum}%
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${earningsLine}${priceActionLine}
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${earningsLine}${priceActionLine}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
@@ -464,6 +475,7 @@ ${newsLines}`
   "urgency": "NISKA" | "UMIARKOWANA" | "WYSOKA",
   "modification": "<ZAWSZE wypełnij: konkretny plan — stop loss, realizacja częściowa (jeśli blisko celu — rozważ sprzedaż 50%), co monitorować, następny przegląd>",
   "suggestedTargetPct": <liczba całkowita % od ceny WEJŚCIA lub null — zaktualizowany cel jeśli fundBlock pokazuje cel analityków istotnie różny od obecnego; null jeśli cel bez zmian lub action=ZAMKNIJ>,
+  "suggestedStopLossPct": <positive integer lub null — ZASADA: domyślny stop tej strategii to ${defaultStop}%, max dozwolony to ${defaultStop * 2}%. Zaproponuj szerszy stop TYLKO gdy WSZYSTKIE 4 warunki: (1) P&L przekroczył domyślny stop (⚠️ NARUSZONY widoczny wyżej), (2) fundamenty silne — EPS rośnie, ROE>15%, FCF yield>5% lub konsensus Kup≥60%, (3) teza inwestycyjna nadal obowiązuje tzn. kupiłbyś tę spółkę dzisiaj, (4) action=TRZYMAJ lub ZMODYFIKUJ. Null gdy: action=ZAMKNIJ z powodu fundamentalnego, fundamenty słabe/nieznane, stop nie naruszony, brak przekonujących podstaw do rozszerzenia>,
   "longTermPerspective": <string po polsku max 2 zdania lub null — oceń TYLKO jeśli spółka ma silny fundament uzasadniający trzymanie 6-12 miesięcy niezależnie od horyzontu strategii (np. przyspieszający EPS, dominacja rynkowa, strukturalny wzrost popytu). Null jeśli brak przekonujących podstaw lub action=ZAMKNIJ>
 }`
 
@@ -483,7 +495,8 @@ ${posBlock}
 ${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1200)
-  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, longTermPerspective: null })
-  parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
+  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, longTermPerspective: null })
+  parsed.suggestedTargetPct   = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
+  parsed.suggestedStopLossPct = clampSuggestedStopLoss(parsed.suggestedStopLossPct, strategy)
   return parsed
 }
