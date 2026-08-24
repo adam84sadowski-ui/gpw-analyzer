@@ -8,6 +8,7 @@ const BASE_TEXT = {
   RSI_OVERSOLD:    'Spółka była mocno wyprzedana (RSI poniżej progu). Oczekiwane techniczne odbicie w górę. Otwórz małą pozycję i obserwuj — zamknij gdy cel zostanie osiągnięty lub RSI przekroczy 55.',
   SMA50_CROSSOVER: 'Cena przebiła 50-dniową średnią ruchomą od dołu — zmiana trendu na wzrostowy. Sygnał swing-trade. Trzymaj pozycję przez kilka tygodni, zamknij gdy trend osłabnie lub spółka osiągnie cel.',
   BREAKOUT:        'Cena wybiła powyżej lokalnego maksimum z ostatnich 20 dni przy zwiększonym wolumenie. Spekulacyjny sygnał — może generować duże zyski lub szybko się odwrócić. Stosuj ścisły stop loss.',
+  VOL_SURGE:       'Wyjątkowo wysoki wolumen z silnym zamknięciem przy szczycie dnia — sygnał instytucjonalnego katalizatora (earnings beat, FDA, makro). Momentum potwierdzone przez MACD i trend SMA150. Horyzont 1-2 dni, cel +3%, stop -2%. Wejdź rano następnego dnia przy utrzymaniu impulsu.',
 }
 
 export function interpretSignal(signal, values = {}, strategy = 'scalping') {
@@ -21,6 +22,16 @@ export function interpretSignal(signal, values = {}, strategy = 'scalping') {
     else if (values.rsi > 70) warnings.push('⚠️ RSI wykupiony (' + values.rsi?.toFixed(1) + ' > 70) — momentum silne, ale korekta możliwa')
     if (values.volMult >= 3)      positives.push('✅ Bardzo silny wolumen (' + values.volMult + 'x) — potwierdza wybicie')
     else if (values.volMult >= 2) positives.push('✅ Silny wolumen (' + values.volMult + 'x) — potwierdza sygnał')
+  }
+
+  if (signal === 'VOL_SURGE') {
+    if (values.volMult >= 4)       positives.push('✅ Ekstremalny wolumen (' + values.volMult + 'x) — silny instytucjonalny katalizator')
+    else if (values.volMult >= 3)  positives.push('✅ Bardzo wysoki wolumen (' + values.volMult + 'x) — potwierdzony interes kupujących')
+    else                           positives.push('✅ Wysoki wolumen (' + values.volMult + 'x) — powyżej progu katalizatora')
+    if (values.priceChange != null) positives.push('✅ Ruch ' + (values.priceChange > 0 ? '+' : '') + values.priceChange + '% przy silnym zamknięciu — kupujący trzymali przez cały dzień')
+    if (values.closeVsHigh != null && values.closeVsHigh >= 0.97) positives.push('✅ Zamknięcie przy szczycie dnia (' + Math.round(values.closeVsHigh * 100) + '% high) — brak odwrócenia intraday')
+    warnings.push('⚠️ Momentum może wygasnąć następnego dnia — monitoruj otwarcie i wyjdź przy pierwszych oznakach słabości')
+    warnings.push('⚠️ Wejdź rano tylko jeśli spółka utrzymuje wczorajszy poziom — nie goń jeśli otwiera znacznie wyżej')
   }
 
   if (signal === 'RSI_OVERSOLD') {
@@ -90,6 +101,14 @@ export function interpretPositionState(pos, currentPrice, cur) {
     if (sma50Delta > 25) return `⚠️ Duże oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa.`
     if (sma50Delta > 0)  return '✅ Cena powyżej SMA50 — trend wzrostowy utrzymany.'
     return '📊 SMA50: neutralnie.'
+  }
+
+  if (signal === 'VOL_SURGE') {
+    if (rsi > 72)       return '⚠️ RSI wykupiony (>72) — momentum słabnie. Rozważ realizację zysku.'
+    if (volMult < 1.5)  return '⚠️ Wolumen opada — katalizator wygasa. Monitoruj uważnie.'
+    if (isPriceDown)    return '⚠️ Cena poniżej ceny wejścia — momentum nie podtrzymane. Rozważ zamknięcie.'
+    if (volMult >= 2)   return `✅ Wolumen nadal podwyższony (${volMult}x) — katalizator aktywny. RSI ${rsi?.toFixed(1)}.`
+    return `📊 VOL_SURGE aktywny. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
   }
 
   return null

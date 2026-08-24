@@ -84,6 +84,39 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
         score, ...extra }
     }
+
+    // VOL_SURGE — momentum/catalyst signal, NYSE only
+    // 7 safety filters: volMult ≥ 2.5x, price +3-8%, RSI 50-70,
+    //   closeVsHigh ≥ 90% (buyers held), sma150 above, indexTrend ≠ down, MACD bullish
+    if (exchange === 'NYSE' && candles.length >= 2) {
+      const last = candles[candles.length - 1]
+      const prev = candles[candles.length - 2]
+      if (last && prev && last.high > 0 && prev.close > 0) {
+        const priceChange  = (last.close - prev.close) / prev.close * 100
+        const closeVsHigh  = last.close / last.high
+        const rsi14        = calcRSI(closes, 14)
+        if (
+          volMult           >= 2.5            &&
+          priceChange        >= 3              &&
+          priceChange        <= 8              &&
+          rsi14             != null            &&
+          rsi14              >= 50             &&
+          rsi14              <= 70             &&
+          closeVsHigh        >= 0.90           &&
+          sma150trend        === 'above'       &&
+          indexTrend         !== 'down'        &&
+          macdSig.trend      === 'bullish'
+        ) {
+          const score = calcScore('scalping', { ...scoreInputs, rsi: rsi14 })
+          return { signal: 'VOL_SURGE', price, rsi: rsi14, rsiPeriod: 14, volMult,
+            priceChange: Math.round(priceChange * 10) / 10,
+            closeVsHigh: Math.round(closeVsHigh * 1000) / 1000,
+            sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+            dynamicStopLoss: null,
+            score, ...extra }
+        }
+      }
+    }
   }
 
   if (strategy === 'swing') {

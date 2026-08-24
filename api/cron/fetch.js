@@ -256,8 +256,8 @@ export default async function handler(req, res) {
 
     const alertId = `${ENV}:alert:${strategy}:${signal.ticker}:${Date.now()}`
 
-    const defaultTarget = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
-    const defaultStop   = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
+    const defaultTarget = signal.signal === 'RSI_OVERSOLD' ? 5 : signal.signal === 'VOL_SURGE' ? 3 : signal.signal === 'SMA50_CROSSOVER' ? 15 : 35
+    const defaultStop   = signal.signal === 'RSI_OVERSOLD' ? 3 : signal.signal === 'VOL_SURGE' ? 2 : signal.signal === 'SMA50_CROSSOVER' ? 5  : 8
     const stopLoss      = signal.dynamicStopLoss ?? defaultStop
 
     const [dynTarget, dynHorizon] = await Promise.all([
