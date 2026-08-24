@@ -17,3 +17,24 @@ export async function fetchCandlesTwelveData(ticker) {
   if (candles.length < 25) return null
   return { candles, shortName: data.meta?.name ?? ticker }
 }
+
+export async function fetchCurrentTwelveData(ticker) {
+  const key = process.env.TWELVE_DATA_API_KEY
+  if (!key) return null
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${key}`
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const d = await res.json()
+  if (d.status === 'error' || !d.close) return null
+  return {
+    close:     Math.round(parseFloat(d.close)  * 100) / 100,
+    open:      Math.round(parseFloat(d.open)   * 100) / 100,
+    high:      Math.round(parseFloat(d.high)   * 100) / 100,
+    low:       Math.round(parseFloat(d.low)    * 100) / 100,
+    volume:    parseInt(d.volume, 10) || null,
+    date:      d.datetime ?? new Date().toISOString().slice(0, 10),
+    Close:     d.close ?? 'N/D',
+    Open:      d.open  ?? 'N/D',
+    shortName: d.name  ?? ticker,
+  }
+}

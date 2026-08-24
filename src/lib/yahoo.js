@@ -1,5 +1,5 @@
 import { fetchCandlesStooq } from './stooq.js'
-import { fetchCandlesTwelveData } from './twelvedata.js'
+import { fetchCandlesTwelveData, fetchCurrentTwelveData } from './twelvedata.js'
 
 const TICKER_MAP = {
   'kghm.pl':   'KGH.WA',
@@ -83,10 +83,18 @@ export async function fetchCandles(ticker, exchange = 'GPW') {
     const data = await fetchCandlesStooq(ticker).catch(() => null)
     if (data) return data
   }
+  if (exchange === 'NYSE') {
+    const td = await fetchCandlesTwelveData(ticker).catch(() => null)
+    if (td) return td
+  }
   return fetchCandlesYahoo(ticker, exchange)
 }
 
 export async function fetchCurrent(ticker, exchange = 'GPW') {
+  if (exchange === 'NYSE') {
+    const td = await fetchCurrentTwelveData(ticker).catch(() => null)
+    if (td) return td
+  }
   const symbol = toYahooSymbol(ticker, exchange)
   const json = await yahooFetch(symbol, '5d')
   const result = json?.chart?.result?.[0]
