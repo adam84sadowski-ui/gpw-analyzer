@@ -18,8 +18,8 @@ export const SIGNAL_DEFAULTS = {
   },
   NYSE: {
     scalping:   { rsiThreshold: 32, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
-    swing:      { volumeMultiplierMin: 1.3, crossoverWindowDays: 7, rsiPeriod: 14 },
-    aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 1.5, rsiPeriod: 14 },
+    swing:      { volumeMultiplierMin: 1.5, crossoverWindowDays: 7, rsiPeriod: 14, rsiMax: 65 },
+    aggressive: { rsiMin: 60, rsiMax: 75, volumeMultiplierMin: 2.0, rsiPeriod: 14 },
   },
 }
 
@@ -84,15 +84,54 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
         score, ...extra }
     }
+
+    // VOL_SURGE — momentum/catalyst signal, NYSE only
+    // 7 safety filters: volMult ≥ 2.5x, price +3-8%, RSI 50-70,
+    //   closeVsHigh ≥ 90% (buyers held), sma150 above, indexTrend ≠ down, MACD bullish
+    if (exchange === 'NYSE' && candles.length >= 2) {
+      const last = candles[candles.length - 1]
+      const prev = candles[candles.length - 2]
+      if (last && prev && last.high > 0 && prev.close > 0) {
+        const priceChange  = (last.close - prev.close) / prev.close * 100
+        const closeVsHigh  = last.close / last.high
+        const rsi14        = calcRSI(closes, 14)
+        if (
+          volMult           >= 2.5            &&
+          priceChange        >= 3              &&
+          priceChange        <= 8              &&
+          rsi14             != null            &&
+          rsi14              >= 50             &&
+          rsi14              <= 70             &&
+          closeVsHigh        >= 0.90           &&
+          sma150trend        === 'above'       &&
+          indexTrend         !== 'down'        &&
+          macdSig.trend      === 'bullish'
+        ) {
+          const score = calcScore('scalping', { ...scoreInputs, rsi: rsi14 })
+          return { signal: 'VOL_SURGE', price, rsi: rsi14, rsiPeriod: 14, volMult,
+            priceChange: Math.round(priceChange * 10) / 10,
+            closeVsHigh: Math.round(closeVsHigh * 1000) / 1000,
+            sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+            dynamicStopLoss: null,
+            score, ...extra }
+        }
+      }
+    }
   }
 
   if (strategy === 'swing') {
     if (sma150 != null && price <= sma150) return null
     if (candles.length < 55) return null
-    const volThr = thresholds.swing_volume_multiplier ?? defaults.swing.volumeMultiplierMin
-    const window = defaults.swing.crossoverWindowDays
+    const volThr    = thresholds.swing_volume_multiplier ?? defaults.swing.volumeMultiplierMin
+    const rsiCeil   = defaults.swing.rsiMax ?? Infinity
+    const crossWin  = defaults.swing.crossoverWindowDays
+    const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
+    const rsi = calcRSI(closes, rsiPeriod)
+    // NYSE: reject overbought entries and bearish MACD
+    if (rsi != null && rsi > rsiCeil) return null
+    if (exchange === 'NYSE' && macdSig.trend !== 'bullish') return null
     let crossed = false
-    for (let i = 1; i <= Math.min(window, closes.length - 2); i++) {
+    for (let i = 1; i <= Math.min(crossWin, closes.length - 2); i++) {
       const dayClose  = closes[closes.length - i]
       const daySMA50  = calcSMA(closes.slice(0, closes.length - i + 1), 50)
       const prevClose = closes[closes.length - i - 1]
@@ -103,8 +142,6 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     }
     if (!crossed) crossed = goldenCross(closes)
     if (crossed && volMult && volMult >= volThr) {
-      const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
-      const rsi    = calcRSI(closes, rsiPeriod)
       const sma50s = calcSMASeries(closes, 50)
       const score  = calcScore('swing', { ...scoreInputs, rsi })
       return { signal: 'SMA50_CROSSOVER', price, rsi, rsiPeriod, volMult,
@@ -120,6 +157,12 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const volThr    = thresholds.aggressive_volume_multiplier ?? defaults.aggressive.volumeMultiplierMin
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.aggressive.rsiPeriod ?? 14
     const rsi = calcRSI(closes, rsiPeriod)
+    // NYSE: block dead-cat bounces (sma150) and shooting stars (closeVsHigh)
+    if (exchange === 'NYSE' && sma150 != null && price <= sma150) return null
+    if (exchange === 'NYSE' && candles.length >= 1) {
+      const last = candles[candles.length - 1]
+      if (last.high > 0 && last.close / last.high < 0.85) return null
+    }
     if (isBreakout(candles) && rsi && rsi > rsiMin && rsi <= rsiMax && volMult && volMult >= volThr) {
       const sma150Warning = sma150 != null && price <= sma150
       const score = calcScore('aggressive', { ...scoreInputs, rsi })

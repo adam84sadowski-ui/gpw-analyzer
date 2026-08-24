@@ -5,8 +5,8 @@ export const UNIVERSES = {
     aggressive: ['apr.pl','ast.pl','bcm.pl','bft.pl','xtp.pl','slv.pl','vrc.pl','crm.pl','hug.pl','elq.pl','trk.pl','pgn.pl','11b.pl','ccc.pl','xtb.pl','mls.pl','grn.pl','mrc.pl','ten.pl'],
   },
   NYSE: {
-    // Scalping: blue chips + large tech (vol >10M/day), defense, energy, commodities, financials, pharma
-    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','QCOM','TXN','INTU','NOW','IBM','ACN','AMD','INTC','NFLX','AMAT','LRCX','MU','MRVL','FTNT','LMT','RTX','NOC','GD','BA','CVX','XOM','FCX','NEM','COP','SLB','OXY','HAL','MPC','NRG','VLO','PSX','V','MA','JPM','BAC','GS','MS','WFC','C','AXP','SCHW','TSLA','CRM','PANW','LLY','PFE'],
+    // Scalping: blue chips + large tech (vol >10M/day), defense, energy, commodities, financials, pharma, consumer
+    scalping:   ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','QCOM','TXN','INTU','NOW','IBM','ACN','AMD','INTC','NFLX','AMAT','LRCX','MU','MRVL','FTNT','LMT','RTX','NOC','GD','BA','CVX','XOM','FCX','NEM','COP','SLB','OXY','HAL','MPC','NRG','VLO','PSX','V','MA','JPM','BAC','GS','MS','WFC','C','AXP','SCHW','TSLA','CRM','PANW','LLY','PFE','MCD','SBUX','COST','UNH','MRNA'],
     // Swing: mid/large cap, diverse sectors — tech, defense, space, commodities, energy, financials, apparel, pharma
     swing:      ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','AVGO','ORCL','ADBE','NOW','INTU','QCOM','TXN','CDNS','SNPS','IBM','ACN','EPAM','CTSH','SAP','AMD','INTC','WDAY','NFLX','AMAT','LRCX','MU','KLAC','MRVL','FTNT','ETN','LMT','RTX','NOC','GD','BA','LHX','LDOS','BAH','AXON','KTOS','AVAV','RKLB','ASTS','LUNR','IRDM','VSAT','BWXT','TDY','CVX','XOM','COP','OXY','EOG','CEG','FCX','NEM','GOLD','ALB','SQM','CCJ','MOS','MP','NRG','VLO','PSX','LNG','WMB','FANG','OKE','KMI','ALAB','LULU','ONON','DECK','RL','TPR','UBER','V','MA','JPM','BAC','GS','WFC','C','AXP','COF','SCHW','BX','ICE','HSBC','TSLA','CRM','PANW','CRWD','COST','UNH','MRNA','PFE','JNJ','ABBV','LLY','NVO','AMGN','GILD','REGN','VRTX'],
     // Aggressive: high beta, momentum — tech, space, energy, financials, apparel, crypto, quantum, EV, biotech
