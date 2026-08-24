@@ -30,8 +30,8 @@ describe('SIGNAL_DEFAULTS', () => {
     expect(SIGNAL_DEFAULTS.GPW.aggressive.rsiMax).toBe(70)
   })
 
-  it('NYSE aggressive has rsiMax: 70', () => {
-    expect(SIGNAL_DEFAULTS.NYSE.aggressive.rsiMax).toBe(70)
+  it('NYSE aggressive has rsiMax: 75 (raised to capture real breakouts)', () => {
+    expect(SIGNAL_DEFAULTS.NYSE.aggressive.rsiMax).toBe(75)
   })
 
   it('GPW aggressive volMultiplierMin is 2.5 (Learning Agent update)', () => {
