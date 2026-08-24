@@ -7,6 +7,7 @@ on:
     - cron: '45 14 * * 1-5'  # GPW scalping — przed zamknięciem
     - cron: '35 15 * * 1-5'  # GPW swing + dividend
     - cron: '40 15 * * 1-5'  # GPW agresywna
+    - cron: '0 14 * * 1-5'   # NYSE scalping — otwarcie (10:00 ET)
     - cron: '35 19 * * 1-5'  # NYSE scalping (13:35 ET)
     - cron: '30 19 * * 1-5'  # NYSE agresywna — pre-close (15:30 ET)
     - cron: '10 20 * * 1-5'  # NYSE swing + dividend
@@ -84,6 +85,12 @@ jobs:
         run: |
           curl -sf --max-time 70 --retry 1 --retry-delay 10 \
             "$BASE?strategy=aggressive&exchange=GPW" -H "Authorization: Bearer $AUTH"
+
+      - name: NYSE scalping — otwarcie (10:00 ET)
+        if: github.event.schedule == '0 14 * * 1-5'
+        run: |
+          curl -sf --max-time 70 --retry 1 --retry-delay 10 \
+            "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE scalping
         if: github.event.schedule == '35 19 * * 1-5'
