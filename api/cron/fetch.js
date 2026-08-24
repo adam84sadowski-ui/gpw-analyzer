@@ -184,7 +184,7 @@ export default async function handler(req, res) {
   // GPW: max 8 misses/run × 5s timeout = 40s worst case (under 55s curl limit).
   // NYSE: max 3 misses/run with 12s delay = ~36s safe within Vercel 60s limit.
   const CANDLE_TTL  = exchange === 'NYSE' ? 90 * 60 : 25 * 60
-  const MISS_LIMIT  = exchange === 'NYSE' ? 3 : 8
+  const MISS_LIMIT  = exchange === 'NYSE' ? 5 : 8
   const MISS_DELAY  = 12000
 
   const cacheChecks = await Promise.all(
