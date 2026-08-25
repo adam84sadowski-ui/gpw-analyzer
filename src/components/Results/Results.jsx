@@ -1042,10 +1042,6 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                             )}
                             {r.addSizeExplanation != null && (() => {
                               const hasSuggestion = r.suggestedAddSizePct != null
-                              const cur = posCurrency(pos)
-                              const cp  = prices[pos.ticker] ?? pos.entryPrice
-                              const addValue  = hasSuggestion ? Math.round(pos.positionSize * r.suggestedAddSizePct / 100) : 0
-                              const addShares = hasSuggestion ? Math.floor(addValue / cp) : 0
                               return (
                                 <div className="border-t border-gpw-border pt-2">
                                   <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${hasSuggestion ? 'text-green-400' : 'text-gray-500'}`}>
@@ -1053,8 +1049,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                   </p>
                                   {hasSuggestion ? (
                                     <p className="text-xs text-gray-300 leading-relaxed">
-                                      AI sugeruje dołożenie <span className="text-green-400 font-bold">{r.suggestedAddSizePct}%</span> oryginalnej pozycji
-                                      {addShares > 0 ? ` — ok. ${addShares} akcji za ~${addValue.toLocaleString('pl-PL')} ${cur} po bieżącej cenie` : ''}.
+                                      AI sugeruje dołożenie <span className="text-green-400 font-bold">+{r.suggestedAddSizePct}%</span> oryginalnej pozycji.
                                       {r.addSizeExplanation ? <span className="text-gray-400"> {r.addSizeExplanation}</span> : null}
                                     </p>
                                   ) : (
