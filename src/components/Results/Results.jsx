@@ -139,6 +139,7 @@ export default function Results() {
   const [techPanelOpen, setTechPanelOpen] = useState({})
   const [copiedEval,    setCopiedEval]    = useState({})
   const [addSizeState,  setAddSizeState]  = useState({}) // posId → { pct, price, loading, error, confirmed }
+  const [paramAction,   setParamAction]   = useState({}) // posId → { target: 'confirmed'|'rejected'|null, stop: 'confirmed'|'rejected'|null }
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -366,25 +367,17 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
-      if (data.suggestedTargetPct != null || data.suggestedStopLossPct != null || data.suggestedAddSizePct != null) {
-        const patch = { id: pos.id }
-        if (data.suggestedTargetPct   != null) patch.target              = data.suggestedTargetPct
-        if (data.suggestedStopLossPct != null) patch.stopLoss            = data.suggestedStopLossPct
-        if (data.suggestedAddSizePct  != null) patch.suggestedAddSizePct = data.suggestedAddSizePct
+      // Only auto-save suggestedAddSizePct (metadata for confirm form) — target and stopLoss require explicit user confirmation
+      if (data.suggestedAddSizePct != null) {
         fetch('/api/positions', {
           method:  'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(patch),
+          body:    JSON.stringify({ id: pos.id, suggestedAddSizePct: data.suggestedAddSizePct }),
         }).catch(() => {})
-        setPositions(prev => prev.map(p => {
-          if (p.id !== pos.id) return p
-          const updates = {}
-          if (data.suggestedTargetPct   != null) updates.target              = data.suggestedTargetPct
-          if (data.suggestedStopLossPct != null) updates.stopLoss            = data.suggestedStopLossPct
-          if (data.suggestedAddSizePct  != null) updates.suggestedAddSizePct = data.suggestedAddSizePct
-          return { ...p, ...updates }
-        }))
+        setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, suggestedAddSizePct: data.suggestedAddSizePct }))
       }
+      // Reset param action state so confirm/reject UI shows fresh for new eval
+      setParamAction(s => ({ ...s, [pos.id]: { target: null, stop: null } }))
     } catch {
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
     }
@@ -995,9 +988,9 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                             <div className="flex justify-between items-center">
                               <span className={`text-base font-bold ${as.cls}`}>{as.icon} {r.action}</span>
                               <div className="flex items-center gap-2">
-                                {r.suggestedStopLossPct != null && (
-                                  <span className="text-[10px] bg-gpw-blue/20 text-gpw-blue px-1.5 py-0.5 rounded font-semibold">
-                                    🤖 Stop −{r.suggestedStopLossPct}%
+                                {r.suggestedStopLossPct != null && paramAction[pos.id]?.stop == null && (
+                                  <span className="text-[10px] bg-gpw-blue/20 text-gpw-blue px-1.5 py-0.5 rounded font-semibold animate-pulse">
+                                    🤖 Stop −{r.suggestedStopLossPct}% ↓
                                   </span>
                                 )}
                                 {r.suggestedAddSizePct != null && (
@@ -1050,6 +1043,94 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-sm text-white leading-relaxed">{r.modification}</p>
                               </div>
                             )}
+                            {r.suggestedTargetPct != null && (() => {
+                              const pa = paramAction[pos.id]?.target
+                              return (
+                                <div className="border-t border-gpw-border pt-2 space-y-1.5">
+                                  <p className="text-[10px] text-gpw-blue font-semibold uppercase tracking-wide">🎯 Sugestia zmiany celu</p>
+                                  {pa === 'confirmed' ? (
+                                    <p className="text-xs text-gpw-green">✅ Cel zaktualizowany do +{r.suggestedTargetPct}%</p>
+                                  ) : pa === 'rejected' ? (
+                                    <p className="text-xs text-gray-500 italic">❌ Odrzucono — AI nie zaproponuje ponownie</p>
+                                  ) : (
+                                    <>
+                                      <p className="text-xs text-gray-300">
+                                        <span className="text-gray-500">Obecny cel:</span> <span className="line-through text-gray-500">+{pos.target}%</span>
+                                        {' → '}
+                                        <span className="text-gpw-blue font-bold">+{r.suggestedTargetPct}%</span>
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={async () => {
+                                            await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, target: r.suggestedTargetPct }) }).catch(() => {})
+                                            setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, target: r.suggestedTargetPct }))
+                                            setParamAction(s => ({ ...s, [pos.id]: { ...s[pos.id], target: 'confirmed' } }))
+                                          }}
+                                          className="flex-1 bg-gpw-blue hover:bg-blue-600 text-white py-1.5 rounded text-xs font-semibold transition-colors"
+                                        >
+                                          ✅ Potwierdź +{r.suggestedTargetPct}%
+                                        </button>
+                                        <button
+                                          onClick={async () => {
+                                            const rejection = { value: r.suggestedTargetPct, date: new Date().toISOString().slice(0, 10) }
+                                            await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, aiTargetRejected: rejection }) }).catch(() => {})
+                                            setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, aiTargetRejected: rejection }))
+                                            setParamAction(s => ({ ...s, [pos.id]: { ...s[pos.id], target: 'rejected' } }))
+                                          }}
+                                          className="flex-1 border border-gpw-border hover:border-gray-500 text-gray-400 hover:text-white py-1.5 rounded text-xs transition-colors"
+                                        >
+                                          ❌ Odrzuć
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                            {r.suggestedStopLossPct != null && (() => {
+                              const pa = paramAction[pos.id]?.stop
+                              return (
+                                <div className="border-t border-gpw-border pt-2 space-y-1.5">
+                                  <p className="text-[10px] text-gpw-blue font-semibold uppercase tracking-wide">🛑 Sugestia zmiany stop loss</p>
+                                  {pa === 'confirmed' ? (
+                                    <p className="text-xs text-gpw-green">✅ Stop loss zaktualizowany do -{r.suggestedStopLossPct}%</p>
+                                  ) : pa === 'rejected' ? (
+                                    <p className="text-xs text-gray-500 italic">❌ Odrzucono — AI nie zaproponuje ponownie</p>
+                                  ) : (
+                                    <>
+                                      <p className="text-xs text-gray-300">
+                                        <span className="text-gray-500">Obecny stop:</span> <span className="line-through text-gray-500">-{pos.stopLoss}%</span>
+                                        {' → '}
+                                        <span className="text-gpw-blue font-bold">-{r.suggestedStopLossPct}%</span>
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={async () => {
+                                            await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, stopLoss: r.suggestedStopLossPct }) }).catch(() => {})
+                                            setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, stopLoss: r.suggestedStopLossPct }))
+                                            setParamAction(s => ({ ...s, [pos.id]: { ...s[pos.id], stop: 'confirmed' } }))
+                                          }}
+                                          className="flex-1 bg-gpw-blue hover:bg-blue-600 text-white py-1.5 rounded text-xs font-semibold transition-colors"
+                                        >
+                                          ✅ Potwierdź -{r.suggestedStopLossPct}%
+                                        </button>
+                                        <button
+                                          onClick={async () => {
+                                            const rejection = { value: r.suggestedStopLossPct, date: new Date().toISOString().slice(0, 10) }
+                                            await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, aiStopRejected: rejection }) }).catch(() => {})
+                                            setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, aiStopRejected: rejection }))
+                                            setParamAction(s => ({ ...s, [pos.id]: { ...s[pos.id], stop: 'rejected' } }))
+                                          }}
+                                          className="flex-1 border border-gpw-border hover:border-gray-500 text-gray-400 hover:text-white py-1.5 rounded text-xs transition-colors"
+                                        >
+                                          ❌ Odrzuć
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )
+                            })()}
                             {r.longTermPerspective && (
                               <div className="border-t border-gpw-border pt-2">
                                 <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">🕰️ Perspektywa 6-12 mies.</p>

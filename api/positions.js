@@ -166,10 +166,19 @@ export default async function handler(req, res) {
   }
 
   if (method === 'PATCH') {
-    const { id, exitPrice, target, stopLoss, suggestedAddSizePct } = req.body
+    const { id, exitPrice, target, stopLoss, suggestedAddSizePct, aiTargetRejected, aiStopRejected } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
+
+    // Store AI suggestion rejection metadata
+    if (!exitPrice && (aiTargetRejected != null || aiStopRejected != null)) {
+      const updated = { ...position }
+      if (aiTargetRejected != null) updated.aiTargetRejected = aiTargetRejected
+      if (aiStopRejected   != null) updated.aiStopRejected   = aiStopRejected
+      await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json(updated)
+    }
 
     // AI-revised target, stop loss, or add-size suggestion for open position
     if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null)) {

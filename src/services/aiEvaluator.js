@@ -430,7 +430,7 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null, aiTargetRejected = null, aiStopRejected = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -467,10 +467,15 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     ? ` (śr. cena wejścia po uśrednieniu: ${avgEntryPrice})`
     : ''
 
+  const rejectionLines = [
+    aiTargetRejected ? `\n- ⛔ Użytkownik odrzucił sugestię zmiany celu do +${aiTargetRejected.value}% (${aiTargetRejected.date}) — nie proponuj tej samej wartości ponownie` : '',
+    aiStopRejected   ? `\n- ⛔ Użytkownik odrzucił sugestię zmiany stop loss do -${aiStopRejected.value}% (${aiStopRejected.date}) — nie proponuj tej samej wartości ponownie` : '',
+  ].join('')
+
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice}${avgEntryLine} | Cena bieżąca: ${currentPrice} | P&L vs śr. cena: ${effectiveEntry > 0 ? `${((currentPrice - effectiveEntry) / effectiveEntry * 100).toFixed(1)}%` : `${pnlNum > 0 ? '+' : ''}${pnlNum}%`}
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${addedPositionsLine}${earningsLine}${priceActionLine}
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${addedPositionsLine}${rejectionLines}${earningsLine}${priceActionLine}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
