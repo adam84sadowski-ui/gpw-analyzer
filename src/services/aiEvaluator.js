@@ -485,6 +485,7 @@ ${newsLines}`
   "suggestedTargetPct": <liczba całkowita % od ceny WEJŚCIA lub null — zaktualizowany cel jeśli fundBlock pokazuje cel analityków istotnie różny od obecnego; null jeśli cel bez zmian lub action=ZAMKNIJ>,
   "suggestedStopLossPct": <positive integer lub null — ZASADA: domyślny stop tej strategii to ${defaultStop}%, max dozwolony to ${defaultStop * 2}%. Zaproponuj szerszy stop TYLKO gdy WSZYSTKIE 4 warunki: (1) P&L przekroczył domyślny stop (⚠️ NARUSZONY widoczny wyżej), (2) fundamenty silne — EPS rośnie, ROE>15%, FCF yield>5% lub konsensus Kup≥60%, (3) teza inwestycyjna nadal obowiązuje tzn. kupiłbyś tę spółkę dzisiaj, (4) action=TRZYMAJ lub ZMODYFIKUJ. Null gdy: action=ZAMKNIJ z powodu fundamentalnego, fundamenty słabe/nieznane, stop nie naruszony, brak przekonujących podstaw do rozszerzenia>,
   "suggestedAddSizePct": <25 | 50 | 100 | null — % oryginalnej pozycji do dołożenia. Zaproponuj TYLKO gdy WSZYSTKIE 5 warunków: (1) strategia NIE jest scalping, (2) action=TRZYMAJ, (3) P&L między -${(defaultStop * 0.5).toFixed(0)}% a +${Math.round(target * 0.7 || 10)}% czyli nie blisko celu i nie przy głębokiej stracie, (4) fundamenty silne lub teza inwestycyjna przekonująca — kupiłbyś tę spółkę DZISIAJ, (5) daysHeld ≥ 2. Wybierz 25 gdy umiarkowane przekonanie, 50 gdy silne, 100 gdy bardzo silne (rzadko). Null gdy: scalping, action≠TRZYMAJ, głęboka strata lub blisko celu, fundamenty słabe, daysHeld < 2>,
+  "addSizeExplanation": <string po polsku, 1 zdanie — ZAWSZE wypełnij dla swing i aggressive (nigdy null). Gdy suggestedAddSizePct != null: krótko DLACZEGO warto dokładać (np. "Silne fundamenty i niskie RSI uzasadniają zwiększenie ekspozycji"). Gdy suggestedAddSizePct = null: krótko DLACZEGO nie warto dokładać teraz (np. "Konsensus analityków słaby — tylko 30% Kup" / "Cena blisko celu — zbyt późno na dokładanie" / "Zbyt krótki holding — brak potwierdzenia tezy"). Null tylko dla scalping>,
   "longTermPerspective": <string po polsku max 2 zdania lub null — oceń TYLKO jeśli spółka ma silny fundament uzasadniający trzymanie 6-12 miesięcy niezależnie od horyzontu strategii (np. przyspieszający EPS, dominacja rynkowa, strukturalny wzrost popytu). Null jeśli brak przekonujących podstaw lub action=ZAMKNIJ>
 }`
 
@@ -504,9 +505,10 @@ ${posBlock}
 ${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1200)
-  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, suggestedAddSizePct: null, longTermPerspective: null })
+  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, suggestedAddSizePct: null, addSizeExplanation: null, longTermPerspective: null })
   parsed.suggestedTargetPct   = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   parsed.suggestedStopLossPct = clampSuggestedStopLoss(parsed.suggestedStopLossPct, strategy)
   parsed.suggestedAddSizePct  = clampSuggestedAddSize(parsed.suggestedAddSizePct, strategy)
+  if (strategy === 'scalping') parsed.addSizeExplanation = null
   return parsed
 }

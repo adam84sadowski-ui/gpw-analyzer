@@ -1040,18 +1040,26 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-xs text-gray-400 italic leading-relaxed">{r.longTermPerspective}</p>
                               </div>
                             )}
-                            {r.suggestedAddSizePct != null && (() => {
+                            {r.addSizeExplanation != null && (() => {
+                              const hasSuggestion = r.suggestedAddSizePct != null
                               const cur = posCurrency(pos)
                               const cp  = prices[pos.ticker] ?? pos.entryPrice
-                              const addValue  = Math.round(pos.positionSize * r.suggestedAddSizePct / 100)
-                              const addShares = Math.floor(addValue / cp)
+                              const addValue  = hasSuggestion ? Math.round(pos.positionSize * r.suggestedAddSizePct / 100) : 0
+                              const addShares = hasSuggestion ? Math.floor(addValue / cp) : 0
                               return (
                                 <div className="border-t border-gpw-border pt-2">
-                                  <p className="text-[10px] text-green-400 font-semibold uppercase tracking-wide mb-1">🔼 Sugestia: zwiększ pozycję</p>
-                                  <p className="text-xs text-gray-300 leading-relaxed">
-                                    AI sugeruje dołożenie <span className="text-green-400 font-bold">{r.suggestedAddSizePct}%</span> oryginalnej pozycji
-                                    {addShares > 0 ? ` — ok. ${addShares} akcji za ~${addValue.toLocaleString('pl-PL')} ${cur} po bieżącej cenie` : ''}.
+                                  <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${hasSuggestion ? 'text-green-400' : 'text-gray-500'}`}>
+                                    🔼 Zwiększenie pozycji
                                   </p>
+                                  {hasSuggestion ? (
+                                    <p className="text-xs text-gray-300 leading-relaxed">
+                                      AI sugeruje dołożenie <span className="text-green-400 font-bold">{r.suggestedAddSizePct}%</span> oryginalnej pozycji
+                                      {addShares > 0 ? ` — ok. ${addShares} akcji za ~${addValue.toLocaleString('pl-PL')} ${cur} po bieżącej cenie` : ''}.
+                                      {r.addSizeExplanation ? <span className="text-gray-400"> {r.addSizeExplanation}</span> : null}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-gray-500 italic leading-relaxed">{r.addSizeExplanation}</p>
+                                  )}
                                 </div>
                               )
                             })()}
