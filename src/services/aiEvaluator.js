@@ -430,7 +430,7 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing' }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -459,10 +459,18 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     : ''
 
   const stopBreached = !trailingActive && pnlNum < -defaultStop
+  const effectiveEntry = avgEntryPrice ?? entryPrice
+  const addedPositionsLine = addedPositions?.length
+    ? `\n- Historia zwiększeń pozycji (${addedPositions.length}x): ${addedPositions.map(a => `${a.date} +${a.addedPct}% @ ${a.priceAtAdd}`).join(' | ')}`
+    : ''
+  const avgEntryLine = avgEntryPrice && Math.abs(avgEntryPrice - entryPrice) > 0.001
+    ? ` (śr. cena wejścia po uśrednieniu: ${avgEntryPrice})`
+    : ''
+
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
-- Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlNum > 0 ? '+' : ''}${pnlNum}%
-- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${earningsLine}${priceActionLine}
+- Cena wejścia: ${entryPrice}${avgEntryLine} | Cena bieżąca: ${currentPrice} | P&L vs śr. cena: ${effectiveEntry > 0 ? `${((currentPrice - effectiveEntry) / effectiveEntry * 100).toFixed(1)}%` : `${pnlNum > 0 ? '+' : ''}${pnlNum}%`}
+- Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${addedPositionsLine}${earningsLine}${priceActionLine}
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
@@ -486,7 +494,11 @@ ${newsLines}`
   "suggestedStopLossPct": <positive integer lub null — ZASADA: domyślny stop tej strategii to ${defaultStop}%, max dozwolony to ${defaultStop * 2}%. Zaproponuj szerszy stop TYLKO gdy WSZYSTKIE 4 warunki: (1) P&L przekroczył domyślny stop (⚠️ NARUSZONY widoczny wyżej), (2) fundamenty silne — EPS rośnie, ROE>15%, FCF yield>5% lub konsensus Kup≥60%, (3) teza inwestycyjna nadal obowiązuje tzn. kupiłbyś tę spółkę dzisiaj, (4) action=TRZYMAJ lub ZMODYFIKUJ. Null gdy: action=ZAMKNIJ z powodu fundamentalnego, fundamenty słabe/nieznane, stop nie naruszony, brak przekonujących podstaw do rozszerzenia>,
   "suggestedAddSizePct": <25 | 50 | 100 | null — % oryginalnej pozycji do dołożenia. Zaproponuj TYLKO gdy WSZYSTKIE 5 warunków: (1) strategia NIE jest scalping, (2) action=TRZYMAJ, (3) P&L między -${(defaultStop * 0.5).toFixed(0)}% a +${Math.round(target * 0.7 || 10)}% czyli nie blisko celu i nie przy głębokiej stracie, (4) fundamenty silne lub teza inwestycyjna przekonująca — kupiłbyś tę spółkę DZISIAJ, (5) daysHeld ≥ 2. Wybierz 25 gdy umiarkowane przekonanie, 50 gdy silne, 100 gdy bardzo silne (rzadko). Null gdy: scalping, action≠TRZYMAJ, głęboka strata lub blisko celu, fundamenty słabe, daysHeld < 2>,
   "addSizeExplanation": <string po polsku, 1 zdanie — ZAWSZE wypełnij dla swing i aggressive (nigdy null). Gdy suggestedAddSizePct != null: krótko DLACZEGO warto dokładać (np. "Silne fundamenty i niskie RSI uzasadniają zwiększenie ekspozycji"). Gdy suggestedAddSizePct = null: krótko DLACZEGO nie warto dokładać teraz (np. "Konsensus analityków słaby — tylko 30% Kup" / "Cena blisko celu — zbyt późno na dokładanie" / "Zbyt krótki holding — brak potwierdzenia tezy"). Null tylko dla scalping>,
-  "longTermPerspective": <string po polsku max 2 zdania lub null — oceń TYLKO jeśli spółka ma silny fundament uzasadniający trzymanie 6-12 miesięcy niezależnie od horyzontu strategii (np. przyspieszający EPS, dominacja rynkowa, strukturalny wzrost popytu). Null jeśli brak przekonujących podstaw lub action=ZAMKNIJ>
+  "longTermPerspective": <string po polsku max 2 zdania lub null — oceń TYLKO jeśli spółka ma silny fundament uzasadniający trzymanie 6-12 miesięcy niezależnie od horyzontu strategii (np. przyspieszający EPS, dominacja rynkowa, strukturalny wzrost popytu). Null jeśli brak przekonujących podstaw lub action=ZAMKNIJ>,
+  "suggestedPartialExitPct": <25 | 50 | 75 | null — % pozycji do częściowej realizacji. Tylko informacyjnie. Zaproponuj gdy: (1) action=TRZYMAJ lub ZMODYFIKUJ, (2) P&L ≥ 60% celu lub ryzyko wzrosło (zbliżające się wyniki, przełamanie wsparcia), (3) strategia NIE jest scalping (dla scalping — zamykaj całość). Wybierz: 25 gdy minimalna ostrożność, 50 gdy umiarkowane ryzyko, 75 gdy wysokie ryzyko / duży zysk do ochrony. Null gdy action=ZAMKNIJ (bo zamykasz całość), gdy teza silna i nie ma powodu do wyjścia, lub gdy P&L jest ujemny>,
+  "nextReviewDate": <string ISO "YYYY-MM-DD" — kiedy następny przegląd. Dla scalping: za 1-2 dni. Dla swing: za 5-10 dni. Dla aggressive: za 3-7 dni. Dostosuj gdy: blisko wyniki spółki → dzień przed, blisko cel/stop → jutro>,
+  "bullCase": <string po polsku, 1 zdanie — NAJWIĘKSZY argument ZA trzymaniem/dokładaniem. Konkretny (np. "EPS rośnie 25% r/r przy P/E 18x, spółka ma pricing power"). Zawsze wypełnij>,
+  "bearCase": <string po polsku, 1 zdanie — NAJWIĘKSZE ryzyko dla pozycji. Konkretny (np. "Wyniki za 6 dni — luka cenowa może znieść cały zysk"). Zawsze wypełnij>
 }`
 
   let persona
@@ -505,10 +517,18 @@ ${posBlock}
 ${jsonSchema}`
 
   const text = await callClaudeAPI(prompt, 1200)
-  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, suggestedAddSizePct: null, addSizeExplanation: null, longTermPerspective: null })
+  const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, suggestedAddSizePct: null, addSizeExplanation: null, longTermPerspective: null, suggestedPartialExitPct: null, nextReviewDate: null, bullCase: null, bearCase: null })
   parsed.suggestedTargetPct   = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   parsed.suggestedStopLossPct = clampSuggestedStopLoss(parsed.suggestedStopLossPct, strategy)
   parsed.suggestedAddSizePct  = clampSuggestedAddSize(parsed.suggestedAddSizePct, strategy)
   if (strategy === 'scalping') parsed.addSizeExplanation = null
+  const ALLOWED_PARTIAL = [25, 50, 75]
+  if (parsed.suggestedPartialExitPct != null) {
+    const closest = ALLOWED_PARTIAL.reduce((a, b) => Math.abs(b - parsed.suggestedPartialExitPct) < Math.abs(a - parsed.suggestedPartialExitPct) ? b : a)
+    parsed.suggestedPartialExitPct = closest
+  }
+  if (parsed.nextReviewDate != null && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.nextReviewDate)) {
+    parsed.nextReviewDate = null
+  }
   return parsed
 }
