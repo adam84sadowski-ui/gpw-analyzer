@@ -138,6 +138,7 @@ export default function Results() {
   const [chatState, setChatState]   = useState({})  // posId → { open, msgs, input, loading }
   const [techPanelOpen, setTechPanelOpen] = useState({})
   const [copiedEval,    setCopiedEval]    = useState({})
+  const [addSizeState,  setAddSizeState]  = useState({}) // posId → { pct, price, loading, error, confirmed }
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -482,10 +483,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       ) : (
         <div className="space-y-3">
           {positions.map(pos => {
-            const cur    = posCurrency(pos)
-            const cp     = prices[pos.ticker]
-            const pnlPct = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100) : null
-            const pnlAmt = cp ? ((cp - pos.entryPrice) * pos.shares) : null
+            const cur          = posCurrency(pos)
+            const cp           = prices[pos.ticker]
+            const effectiveEP  = pos.avgEntryPrice ?? pos.entryPrice
+            const pnlPct       = cp ? ((cp - effectiveEP) / effectiveEP * 100) : null
+            const pnlAmt       = cp ? ((cp - effectiveEP) * pos.shares) : null
 
             return (
               <div key={pos.id} className="bg-gpw-card border border-gpw-border rounded-lg p-4 space-y-3">
@@ -563,6 +565,15 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   <span>Akcji: {pos.shares} × {pos.entryPrice} {cur} = {pos.positionSize.toLocaleString('pl-PL')} {cur}</span>
                   <span>{new Date(pos.entryDate).toLocaleDateString('pl-PL')}</span>
                 </div>
+
+                {pos.avgEntryPrice != null && Math.abs(pos.avgEntryPrice - pos.entryPrice) > 0.001 && (
+                  <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span>Śr. cena wejścia: <span className="text-blue-300 font-semibold">{pos.avgEntryPrice} {cur}</span></span>
+                    {pos.addedPositions?.length > 0 && (
+                      <span className="bg-blue-900/20 text-blue-400 px-1.5 py-0.5 rounded text-[10px]">zwiększono {pos.addedPositions.length}×</span>
+                    )}
+                  </div>
+                )}
 
                 {pos.entryRsi != null && (
                   <div className="text-xs text-gray-500">
@@ -994,6 +1005,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                     🔼 +{r.suggestedAddSizePct}%
                                   </span>
                                 )}
+                                {r.nextReviewDate && (
+                                  <span className="text-[10px] bg-gpw-dark text-gray-400 px-1.5 py-0.5 rounded">
+                                    📅 {r.nextReviewDate}
+                                  </span>
+                                )}
                                 <span className={`text-xs font-semibold ${URGENCY_STYLE[r.urgency] ?? 'text-gray-400'}`}>
                                   Pilność: {r.urgency}
                                 </span>
@@ -1040,24 +1056,108 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-xs text-gray-400 italic leading-relaxed">{r.longTermPerspective}</p>
                               </div>
                             )}
+                            {(r.bullCase || r.bearCase) && (
+                              <div className="border-t border-gpw-border pt-2 space-y-1.5">
+                                {r.bullCase && (
+                                  <div className="flex gap-2 items-start">
+                                    <span className="text-gpw-green text-[11px] font-bold shrink-0">🟢 Bull:</span>
+                                    <p className="text-xs text-gray-300 leading-relaxed">{r.bullCase}</p>
+                                  </div>
+                                )}
+                                {r.bearCase && (
+                                  <div className="flex gap-2 items-start">
+                                    <span className="text-gpw-red text-[11px] font-bold shrink-0">🔴 Bear:</span>
+                                    <p className="text-xs text-gray-300 leading-relaxed">{r.bearCase}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             {r.addSizeExplanation != null && (() => {
                               const hasSuggestion = r.suggestedAddSizePct != null
+                              const addSt = addSizeState[pos.id] ?? {}
+                              const currentPct   = addSt.pct   ?? r.suggestedAddSizePct ?? 25
+                              const currentPrice = addSt.price ?? String(prices[pos.ticker] ?? pos.entryPrice)
                               return (
-                                <div className="border-t border-gpw-border pt-2">
-                                  <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${hasSuggestion ? 'text-green-400' : 'text-gray-500'}`}>
+                                <div className="border-t border-gpw-border pt-2 space-y-2">
+                                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${hasSuggestion ? 'text-green-400' : 'text-gray-500'}`}>
                                     🔼 Zwiększenie pozycji
                                   </p>
                                   {hasSuggestion ? (
-                                    <p className="text-xs text-gray-300 leading-relaxed">
-                                      AI sugeruje dołożenie <span className="text-green-400 font-bold">+{r.suggestedAddSizePct}%</span> oryginalnej pozycji.
-                                      {r.addSizeExplanation ? <span className="text-gray-400"> {r.addSizeExplanation}</span> : null}
-                                    </p>
+                                    addSt.confirmed ? (
+                                      <p className="text-xs text-green-400">✅ Zwiększenie potwierdzone! Śr. cena wejścia zaktualizowana.</p>
+                                    ) : (
+                                      <>
+                                        <p className="text-xs text-gray-400 leading-relaxed">{r.addSizeExplanation}</p>
+                                        <div className="flex gap-2 items-center">
+                                          <div className="flex gap-1">
+                                            {[25, 50, 100].map(v => (
+                                              <button
+                                                key={v}
+                                                onClick={() => setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], pct: v } }))}
+                                                className={`text-xs px-2 py-1 rounded border transition-colors ${currentPct === v ? 'bg-green-900/40 border-green-600 text-green-400 font-bold' : 'border-gpw-border text-gray-400 hover:border-gray-500'}`}
+                                              >
+                                                +{v}%
+                                              </button>
+                                            ))}
+                                          </div>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            value={currentPrice}
+                                            onChange={e => setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], price: e.target.value } }))}
+                                            className="w-24 bg-gpw-dark border border-gpw-border rounded px-2 py-1 text-xs text-white outline-none focus:border-gpw-blue"
+                                            placeholder={`Cena (${cur})`}
+                                          />
+                                        </div>
+                                        {addSt.error && <p className="text-xs text-gpw-red">{addSt.error}</p>}
+                                        <button
+                                          disabled={addSt.loading}
+                                          onClick={async () => {
+                                            const pct  = currentPct
+                                            const price = Number(currentPrice)
+                                            if (!price || price <= 0) {
+                                              setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], error: 'Podaj prawidłową cenę' } }))
+                                              return
+                                            }
+                                            setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], loading: true, error: null } }))
+                                            try {
+                                              const res = await fetch('/api/positions', {
+                                                method: 'PATCH',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ id: pos.id, action: 'addToPosition', addedPct: pct, priceAtAdd: price }),
+                                              })
+                                              if (!res.ok) {
+                                                const err = await res.json().catch(() => ({}))
+                                                setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], loading: false, error: err.error ?? 'Błąd' } }))
+                                                return
+                                              }
+                                              const updated = await res.json()
+                                              setPositions(prev => prev.map(p => p.id === pos.id ? updated : p))
+                                              setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], loading: false, confirmed: true } }))
+                                            } catch {
+                                              setAddSizeState(s => ({ ...s, [pos.id]: { ...s[pos.id], loading: false, error: 'Błąd sieci' } }))
+                                            }
+                                          }}
+                                          className="w-full bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white py-1.5 rounded text-xs font-semibold transition-colors"
+                                        >
+                                          {addSt.loading ? 'Zapisuję…' : `✅ Potwierdź: dołóż +${currentPct}% pozycji @ ${currentPrice} ${cur}`}
+                                        </button>
+                                      </>
+                                    )
                                   ) : (
                                     <p className="text-xs text-gray-500 italic leading-relaxed">{r.addSizeExplanation}</p>
                                   )}
                                 </div>
                               )
                             })()}
+                            {r.suggestedPartialExitPct != null && (
+                              <div className="border-t border-gpw-border pt-2">
+                                <p className="text-[10px] text-yellow-500 font-semibold uppercase tracking-wide mb-1">📤 Częściowa realizacja</p>
+                                <p className="text-xs text-gray-300 leading-relaxed">
+                                  AI sugeruje sprzedaż <span className="text-yellow-400 font-bold">{r.suggestedPartialExitPct}% pozycji</span> — informacyjnie. Zamknięcie realizuj przez przycisk poniżej.
+                                </p>
+                              </div>
+                            )}
                             <div className="flex gap-2 border-t border-gpw-border pt-2">
                               <button
                                 onClick={async () => {

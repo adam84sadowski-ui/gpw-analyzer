@@ -181,6 +181,32 @@ export default async function handler(req, res) {
       return res.json(updated)
     }
 
+    // Confirm position increase — recalculates avgEntryPrice, shares, positionSize
+    const { action: patchAction, addedPct, priceAtAdd } = req.body
+    if (!exitPrice && patchAction === 'addToPosition' && addedPct != null && priceAtAdd != null) {
+      const addedValue  = Math.round(position.positionSize * addedPct / 100)
+      const addedShares = Math.floor(addedValue / priceAtAdd)
+      if (addedShares < 1) return res.status(400).json({ error: 'Kwota zbyt mała na zakup 1 akcji po tej cenie' })
+      const prevAvg  = position.avgEntryPrice ?? position.entryPrice
+      const newShares = position.shares + addedShares
+      const newAvgEntryPrice = Math.round(((prevAvg * position.shares) + (priceAtAdd * addedShares)) / newShares * 100) / 100
+      const updated = {
+        ...position,
+        shares:          newShares,
+        positionSize:    Math.round((position.positionSize + addedShares * priceAtAdd) * 100) / 100,
+        avgEntryPrice:   newAvgEntryPrice,
+        addedPositions:  [...(position.addedPositions ?? []), {
+          date: new Date().toISOString().slice(0, 10),
+          addedPct,
+          addedShares,
+          priceAtAdd,
+          addedValue: Math.round(addedShares * priceAtAdd * 100) / 100,
+        }],
+      }
+      await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json(updated)
+    }
+
     if (!exitPrice) return res.status(400).json({ error: 'id, exitPrice required' })
     const exitDate = new Date().toISOString()
     const pnlPct   = Math.round(((exitPrice - position.entryPrice) / position.entryPrice) * 10000) / 100

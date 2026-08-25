@@ -209,6 +209,8 @@ export default async function handler(req, res) {
       target:         pos?.target          ?? Number(target ?? 0),
       trailingActive: pos?.trailingActive  ?? (trailingActive === 'true'),
       strategy:       pos?.strategy        ?? strategy ?? 'swing',
+      avgEntryPrice:  pos?.avgEntryPrice   ?? null,
+      addedPositions: pos?.addedPositions  ?? null,
       priceAction:    priceActionEval,
       earningsDate:   fundamentals?.earningsDate ?? null,
       news,
