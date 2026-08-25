@@ -16,6 +16,7 @@ function buildPositionShareText(pos, r, cur) {
   if (r.signalStrength) lines.push(`Siła sygnału: ${r.signalStrength}`)
   if (r.suggestedTargetPct   != null) lines.push(`Cel AI: +${r.suggestedTargetPct}% ${curr}`)
   if (r.suggestedStopLossPct != null) lines.push(`Stop AI: -${r.suggestedStopLossPct}% ${curr} (rozszerzony — silne fundamenty)`)
+  if (r.suggestedAddSizePct  != null) lines.push(`Sugestia AI: dołóż ${r.suggestedAddSizePct}% oryginalnej pozycji`)
   lines.push('')
 
   // Technical indicators from indics
@@ -364,10 +365,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
-      if (data.suggestedTargetPct != null || data.suggestedStopLossPct != null) {
+      if (data.suggestedTargetPct != null || data.suggestedStopLossPct != null || data.suggestedAddSizePct != null) {
         const patch = { id: pos.id }
-        if (data.suggestedTargetPct   != null) patch.target   = data.suggestedTargetPct
-        if (data.suggestedStopLossPct != null) patch.stopLoss = data.suggestedStopLossPct
+        if (data.suggestedTargetPct   != null) patch.target              = data.suggestedTargetPct
+        if (data.suggestedStopLossPct != null) patch.stopLoss            = data.suggestedStopLossPct
+        if (data.suggestedAddSizePct  != null) patch.suggestedAddSizePct = data.suggestedAddSizePct
         fetch('/api/positions', {
           method:  'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -376,8 +378,9 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         setPositions(prev => prev.map(p => {
           if (p.id !== pos.id) return p
           const updates = {}
-          if (data.suggestedTargetPct   != null) updates.target   = data.suggestedTargetPct
-          if (data.suggestedStopLossPct != null) updates.stopLoss = data.suggestedStopLossPct
+          if (data.suggestedTargetPct   != null) updates.target              = data.suggestedTargetPct
+          if (data.suggestedStopLossPct != null) updates.stopLoss            = data.suggestedStopLossPct
+          if (data.suggestedAddSizePct  != null) updates.suggestedAddSizePct = data.suggestedAddSizePct
           return { ...p, ...updates }
         }))
       }
@@ -597,6 +600,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                            <span className="text-gray-400 ml-1">({(pos.entryPrice * (1 - pos.stopLoss / 100)).toFixed(2)} {cur})</span></>
                       }
                     </div>
+                    {aiEvals[pos.id]?.result?.suggestedAddSizePct != null && (
+                      <div className="flex-1 text-center bg-green-900/20 rounded p-1.5">
+                        🔼 Dokładaj: <span className="text-green-400">+{aiEvals[pos.id].result.suggestedAddSizePct}%</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -981,6 +989,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                     🤖 Stop −{r.suggestedStopLossPct}%
                                   </span>
                                 )}
+                                {r.suggestedAddSizePct != null && (
+                                  <span className="text-[10px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded font-semibold">
+                                    🔼 +{r.suggestedAddSizePct}%
+                                  </span>
+                                )}
                                 <span className={`text-xs font-semibold ${URGENCY_STYLE[r.urgency] ?? 'text-gray-400'}`}>
                                   Pilność: {r.urgency}
                                 </span>
@@ -1027,6 +1040,24 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                                 <p className="text-xs text-gray-400 italic leading-relaxed">{r.longTermPerspective}</p>
                               </div>
                             )}
+                            {r.addSizeExplanation != null && (() => {
+                              const hasSuggestion = r.suggestedAddSizePct != null
+                              return (
+                                <div className="border-t border-gpw-border pt-2">
+                                  <p className={`text-[10px] font-semibold uppercase tracking-wide mb-1 ${hasSuggestion ? 'text-green-400' : 'text-gray-500'}`}>
+                                    🔼 Zwiększenie pozycji
+                                  </p>
+                                  {hasSuggestion ? (
+                                    <p className="text-xs text-gray-300 leading-relaxed">
+                                      AI sugeruje dołożenie <span className="text-green-400 font-bold">+{r.suggestedAddSizePct}%</span> oryginalnej pozycji.
+                                      {r.addSizeExplanation ? <span className="text-gray-400"> {r.addSizeExplanation}</span> : null}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-gray-500 italic leading-relaxed">{r.addSizeExplanation}</p>
+                                  )}
+                                </div>
+                              )
+                            })()}
                             <div className="flex gap-2 border-t border-gpw-border pt-2">
                               <button
                                 onClick={async () => {

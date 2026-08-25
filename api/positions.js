@@ -166,16 +166,17 @@ export default async function handler(req, res) {
   }
 
   if (method === 'PATCH') {
-    const { id, exitPrice, target, stopLoss } = req.body
+    const { id, exitPrice, target, stopLoss, suggestedAddSizePct } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
 
-    // AI-revised target or stop loss for open position
-    if (!exitPrice && (target != null || stopLoss != null)) {
+    // AI-revised target, stop loss, or add-size suggestion for open position
+    if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null)) {
       const updated = { ...position }
-      if (target   != null) updated.target   = target
-      if (stopLoss != null) updated.stopLoss = stopLoss
+      if (target             != null) updated.target             = target
+      if (stopLoss           != null) updated.stopLoss           = stopLoss
+      if (suggestedAddSizePct != null) updated.suggestedAddSizePct = suggestedAddSizePct
       await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
       return res.json(updated)
     }
