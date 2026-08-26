@@ -161,8 +161,22 @@ export default async function handler(req, res) {
       news,
       fundamentals,
     })
+    // AI Swap — find weak open position on same exchange for swap suggestion
+    const openPos = positions.filter(p => p.status === 'open')
+    const swapCand = openPos.find(p =>
+      (p.exchange ?? 'GPW') === exchange &&
+      p.aiEvalHistory?.length > 0 &&
+      p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
+    )
+    const swapSuggestion = swapCand ? {
+      ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
+      holdTotal: swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].holdTotal,
+      aiAction:  swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].aiAction ?? null,
+    } : null
+
     return res.json({
       ...result,
+      swapSuggestion,
       targetMeanPrice:   fundamentals?.targetMeanPrice   ?? null,
       targetUpside:      fundamentals?.targetUpside      ?? null,
       analystBuy:        fundamentals?.analystBuy        ?? null,

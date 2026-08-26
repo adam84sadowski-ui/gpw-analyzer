@@ -386,6 +386,23 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 )}
               </div>
 
+              {/* AI Swap suggestion */}
+              {result.swapSuggestion && result.decision !== 'UNIKAJ' && (
+                <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 text-xs space-y-1">
+                  <p className="text-yellow-400 font-semibold">🔄 AI SWAP — sugestia wymiany pozycji</p>
+                  <p className="text-gray-300 leading-relaxed">
+                    Masz otwartą pozycję{' '}
+                    <span className="font-bold text-white">{result.swapSuggestion.ticker}</span>
+                    {' '}o słabnącej sile holdingu:{' '}
+                    <span className="text-gpw-red font-bold">{result.swapSuggestion.holdTotal}/100</span>
+                    {result.swapSuggestion.aiAction && (
+                      <span className="text-gray-500"> · AI oceniła: {result.swapSuggestion.aiAction}</span>
+                    )}
+                    . Rozważ zamknięcie jej i otwarcie tej pozycji zamiast.
+                  </p>
+                </div>
+              )}
+
               {/* Checklist analysis */}
               {result.analysis && (
                 <div className="bg-gpw-card border border-gpw-border rounded-lg p-3">
