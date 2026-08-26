@@ -12,13 +12,13 @@ import { calcScore } from '../indicators/scoring.js'
 
 export const SIGNAL_DEFAULTS = {
   GPW: {
-    scalping:   { rsiThreshold: 30, volumeMultiplierMin: 1.5,  rsiPeriod: 9  },
-    swing:      { volumeMultiplierMin: 1.2, crossoverWindowDays: 7, rsiPeriod: 14 },
+    scalping:   { rsiThresholdMin: 34, rsiThreshold: 46, volumeMultiplierMin: 1.2, rsiPeriod: 9 },
+    swing:      { rsiMin: 36, rsiMax: 55, volumeMultiplierMin: 1.1, sma50DeltaMin: -3, sma50DeltaMax: 5, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 2.5, rsiPeriod: 14 },
   },
   NYSE: {
-    scalping:   { rsiThreshold: 32, volumeMultiplierMin: 1.15, rsiPeriod: 9  },
-    swing:      { volumeMultiplierMin: 1.5, crossoverWindowDays: 7, rsiPeriod: 14, rsiMax: 65 },
+    scalping:   { rsiThresholdMin: 35, rsiThreshold: 50, volumeMultiplierMin: 1.1, rsiPeriod: 9 },
+    swing:      { rsiMin: 40, rsiMax: 58, volumeMultiplierMin: 1.1, sma50DeltaMin: -2, sma50DeltaMax: 5, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 75, volumeMultiplierMin: 2.0, rsiPeriod: 14 },
   },
 }
@@ -73,14 +73,20 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
 
   if (strategy === 'scalping') {
     if (sma150 != null && price <= sma150) return null
-    const rsiThr    = thresholds.rsi_threshold ?? defaults.scalping.rsiThreshold
+    const rsiMin    = thresholds.rsi_threshold_min ?? defaults.scalping.rsiThresholdMin
+    const rsiMax    = thresholds.rsi_threshold     ?? defaults.scalping.rsiThreshold
     const volThr    = thresholds.volume_multiplier ?? defaults.scalping.volumeMultiplierMin
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.scalping.rsiPeriod ?? 14
-    const rsi = calcRSI(closes, rsiPeriod)
-    if (rsi !== null && rsi < rsiThr && volMult && volMult >= volThr) {
+    const rsi    = calcRSI(closes, rsiPeriod)
+    const sma20  = calcSMA(closes, 20)
+    const sma50  = calcSMA(closes, 50)
+    // Pullback-in-trend: RSI in reset zone, price above SMA50, within -5%/+3% of SMA20
+    const aboveSma50 = sma50 != null && price > sma50
+    const nearSma20  = sma20 != null && price >= sma20 * 0.95 && price <= sma20 * 1.03
+    if (rsi !== null && rsi >= rsiMin && rsi <= rsiMax && aboveSma50 && nearSma20 && volMult && volMult >= volThr) {
       const score = calcScore('scalping', { ...scoreInputs, rsi })
       return { signal: 'RSI_OVERSOLD', price, rsi, rsiPeriod, volMult,
-        sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+        sma20, sma50,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
         score, ...extra }
     }
@@ -122,30 +128,29 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   if (strategy === 'swing') {
     if (sma150 != null && price <= sma150) return null
     if (candles.length < 55) return null
+    const rsiFloor  = defaults.swing.rsiMin
+    const rsiCeil   = defaults.swing.rsiMax
     const volThr    = thresholds.swing_volume_multiplier ?? defaults.swing.volumeMultiplierMin
-    const rsiCeil   = defaults.swing.rsiMax ?? Infinity
-    const crossWin  = defaults.swing.crossoverWindowDays
+    const dMin      = defaults.swing.sma50DeltaMin
+    const dMax      = defaults.swing.sma50DeltaMax
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
-    const rsi = calcRSI(closes, rsiPeriod)
+    const rsi    = calcRSI(closes, rsiPeriod)
+    const sma50s = calcSMASeries(closes, 50)
+    const sma50  = sma50s[sma50s.length - 1]
+    const sma50Delta = sma50 != null ? Math.round((price - sma50) / sma50 * 1000) / 10 : null
+
     // NYSE: reject overbought entries and bearish MACD
     if (rsi != null && rsi > rsiCeil) return null
     if (exchange === 'NYSE' && macdSig.trend !== 'bullish') return null
-    let crossed = false
-    for (let i = 1; i <= Math.min(crossWin, closes.length - 2); i++) {
-      const dayClose  = closes[closes.length - i]
-      const daySMA50  = calcSMA(closes.slice(0, closes.length - i + 1), 50)
-      const prevClose = closes[closes.length - i - 1]
-      const prevSMA50 = closes.length >= 51
-        ? closes.slice(closes.length - i - 50, closes.length - i).reduce((a, b) => a + b, 0) / 50
-        : null
-      if (prevSMA50 && prevClose <= prevSMA50 && daySMA50 && dayClose > daySMA50) { crossed = true; break }
-    }
-    if (!crossed) crossed = goldenCross(closes)
-    if (crossed && volMult && volMult >= volThr) {
-      const sma50s = calcSMASeries(closes, 50)
-      const score  = calcScore('swing', { ...scoreInputs, rsi })
-      return { signal: 'SMA50_CROSSOVER', price, rsi, rsiPeriod, volMult,
-        sma20: calcSMA(closes, 20), sma50: sma50s[sma50s.length - 1],
+
+    // Pullback-to-SMA50: price within proximity band, RSI in reset zone, mild volume
+    const inPullbackZone = sma50Delta != null && sma50Delta >= dMin && sma50Delta <= dMax
+    const rsiReset       = rsi != null && rsi >= rsiFloor && rsi <= rsiCeil
+    if (inPullbackZone && rsiReset && volMult && volMult >= volThr) {
+      const score = calcScore('swing', { ...scoreInputs, rsi })
+      return { signal: 'PULLBACK_TO_SMA50', price, rsi, rsiPeriod, volMult,
+        sma20: calcSMA(closes, 20), sma50,
+        sma50Delta,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
         score, ...extra }
     }

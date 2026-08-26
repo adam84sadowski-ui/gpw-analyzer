@@ -5,10 +5,11 @@ export const HORIZON = {
 }
 
 const BASE_TEXT = {
-  RSI_OVERSOLD:    'Spółka była mocno wyprzedana (RSI poniżej progu). Oczekiwane techniczne odbicie w górę. Otwórz małą pozycję i obserwuj — zamknij gdy cel zostanie osiągnięty lub RSI przekroczy 55.',
-  SMA50_CROSSOVER: 'Cena przebiła 50-dniową średnią ruchomą od dołu — zmiana trendu na wzrostowy. Sygnał swing-trade. Trzymaj pozycję przez kilka tygodni, zamknij gdy trend osłabnie lub spółka osiągnie cel.',
-  BREAKOUT:        'Cena wybiła powyżej lokalnego maksimum z ostatnich 20 dni przy zwiększonym wolumenie. Spekulacyjny sygnał — może generować duże zyski lub szybko się odwrócić. Stosuj ścisły stop loss.',
-  VOL_SURGE:       'Wyjątkowo wysoki wolumen z silnym zamknięciem przy szczycie dnia — sygnał instytucjonalnego katalizatora (earnings beat, FDA, makro). Momentum potwierdzone przez MACD i trend SMA150. Horyzont 1-2 dni, cel +3%, stop -2%. Wejdź rano następnego dnia przy utrzymaniu impulsu.',
+  RSI_OVERSOLD:       'Spółka w trendzie wzrostowym wchodzi w korektę — RSI cofnął się do strefy pullbacku (34-50). Cena pozostaje powyżej SMA50 i blisko SMA20. Otwórz małą pozycję przy pierwszych oznakach odbicia, zamknij gdy RSI przekroczy 55 lub cel zostanie osiągnięty.',
+  PULLBACK_TO_SMA50:  'Cena w trendzie wzrostowym cofnęła się do okolic 50-dniowej średniej (±3-5%). RSI zresetował się do strefy równowagi — klasyczny sygnał swing-trade "kup pullback". Trzymaj pozycję przez kilka tygodni, zamknij gdy trend osłabnie lub spółka osiągnie cel.',
+  SMA50_CROSSOVER:    'Cena przebiła 50-dniową średnią ruchomą od dołu — zmiana trendu na wzrostowy. Sygnał swing-trade. Trzymaj pozycję przez kilka tygodni, zamknij gdy trend osłabnie lub spółka osiągnie cel.',
+  BREAKOUT:           'Cena wybiła powyżej lokalnego maksimum z ostatnich 20 dni przy zwiększonym wolumenie. Spekulacyjny sygnał — może generować duże zyski lub szybko się odwrócić. Stosuj ścisły stop loss.',
+  VOL_SURGE:          'Wyjątkowo wysoki wolumen z silnym zamknięciem przy szczycie dnia — sygnał instytucjonalnego katalizatora (earnings beat, FDA, makro). Momentum potwierdzone przez MACD i trend SMA150. Horyzont 1-2 dni, cel +3%, stop -2%. Wejdź rano następnego dnia przy utrzymaniu impulsu.',
 }
 
 export function interpretSignal(signal, values = {}, strategy = 'scalping') {
@@ -35,9 +36,16 @@ export function interpretSignal(signal, values = {}, strategy = 'scalping') {
   }
 
   if (signal === 'RSI_OVERSOLD') {
-    if (values.rsi < 20)      positives.push('✅ RSI ekstremalnie niski (' + values.rsi?.toFixed(1) + ') — silne wyprzedanie')
-    else if (values.rsi < 30) positives.push('✅ RSI mocno wyprzedany (' + values.rsi?.toFixed(1) + ') — dobre warunki do odbicia')
-    if (values.volMult >= 2)  positives.push('✅ Wolumen ' + values.volMult + 'x — potwierdza zainteresowanie kupujących')
+    if (values.rsi <= 38)      positives.push('✅ RSI głęboko w strefie pullbacku (' + values.rsi?.toFixed(1) + ') — silniejsze cofnięcie, lepsze warunki do odbicia')
+    else if (values.rsi <= 44) positives.push('✅ RSI w strefie pullbacku (' + values.rsi?.toFixed(1) + ') — spółka koryguje w trendzie wzrostowym')
+    if (values.volMult >= 1.5) positives.push('✅ Wolumen ' + values.volMult + 'x — potwierdza zainteresowanie kupujących na poziomie wsparcia')
+  }
+
+  if (signal === 'PULLBACK_TO_SMA50') {
+    if (values.sma50Delta != null && Math.abs(values.sma50Delta) <= 1) positives.push('✅ Cena dokładnie przy SMA50 (delta: ' + values.sma50Delta + '%) — klasyczne wsparcie')
+    else if (values.sma50Delta != null)                                positives.push('✅ Cena blisko SMA50 (delta: ' + values.sma50Delta + '%) — strefa pullbacku')
+    if (values.volMult >= 1.3) positives.push('✅ Wolumen ' + values.volMult + 'x — potwierdza zainteresowanie przy wsparciu')
+    if (values.rsi != null && values.rsi <= 45) positives.push('✅ RSI zresetowany do ' + values.rsi?.toFixed(1) + ' — spółka "oddycha" po wzrostach')
   }
 
   if (signal === 'SMA50_CROSSOVER') {
@@ -94,6 +102,13 @@ export function interpretPositionState(pos, currentPrice, cur) {
     if (rsi > 55) return '💡 RSI wyszedł ze strefy wyprzedania — rozważ realizację zysku.'
     if (rsi < 40) return '✅ RSI nadal w strefie wyprzedania — sygnał aktywny.'
     return `📊 RSI ${rsi?.toFixed(1)} — w normalnym zakresie. Trend wzrostowy.`
+  }
+
+  if (signal === 'PULLBACK_TO_SMA50') {
+    if (sma50Delta < -5) return '⚠️ Cena spadła poniżej SMA50 — pullback przeszedł w korektę. Rozważ stop loss.'
+    if (sma50Delta > 20) return `⚠️ Cena odleciała od SMA50 (+${sma50Delta}%) — zrealizuj część zysku lub zaciągnij trailing stop.`
+    if (sma50Delta > 0)  return `✅ Cena odbija od SMA50 (+${sma50Delta}%) — sygnał pullbacku aktywny. RSI: ${rsi?.toFixed(1)}.`
+    return `📊 Cena blisko SMA50 (${sma50Delta}%). RSI: ${rsi?.toFixed(1)} — obserwuj kierunek.`
   }
 
   if (signal === 'SMA50_CROSSOVER') {
