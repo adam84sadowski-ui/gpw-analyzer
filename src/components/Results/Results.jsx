@@ -711,6 +711,18 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 </button>
 
+                {/* Soft exit warning banner */}
+                {pos.status === 'open' && pos.aiEvalHistory?.length >= 2 && pos.aiEvalHistory.slice(-2).every(e => e.holdTotal < 25) && (
+                  <div className="bg-gpw-red/15 border border-gpw-red/50 rounded-lg px-3 py-2 text-xs space-y-0.5">
+                    <p className="text-gpw-red font-bold">⚠️ SOFT EXIT — słabnąca teza</p>
+                    <p className="text-gray-300">
+                      Dwa kolejne przeglądy AI wykazały Hold Strength poniżej 25/100
+                      {' '}({pos.aiEvalHistory.slice(-2).map(e => e.holdTotal).join(' → ')}).
+                      Rozważ zamknięcie pozycji.
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wejście</div>

@@ -12,7 +12,7 @@ function zoneStatus(item) {
   return null
 }
 
-function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
+function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate }) {
   const [confirming,    setConfirming]    = useState(false)
   const [opening,       setOpening]       = useState(false)
   const [indicsOpen,    setIndicsOpen]    = useState(false)
@@ -146,6 +146,19 @@ function WatchCard({ item, onDelete, onPositionOpened, onValidate }) {
         </div>
       )}
 
+      {/* AI Swap suggestion */}
+      {swapCandidate && item.aiDecision !== 'UNIKAJ' && (
+        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-3 py-2 text-xs space-y-0.5">
+          <p className="text-yellow-400 font-semibold">🔄 AI SWAP — sugestia wymiany</p>
+          <p className="text-gray-300 leading-relaxed">
+            Otwarta pozycja <span className="font-bold text-white">{swapCandidate.ticker}</span> słabnie
+            (Hold Strength: <span className="text-gpw-red font-bold">{swapCandidate.holdTotal}/100</span>
+            {swapCandidate.aiAction && <span className="text-gray-500"> · {swapCandidate.aiAction}</span>}).
+            Rozważ zamianę na tę spółkę.
+          </p>
+        </div>
+      )}
+
       {/* Entry zone */}
       {(item.entryZoneMin != null || item.entryZoneMax != null) && (
         <div className="bg-gpw-dark rounded-lg p-2 text-xs text-gray-300">
@@ -261,6 +274,7 @@ export default function Watchlist() {
   const [batchRunning,  setBatchRunning]  = useState(false)
   const [batchProgress, setBatchProgress] = useState(null)
   const batchStoppedRef = useRef(false)
+  const [openPositions, setOpenPositions] = useState([])
 
   async function load() {
     setLoading(true)
@@ -366,7 +380,13 @@ export default function Watchlist() {
     setBatchProgress(null)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    fetch('/api/positions?status=open')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setOpenPositions(d) })
+      .catch(() => {})
+  }, [])
 
   const active = items
 
@@ -418,15 +438,28 @@ export default function Watchlist() {
               </div>
             )}
 
-            {active.map(w => (
-              <WatchCard
-                key={w.id}
-                item={w}
-                onDelete={remove}
-                onPositionOpened={id => setItems(prev => prev.filter(x => x.id !== id))}
-                onValidate={handleValidate}
-              />
-            ))}
+            {active.map(w => {
+              const swapCand = openPositions.find(p =>
+                (p.exchange ?? 'GPW') === (w.exchange ?? 'GPW') &&
+                p.aiEvalHistory?.length > 0 &&
+                p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
+              )
+              const swapCandidate = swapCand ? {
+                ticker:   swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
+                holdTotal: swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].holdTotal,
+                aiAction:  swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].aiAction ?? null,
+              } : null
+              return (
+                <WatchCard
+                  key={w.id}
+                  item={w}
+                  swapCandidate={swapCandidate}
+                  onDelete={remove}
+                  onPositionOpened={id => setItems(prev => prev.filter(x => x.id !== id))}
+                  onValidate={handleValidate}
+                />
+              )
+            })}
           </div>
         )}
 
