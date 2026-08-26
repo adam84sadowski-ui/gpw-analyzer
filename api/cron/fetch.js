@@ -312,7 +312,21 @@ export default async function handler(req, res) {
       interpretation: interp,
     })
 
-    await sendTelegram(msg, IS_STAGING)
+    // AI Swap suggestion — strong new signal (≥70) while a weak open position exists on same exchange
+    let swapLine = ''
+    if (adjustedScore >= 70) {
+      const swapCandidate = openPositions.find(p =>
+        (p.exchange ?? 'GPW') === exchange &&
+        p.aiEvalHistory?.length > 0 &&
+        p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
+      )
+      if (swapCandidate) {
+        const swapTicker = swapCandidate.tickerDisplay ?? swapCandidate.ticker.replace('.pl', '').toUpperCase()
+        const swapHS = swapCandidate.aiEvalHistory[swapCandidate.aiEvalHistory.length - 1].holdTotal
+        swapLine = `\n\n🔄 <b>AI SWAP:</b> Rozważ zamknięcie <b>${swapTicker}</b> (Hold Strength: ${swapHS}/100) i otwarcie tej pozycji.`
+      }
+    }
+    await sendTelegram(msg + swapLine, IS_STAGING)
 
     await kv.set(alertId, {
       id: alertId, ticker: signal.ticker, strategy, exchange,

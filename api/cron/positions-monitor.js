@@ -296,6 +296,21 @@ export default async function handler(req, res) {
         } catch {}
       }
 
+      // 8. SOFT EXIT — last 2 AI evals both holdTotal < 25
+      const evalHistory = pos.aiEvalHistory ?? []
+      if (evalHistory.length >= 2) {
+        const last2 = evalHistory.slice(-2)
+        if (last2.every(e => e.holdTotal < 25)) {
+          if (!(await dedup('soft-exit', 48))) {
+            await sendTelegram(
+              `🔴 <b>SOFT EXIT — ${ticker}</b>\n\nDwa kolejne przeglądy AI wykazały Hold Strength &lt; 25/100.\nP&amp;L: ${(pnlPct * 100).toFixed(1)}% | Cena: ${price} ${currency}\n\nOstatnie oceny: ${last2.map(e => `${e.date}: ${e.holdTotal}/100`).join(' → ')}\n\n💡 Silna diagnoza słabnącej tezy — rozważ zamknięcie pozycji.\n\n📱 <a href="https://gpw-analyzer.vercel.app">Otwórz Moje wyniki</a>`,
+              IS_STAGING
+            )
+            alertsSent++
+          }
+        }
+      }
+
     } catch (e) {
       console.error(`positions-monitor: error for ${pos.ticker}:`, e.message)
     }
