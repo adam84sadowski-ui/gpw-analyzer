@@ -38,8 +38,9 @@ describe('SIGNAL_DEFAULTS', () => {
     expect(SIGNAL_DEFAULTS.GPW.aggressive.volumeMultiplierMin).toBe(2.5)
   })
 
-  it('GPW scalping rsiThreshold is 30 (Learning Agent update)', () => {
-    expect(SIGNAL_DEFAULTS.GPW.scalping.rsiThreshold).toBe(30)
+  it('GPW scalping uses pullback-in-trend RSI window [34, 46]', () => {
+    expect(SIGNAL_DEFAULTS.GPW.scalping.rsiThresholdMin).toBe(34)
+    expect(SIGNAL_DEFAULTS.GPW.scalping.rsiThreshold).toBe(46)
   })
 })
 
