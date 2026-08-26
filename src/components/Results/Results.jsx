@@ -66,9 +66,61 @@ function buildPositionShareText(pos, r, cur) {
   return lines.join('\n')
 }
 
+const HOLD_HORIZON = { scalping: 5, swing: 40, aggressive: 30 }
+
+function computeHoldStrength(pos, cp, cur, aiEval) {
+  const ep       = pos.avgEntryPrice ?? pos.entryPrice
+  const pnlPct   = cp ? ((cp - ep) / ep * 100) : null
+  const today    = new Date(new Date().toISOString().slice(0, 10))
+  const daysHeld = Math.max(0, Math.round((today - new Date(pos.entryDate.slice(0, 10))) / 86400000))
+  const horizon  = HOLD_HORIZON[pos.strategy] ?? 30
+
+  // 1. Efficiency (30%) — pnl pace vs horizon pace
+  let efficiency = 50
+  if (pnlPct != null && pos.target && daysHeld > 0) {
+    const effRatio = (pnlPct / pos.target) / (daysHeld / horizon)
+    efficiency = Math.min(100, Math.max(0, Math.round(effRatio * 50)))
+  }
+
+  // 2. Momentum (25%) — RSI direction vs entry
+  let momentum = 50
+  const rsiNow   = cur?.rsi
+  const rsiEntry = pos.entryRsi
+  if (rsiNow != null && rsiEntry != null) {
+    const d = rsiNow - rsiEntry
+    momentum = d > 10 ? 90 : d > 4 ? 75 : d > 0 ? 60 : d < -10 ? 15 : d < -4 ? 30 : 45
+  }
+
+  // 3. Thesis integrity (25%) — signal-type specific check
+  let thesis = 50
+  const sma50 = cur?.sma50Delta
+  if (pos.signal === 'PULLBACK_TO_SMA50' && sma50 != null) {
+    thesis = sma50 >= -3 && sma50 <= 8 ? 85 : sma50 > 8 ? 70 : 30
+  } else if (pos.signal === 'RSI_OVERSOLD' && rsiNow != null) {
+    thesis = rsiNow >= 40 && rsiNow <= 65 ? 80 : rsiNow > 65 ? 60 : 30
+  } else if (pos.signal === 'BREAKOUT' && rsiNow != null) {
+    thesis = rsiNow >= 55 ? 85 : rsiNow >= 45 ? 60 : 30
+  }
+
+  // 4. Entry quality (10%)
+  const entryQuality = pos.entryScore ?? 50
+
+  // 5. AI history (10%)
+  let aiHistory = 50
+  if (aiEval?.result) {
+    const { action, confidence } = aiEval.result
+    if (action === 'TRZYMAJ') aiHistory = confidence ?? 70
+    else if (action === 'ZAMKNIJ') aiHistory = 100 - (confidence ?? 70)
+  }
+
+  const total = Math.round(efficiency * 0.30 + momentum * 0.25 + thesis * 0.25 + entryQuality * 0.10 + aiHistory * 0.10)
+  return { total, dimensions: { efficiency, momentum, thesis, entryQuality, aiHistory } }
+}
+
 function CloseModal({ position, onClose, onConfirm, currency }) {
-  const [exitPrice, setExitPrice] = useState(String(position.entryPrice))
+  const [exitPrice,   setExitPrice]   = useState(String(position.entryPrice))
   const [priceLoading, setPriceLoading] = useState(true)
+  const [closePct,    setClosePct]    = useState(100)
 
   useEffect(() => {
     const exchange = position.exchange ?? 'GPW'
@@ -79,14 +131,39 @@ function CloseModal({ position, onClose, onConfirm, currency }) {
       .finally(() => setPriceLoading(false))
   }, [])
 
-  const pnlPct = ((Number(exitPrice) - position.entryPrice) / position.entryPrice * 100).toFixed(2)
-  const pnlAmt = ((Number(exitPrice) - position.entryPrice) * position.shares).toFixed(2)
+  const ep          = position.avgEntryPrice ?? position.entryPrice
+  const sharesToClose = Math.round(position.shares * closePct / 100)
+  const pnlPct      = ((Number(exitPrice) - ep) / ep * 100).toFixed(2)
+  const pnlAmt      = ((Number(exitPrice) - ep) * sharesToClose).toFixed(2)
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gpw-card border border-gpw-border rounded-xl p-6 w-full max-w-sm space-y-4">
         <h3 className="font-semibold text-lg">Zamknij pozycję — {position.tickerDisplay}</h3>
-        <div className="text-sm text-gray-400">Cena wejścia: <span className="text-white">{position.entryPrice} {currency}</span></div>
+        <div className="text-sm text-gray-400">Łącznie akcji: <span className="text-white">{position.shares}</span> · Wejście: <span className="text-white">{ep} {currency}</span></div>
+
+        <div className="space-y-1.5">
+          <span className="text-sm text-gray-400">Zamknij:</span>
+          <div className="flex gap-2">
+            {[25, 50, 75, 100].map(v => (
+              <button
+                key={v}
+                onClick={() => setClosePct(v)}
+                className={`flex-1 py-1.5 rounded text-sm font-semibold border transition-colors ${
+                  closePct === v
+                    ? 'bg-gpw-blue border-gpw-blue text-white'
+                    : 'bg-gpw-dark border-gpw-border text-gray-400 hover:border-gray-500'
+                }`}
+              >
+                {v}%
+              </button>
+            ))}
+          </div>
+          {closePct < 100 && (
+            <p className="text-xs text-gray-500">{sharesToClose} z {position.shares} akcji</p>
+          )}
+        </div>
+
         <label className="block">
           <span className="text-sm text-gray-400">Cena wyjścia ({currency})</span>
           <input
@@ -105,10 +182,10 @@ function CloseModal({ position, onClose, onConfirm, currency }) {
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 bg-gpw-dark border border-gpw-border py-2 rounded-lg text-sm">Anuluj</button>
           <button
-            onClick={() => onConfirm(Number(exitPrice))}
+            onClick={() => onConfirm(Number(exitPrice), closePct)}
             className="flex-1 bg-gpw-green hover:bg-green-600 text-white py-2 rounded-lg text-sm font-semibold"
           >
-            Potwierdź zamknięcie
+            Potwierdź {closePct < 100 ? `${closePct}%` : 'zamknięcie'}
           </button>
         </div>
       </div>
@@ -208,15 +285,25 @@ export default function Results() {
     }
   }
 
-  async function closePosition(exitPrice) {
+  async function closePosition(exitPrice, closePct = 100) {
     const id = closing.id
-    await fetch('/api/positions', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, exitPrice }),
-    })
-    localStorage.removeItem(`chat_pos_${id}`)
-    setChatState(s => { const n = { ...s }; delete n[id]; return n })
+    if (closePct < 100) {
+      const res     = await fetch('/api/positions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id, action: 'partialClose', closePct, exitPrice }),
+      })
+      const updated = await res.json()
+      setPositions(prev => prev.map(p => p.id === id ? updated : p))
+    } else {
+      await fetch('/api/positions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id, exitPrice }),
+      })
+      localStorage.removeItem(`chat_pos_${id}`)
+      setChatState(s => { const n = { ...s }; delete n[id]; return n })
+    }
     setClosing(null)
     load()
   }
@@ -646,6 +733,19 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 )}
 
+                {pos.partialCloses?.length > 0 && (
+                  <div className="text-xs text-gray-500 space-y-0.5">
+                    {pos.partialCloses.map((pc, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <span className="bg-yellow-900/20 text-yellow-400 px-1.5 py-0.5 rounded text-[10px]">📤 {pc.closePct}% zamknięte</span>
+                        <span>{pc.closedShares} akcji @ {pc.exitPrice} {cur}</span>
+                        <span className={pc.pnlPct >= 0 ? 'text-gpw-green' : 'text-gpw-red'}>{pc.pnlPct >= 0 ? '+' : ''}{pc.pnlPct}%</span>
+                        <span className="text-gray-600">({pc.date})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {pos.entryRsi != null && (
                   <div className="text-xs text-gray-500">
                     RSI przy wejściu: <span className={`font-semibold ${pos.entryRsi < 30 ? 'text-gpw-green' : pos.entryRsi > 70 ? 'text-gpw-red' : 'text-gray-300'}`}>{pos.entryRsi.toFixed(1)}</span>
@@ -712,6 +812,43 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                       </div>
                       <div className="w-full bg-gpw-dark rounded-full h-1.5">
                         <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* ── Hold Strength ── */}
+                {pos.status === 'open' && (() => {
+                  const cp  = prices[pos.ticker]
+                  const cur = indics[pos.id]
+                  const ev  = aiEvals[pos.id]
+                  if (!cp && !cur) return null
+                  const hs       = computeHoldStrength(pos, cp, cur, ev)
+                  const barCls   = hs.total >= 70 ? 'bg-gpw-green' : hs.total >= 40 ? 'bg-yellow-500' : 'bg-gpw-red'
+                  const textCls  = hs.total >= 70 ? 'text-gpw-green' : hs.total >= 40 ? 'text-yellow-400' : 'text-gpw-red'
+                  const dimCls   = v => v >= 70 ? 'text-gpw-green' : v >= 40 ? 'text-yellow-400' : 'text-gpw-red'
+                  return (
+                    <div className="border-t border-gpw-border pt-2 space-y-1.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-400">🏋️ Hold Strength</span>
+                        <span className={`font-bold text-sm ${textCls}`}>{hs.total}/100</span>
+                      </div>
+                      <div className="w-full bg-gpw-dark rounded-full h-1.5">
+                        <div className={`h-1.5 rounded-full transition-all ${barCls}`} style={{ width: `${hs.total}%` }} />
+                      </div>
+                      <div className="grid grid-cols-5 gap-1 text-[9px] text-center text-gray-500">
+                        {[
+                          ['Efektyw.', hs.dimensions.efficiency],
+                          ['Momentum', hs.dimensions.momentum],
+                          ['Teza', hs.dimensions.thesis],
+                          ['Wejście', hs.dimensions.entryQuality],
+                          ['AI', hs.dimensions.aiHistory],
+                        ].map(([label, val]) => (
+                          <div key={label}>
+                            <div className={`font-semibold ${dimCls(val)}`}>{val}</div>
+                            <div>{label}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )
