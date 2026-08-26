@@ -376,6 +376,14 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         }).catch(() => {})
         setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, suggestedAddSizePct: data.suggestedAddSizePct }))
       }
+      if (data.nextReviewDate != null) {
+        fetch('/api/positions', {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ id: pos.id, nextReviewDate: data.nextReviewDate }),
+        }).catch(() => {})
+        setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, nextReviewDate: data.nextReviewDate }))
+      }
       // Reset param action state so confirm/reject UI shows fresh for new eval
       setParamAction(s => ({ ...s, [pos.id]: { target: null, stop: null } }))
     } catch {
@@ -475,6 +483,76 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         </div>
       ) : (
         <div className="space-y-3">
+          {tab === 'open' && openPositions.length > 0 && (() => {
+            const today = new Date(new Date().toISOString().slice(0, 10))
+            const withReview = openPositions
+              .map(pos => {
+                if (!pos.nextReviewDate) return null
+                const diffDays = Math.round((new Date(pos.nextReviewDate) - today) / 86400000)
+                if (diffDays > 7) return null
+                return { pos, diffDays }
+              })
+              .filter(Boolean)
+              .sort((a, b) => a.diffDays - b.diffDays)
+
+            return (
+              <div className="bg-gpw-card border border-gpw-border rounded-lg p-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">📋 Kolejka przeglądów</p>
+                {withReview.length === 0 ? (
+                  <p className="text-xs text-gray-500">✅ Brak zaplanowanych przeglądów w ciągu 7 dni</p>
+                ) : withReview.map(({ pos, diffDays }) => {
+                  const cp          = prices[pos.ticker]
+                  const effectiveEP = pos.avgEntryPrice ?? pos.entryPrice
+                  const positionPnl = cp ? ((cp - effectiveEP) / effectiveEP * 100) : null
+                  const ev          = aiEvals[pos.id]
+                  let badge, badgeCls, needsReview
+                  if (diffDays < 0) {
+                    badge = `PRZETERMINOWANA (${Math.abs(diffDays)}d)`
+                    badgeCls = 'text-red-400 bg-red-900/20 border border-red-800'
+                    needsReview = true
+                  } else if (diffDays === 0) {
+                    badge = 'DZIŚ'
+                    badgeCls = 'text-orange-400 bg-orange-900/20 border border-orange-800'
+                    needsReview = true
+                  } else if (diffDays === 1) {
+                    badge = 'JUTRO'
+                    badgeCls = 'text-yellow-400 bg-yellow-900/10'
+                    needsReview = false
+                  } else {
+                    badge = `za ${diffDays} dni`
+                    badgeCls = 'text-gray-500 bg-gpw-dark'
+                    needsReview = false
+                  }
+                  return (
+                    <div key={pos.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-gpw-border/50 last:border-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-semibold text-sm">{pos.tickerDisplay ?? pos.ticker}</span>
+                        <span className="text-[10px] text-gray-500 shrink-0">{pos.strategy}</span>
+                        {positionPnl != null && (
+                          <span className={`text-xs font-bold shrink-0 ${positionPnl >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+                            {positionPnl >= 0 ? '+' : ''}{positionPnl.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badgeCls}`}>{badge}</span>
+                        {needsReview && (
+                          <button
+                            onClick={() => evaluateWithAI(pos)}
+                            disabled={ev?.loading}
+                            className="text-[10px] bg-gpw-blue hover:bg-blue-600 disabled:opacity-50 text-white px-2 py-0.5 rounded transition-colors whitespace-nowrap"
+                          >
+                            {ev?.loading ? '…' : '🤖 Waliduj AI'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
           {positions.map(pos => {
             const cur          = posCurrency(pos)
             const cp           = prices[pos.ticker]
