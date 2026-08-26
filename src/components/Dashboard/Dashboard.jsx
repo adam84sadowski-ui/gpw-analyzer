@@ -213,7 +213,7 @@ export default function Dashboard() {
                   {parseFloat(change) >= 0 ? '+' : ''}{change}%
                 </div>
               )}
-              <div className="mt-1.5 pt-1.5 border-t border-gpw-border grid grid-cols-3 gap-0.5 text-[9px] text-center">
+              <div className="mt-1.5 pt-1.5 border-t border-gpw-border grid grid-cols-3 gap-0.5 text-xs text-center">
                 {[['1M', perf?.change1M], ['3M', perf?.change3M], ['YTD', perf?.changeYtd]].map(([label, val]) => (
                   <div key={label}>
                     <div className="text-gray-500">{label}</div>
