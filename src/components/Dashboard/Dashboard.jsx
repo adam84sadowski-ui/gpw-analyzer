@@ -31,6 +31,7 @@ export default function Dashboard() {
   const config = EXCHANGE_CONFIG[exchange]
 
   const [indexData,       setIndexData]       = useState({})
+  const [indexPerfData,   setIndexPerfData]   = useState({})
   const [tickerCandles,   setTickerCandles]   = useState({})
   const [selectedTickers, setSelectedTickers] = useState([])
   const [loading,         setLoading]         = useState(true)
@@ -81,7 +82,7 @@ export default function Dashboard() {
     }).finally(() => setLoading(false))
   }, [selectedTickers, exchange])
 
-  // Load index cards
+  // Load index cards (current price)
   useEffect(() => {
     setIndexData({})
     Promise.all(config.indices.map(i =>
@@ -90,6 +91,49 @@ export default function Dashboard() {
       const m = {}
       results.forEach(({ ticker, data }) => { m[ticker] = data })
       setIndexData(m)
+    })
+  }, [exchange])
+
+  // Load index historical % changes (1M / 3M / YTD), cached in localStorage per exchange+day
+  useEffect(() => {
+    setIndexPerfData({})
+    const today    = new Date().toISOString().slice(0, 10)
+    const cacheKey = `gpw_idx_perf_${exchange}_${today}`
+    try {
+      const cached = localStorage.getItem(cacheKey)
+      if (cached) { setIndexPerfData(JSON.parse(cached)); return }
+    } catch {}
+
+    Promise.all(config.indices.map(async idx => {
+      try {
+        const candles = await fetchDaily(idx, exchange)
+        if (!candles?.length) return { idx, data: null }
+        const last     = candles[candles.length - 1].close
+        const yearStr  = `${new Date().getFullYear()}-01-01`
+        const findBefore = (daysAgo) => {
+          const cutoff = new Date()
+          cutoff.setDate(cutoff.getDate() - daysAgo)
+          const cutoffStr = cutoff.toISOString().slice(0, 10)
+          let nearest = null
+          for (const c of candles) {
+            if (c.date <= cutoffStr) nearest = c
+            else break
+          }
+          return nearest?.close ?? null
+        }
+        const p1m  = findBefore(30)
+        const p3m  = findBefore(90)
+        const pYtd = candles.find(c => c.date >= yearStr)?.close ?? null
+        const calc = base => base ? +((last - base) / base * 100).toFixed(2) : null
+        return { idx, data: { change1M: calc(p1m), change3M: calc(p3m), changeYtd: calc(pYtd) } }
+      } catch {
+        return { idx, data: null }
+      }
+    })).then(results => {
+      const m = {}
+      results.forEach(({ idx, data }) => { m[idx] = data })
+      setIndexPerfData(m)
+      try { localStorage.setItem(cacheKey, JSON.stringify(m)) } catch {}
     })
   }, [exchange])
 
@@ -154,18 +198,29 @@ export default function Dashboard() {
       <div className="grid grid-cols-3 gap-3">
         {config.indices.map(idx => {
           const d      = indexData[idx]
+          const perf   = indexPerfData[idx]
           const close  = d ? (d.close ?? parseFloat(d.Close)) : null
           const open   = d ? (d.open  ?? parseFloat(d.Open))  : null
           const change = close && open && !isNaN(open) ? ((close - open) / open * 100).toFixed(2) : null
+          const fmtPct = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${v}%`
+          const pctCls = v => v == null ? 'text-gray-500' : v >= 0 ? 'text-gpw-green' : 'text-gpw-red'
           return (
-            <div key={idx} className="bg-gpw-card border border-gpw-border rounded-lg p-4">
+            <div key={idx} className="bg-gpw-card border border-gpw-border rounded-lg p-3">
               <div className="text-xs text-gray-400">{config.indexLabels[idx]}</div>
-              <div className="text-xl font-bold">{close?.toLocaleString() ?? '—'}</div>
+              <div className="text-lg font-bold leading-tight">{close?.toLocaleString() ?? '—'}</div>
               {change !== null && (
                 <div className={`text-sm ${parseFloat(change) >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
                   {parseFloat(change) >= 0 ? '+' : ''}{change}%
                 </div>
               )}
+              <div className="mt-1.5 pt-1.5 border-t border-gpw-border grid grid-cols-3 gap-0.5 text-xs text-center">
+                {[['1M', perf?.change1M], ['3M', perf?.change3M], ['YTD', perf?.changeYtd]].map(([label, val]) => (
+                  <div key={label}>
+                    <div className="text-gray-500">{label}</div>
+                    <div className={`font-semibold ${pctCls(val)}`}>{fmtPct(val)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )
         })}

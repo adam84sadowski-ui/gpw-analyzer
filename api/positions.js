@@ -166,7 +166,8 @@ export default async function handler(req, res) {
   }
 
   if (method === 'PATCH') {
-    const { id, exitPrice, target, stopLoss, suggestedAddSizePct, aiTargetRejected, aiStopRejected } = req.body
+    const { id, exitPrice, target, stopLoss, suggestedAddSizePct, nextReviewDate,
+            aiTargetRejected, aiStopRejected } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
@@ -180,18 +181,19 @@ export default async function handler(req, res) {
       return res.json(updated)
     }
 
-    // AI-revised target, stop loss, or add-size suggestion for open position
-    if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null)) {
+    // AI-revised target, stop loss, add-size suggestion, or next review date
+    if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null || nextReviewDate != null)) {
       const updated = { ...position }
-      if (target             != null) updated.target             = target
-      if (stopLoss           != null) updated.stopLoss           = stopLoss
+      if (target              != null) updated.target              = target
+      if (stopLoss            != null) updated.stopLoss            = stopLoss
       if (suggestedAddSizePct != null) updated.suggestedAddSizePct = suggestedAddSizePct
+      if (nextReviewDate      != null) updated.nextReviewDate      = nextReviewDate
       await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
       return res.json(updated)
     }
 
     // Confirm position increase — recalculates avgEntryPrice, shares, positionSize
-    const { action: patchAction, addedPct, priceAtAdd } = req.body
+    const { action: patchAction, addedPct, priceAtAdd, closePct } = req.body
     if (!exitPrice && patchAction === 'addToPosition' && addedPct != null && priceAtAdd != null) {
       const addedValue  = Math.round(position.positionSize * addedPct / 100)
       const addedShares = Math.floor(addedValue / priceAtAdd)
@@ -213,6 +215,52 @@ export default async function handler(req, res) {
         }],
       }
       await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json(updated)
+    }
+
+    // Partial close — creates a closed sub-record, reduces original position proportionally
+    if (patchAction === 'partialClose' && closePct != null && exitPrice != null) {
+      const ep           = position.avgEntryPrice ?? position.entryPrice
+      const closedShares = Math.round(position.shares * closePct / 100)
+      const remainShares = position.shares - closedShares
+      if (closedShares < 1) return res.status(400).json({ error: 'Za mało akcji do zamknięcia' })
+      const pnlPct = Math.round(((exitPrice - ep) / ep) * 10000) / 100
+      const pnlPln = Math.round((exitPrice - ep) * closedShares * 100) / 100
+      const now    = new Date().toISOString()
+
+      if (remainShares === 0) {
+        const updated = { ...position, exitPrice, exitDate: now, status: 'closed', pnlPct, pnlPln }
+        await kv.set(id, updated)
+        return res.json(updated)
+      }
+
+      const partialId = `${ENV_PREFIX}:position:${position.ticker}:${Date.now()}`
+      const partialPosition = {
+        ...position,
+        id:              partialId,
+        shares:          closedShares,
+        positionSize:    Math.round(closedShares * ep * 100) / 100,
+        exitPrice,
+        exitDate:        now,
+        status:          'closed',
+        pnlPct,
+        pnlPln,
+        isPartialClose:  true,
+        parentId:        id,
+        closedPct:       closePct,
+      }
+      const updated = {
+        ...position,
+        shares:        remainShares,
+        positionSize:  Math.round(remainShares * ep * 100) / 100,
+        partialCloses: [...(position.partialCloses ?? []), {
+          date: now.slice(0, 10), closePct, closedShares, exitPrice, pnlPct, pnlPln,
+        }],
+      }
+      await Promise.all([
+        kv.set(id,        updated,         { ex: 365 * 24 * 60 * 60 }),
+        kv.set(partialId, partialPosition, { ex: 365 * 24 * 60 * 60 }),
+      ])
       return res.json(updated)
     }
 
