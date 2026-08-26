@@ -430,7 +430,7 @@ Punkty w "analysis" (12 kryteriów Buffett/Lynch):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null, aiTargetRejected = null, aiStopRejected = null }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null, aiTargetRejected = null, aiStopRejected = null, holdStrength = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -472,6 +472,17 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     aiStopRejected   ? `\n- ⛔ Użytkownik odrzucił sugestię zmiany stop loss do -${aiStopRejected.value}% (${aiStopRejected.date}) — nie proponuj tej samej wartości ponownie` : '',
   ].join('')
 
+  const holdStrengthBlock = holdStrength
+    ? `\nHOLD STRENGTH (wstępna diagnoza klienta — traktuj jako punkt wyjścia, nie wyrok):
+Ogólny wynik: ${holdStrength.total}/100
+- Efektywność (tempo do celu): ${holdStrength.dimensions.efficiency}/100
+- Momentum RSI: ${holdStrength.dimensions.momentum}/100
+- Integralność tezy (sygnał): ${holdStrength.dimensions.thesis}/100
+- Jakość wejścia: ${holdStrength.dimensions.entryQuality}/100
+- Historia AI: ${holdStrength.dimensions.aiHistory}/100
+Interpretacja: ${holdStrength.total >= 70 ? 'MOCNA pozycja — teza działa' : holdStrength.total >= 40 ? 'SŁABNĄCA pozycja — wymagana uwaga' : 'SŁABA pozycja — rozważ wyjście'}`
+    : ''
+
   const posBlock = `DANE POZYCJI:
 - Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
 - Cena wejścia: ${entryPrice}${avgEntryLine} | Cena bieżąca: ${currentPrice} | P&L vs śr. cena: ${effectiveEntry > 0 ? `${((currentPrice - effectiveEntry) / effectiveEntry * 100).toFixed(1)}%` : `${pnlNum > 0 ? '+' : ''}${pnlNum}%`}
@@ -479,7 +490,7 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
 
 WSKAŹNIKI BIEŻĄCE:
 - RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%
-
+${holdStrengthBlock}
 FUNDAMENTY:
 ${fundBlock}
 

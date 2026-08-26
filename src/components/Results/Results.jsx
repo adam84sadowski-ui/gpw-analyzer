@@ -435,9 +435,13 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
     }
     try {
       const entryDay = new Date(pos.entryDate.slice(0, 10))
-      const today    = new Date(new Date().toISOString().slice(0, 10))
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const today    = new Date(todayStr)
       const daysHeld = Math.round((today - entryDay) / 86400000)
       const pnlPct   = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : 0
+      // Compute hold strength to enrich AI prompt
+      const ev = aiEvals[pos.id]
+      const hs = computeHoldStrength(pos, cp, cur, ev)
       const params   = new URLSearchParams({
         mode:          'ai-evaluate',
         ticker:        pos.ticker,
@@ -450,6 +454,12 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         rsi:           cur?.rsi        ?? 50,
         volMult:       cur?.volMult    ?? 1,
         sma50Delta:    cur?.sma50Delta ?? 0,
+        hsTotal:       hs.total,
+        hsEff:         hs.dimensions.efficiency,
+        hsMom:         hs.dimensions.momentum,
+        hsTh:          hs.dimensions.thesis,
+        hsEQ:          hs.dimensions.entryQuality,
+        hsAI:          hs.dimensions.aiHistory,
       })
       const res  = await fetch(`/api/market?${params}`)
       const data = await res.json()
@@ -463,14 +473,36 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         }).catch(() => {})
         setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, suggestedAddSizePct: data.suggestedAddSizePct }))
       }
-      if (data.nextReviewDate != null) {
-        fetch('/api/positions', {
-          method:  'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ id: pos.id, nextReviewDate: data.nextReviewDate }),
-        }).catch(() => {})
-        setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, nextReviewDate: data.nextReviewDate }))
+      // Dynamic nextReviewDate = min(claude_date, hs_date)
+      const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
+      const hsDays = hs.total >= 75 ? 7 : hs.total >= 50 ? 3 : 1
+      const hsDate = addDays(todayStr, hsDays)
+      const finalReviewDate = data.nextReviewDate
+        ? (data.nextReviewDate < hsDate ? data.nextReviewDate : hsDate)
+        : hsDate
+      fetch('/api/positions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: pos.id, nextReviewDate: finalReviewDate }),
+      }).catch(() => {})
+      setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, nextReviewDate: finalReviewDate }))
+      // Save AI eval history entry for trajectory tracking
+      const historyEntry = {
+        date:           todayStr,
+        holdTotal:      hs.total,
+        holdDimensions: hs.dimensions,
+        aiAction:       data.action,
+        aiConfidence:   data.confidence,
       }
+      fetch('/api/positions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: pos.id, action: 'saveEvalHistory', historyEntry }),
+      }).then(r => r.json()).then(updated => {
+        if (updated.aiEvalHistory) {
+          setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, aiEvalHistory: updated.aiEvalHistory }))
+        }
+      }).catch(() => {})
       // Reset param action state so confirm/reject UI shows fresh for new eval
       setParamAction(s => ({ ...s, [pos.id]: { target: null, stop: null } }))
     } catch {
@@ -679,6 +711,18 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 </button>
 
+                {/* Soft exit warning banner */}
+                {pos.status === 'open' && pos.aiEvalHistory?.length >= 2 && pos.aiEvalHistory.slice(-2).every(e => e.holdTotal < 25) && (
+                  <div className="bg-gpw-red/15 border border-gpw-red/50 rounded-lg px-3 py-2 text-xs space-y-0.5">
+                    <p className="text-gpw-red font-bold">⚠️ SOFT EXIT — słabnąca teza</p>
+                    <p className="text-gray-300">
+                      Dwa kolejne przeglądy AI wykazały Hold Strength poniżej 25/100
+                      {' '}({pos.aiEvalHistory.slice(-2).map(e => e.holdTotal).join(' → ')}).
+                      Rozważ zamknięcie pozycji.
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wejście</div>
@@ -850,6 +894,19 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                           </div>
                         ))}
                       </div>
+                      {pos.aiEvalHistory?.length > 1 && (
+                        <div className="text-[9px] text-gray-500 flex items-center gap-1 flex-wrap pt-0.5">
+                          <span className="text-gray-600">Trajektoria:</span>
+                          {pos.aiEvalHistory.slice(-5).map((e, i, arr) => (
+                            <span key={i} className={e.holdTotal >= 70 ? 'text-gpw-green' : e.holdTotal >= 40 ? 'text-yellow-400' : 'text-gpw-red'}>
+                              {e.holdTotal}{i < arr.length - 1 ? ' →' : ''}
+                            </span>
+                          ))}
+                          {pos.aiEvalHistory.slice(-2).every(e => e.holdTotal < 25) && (
+                            <span className="text-gpw-red font-semibold ml-1">⚠️ SOFT EXIT</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })()}

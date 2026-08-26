@@ -161,8 +161,22 @@ export default async function handler(req, res) {
       news,
       fundamentals,
     })
+    // AI Swap — find weak open position on same exchange for swap suggestion
+    const openPos = positions.filter(p => p.status === 'open')
+    const swapCand = openPos.find(p =>
+      (p.exchange ?? 'GPW') === exchange &&
+      p.aiEvalHistory?.length > 0 &&
+      p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
+    )
+    const swapSuggestion = swapCand ? {
+      ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
+      holdTotal: swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].holdTotal,
+      aiAction:  swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].aiAction ?? null,
+    } : null
+
     return res.json({
       ...result,
+      swapSuggestion,
       targetMeanPrice:   fundamentals?.targetMeanPrice   ?? null,
       targetUpside:      fundamentals?.targetUpside      ?? null,
       analystBuy:        fundamentals?.analystBuy        ?? null,
@@ -174,7 +188,7 @@ export default async function handler(req, res) {
 
   if (mode === 'ai-evaluate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
-    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive } = req.query
+    const { posId, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, hsTotal, hsEff, hsMom, hsTh, hsEQ, hsAI } = req.query
     const [pos, news, fundamentals, candleDataEval] = await Promise.all([
       posId ? kv.get(posId).catch(() => null) : Promise.resolve(null),
       fetchNewsHeadlines(ticker, exchange).catch(() => []),
@@ -217,6 +231,16 @@ export default async function handler(req, res) {
       earningsDate:   fundamentals?.earningsDate ?? null,
       news,
       fundamentals,
+      holdStrength: hsTotal != null ? {
+        total: Number(hsTotal),
+        dimensions: {
+          efficiency:   Number(hsEff ?? 50),
+          momentum:     Number(hsMom ?? 50),
+          thesis:       Number(hsTh  ?? 50),
+          entryQuality: Number(hsEQ  ?? 50),
+          aiHistory:    Number(hsAI  ?? 50),
+        },
+      } : null,
     })
     return res.json(result)
   }

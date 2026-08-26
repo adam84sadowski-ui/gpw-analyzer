@@ -118,6 +118,14 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
   const scanStartedRef    = useRef(false)
   const batchRsiStoppedRef = useRef(false)
   const [settings, setSettings]       = useState({ capital: 10000, maxPositionPct: 15 })
+  const [openPositions, setOpenPositions] = useState([])
+
+  useEffect(() => {
+    fetch('/api/positions?status=open')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setOpenPositions(d) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -606,6 +614,15 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               ? Math.round((effectivePrice - rec.price) / rec.price * 1000) / 10
               : 0
             const isStale = Math.abs(priceDriftPct) >= 5
+            const swapCandSig = openPositions.find(p =>
+              (p.exchange ?? 'GPW') === (rec.exchange ?? exchange) &&
+              p.aiEvalHistory?.length > 0 &&
+              p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
+            )
+            const swapSigCandidate = swapCandSig ? {
+              ticker:    swapCandSig.tickerDisplay ?? swapCandSig.ticker.replace('.pl', '').toUpperCase(),
+              holdTotal: swapCandSig.aiEvalHistory[swapCandSig.aiEvalHistory.length - 1].holdTotal,
+            } : null
             return (
               <div key={rec.ticker} className="bg-gpw-dark border border-gpw-border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
@@ -649,6 +666,17 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                 {isStale && (
                   <div className="bg-yellow-900/40 border border-yellow-600 rounded-lg px-3 py-2 text-xs text-yellow-300">
                     ⚠️ Cena odeszła <span className="font-bold">{priceDriftPct > 0 ? '+' : ''}{priceDriftPct}%</span> od sygnału ({rec.price} → {effectivePrice} {currency}) — breakout mógł już się wyczerpać, oceń czy warto wchodzić.
+                  </div>
+                )}
+
+                {swapSigCandidate && (
+                  <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg px-3 py-2 text-xs space-y-0.5">
+                    <p className="text-yellow-400 font-semibold">🔄 AI SWAP — możliwa wymiana pozycji</p>
+                    <p className="text-gray-300">
+                      Otwarta pozycja <span className="font-bold text-white">{swapSigCandidate.ticker}</span> słabnie
+                      (Hold Strength: <span className="text-gpw-red font-bold">{swapSigCandidate.holdTotal}/100</span>).
+                      Rozważ zamianę na ten sygnał.
+                    </p>
                   </div>
                 )}
 

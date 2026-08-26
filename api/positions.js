@@ -193,7 +193,7 @@ export default async function handler(req, res) {
     }
 
     // Confirm position increase — recalculates avgEntryPrice, shares, positionSize
-    const { action: patchAction, addedPct, priceAtAdd, closePct } = req.body
+    const { action: patchAction, addedPct, priceAtAdd, closePct, historyEntry } = req.body
     if (!exitPrice && patchAction === 'addToPosition' && addedPct != null && priceAtAdd != null) {
       const addedValue  = Math.round(position.positionSize * addedPct / 100)
       const addedShares = Math.floor(addedValue / priceAtAdd)
@@ -262,6 +262,16 @@ export default async function handler(req, res) {
         kv.set(partialId, partialPosition, { ex: 365 * 24 * 60 * 60 }),
       ])
       return res.json(updated)
+    }
+
+    // Save AI eval history entry (Sprint C trajectory tracking)
+    if (patchAction === 'saveEvalHistory') {
+      if (!historyEntry) return res.status(400).json({ error: 'historyEntry required' })
+      const history = [...(position.aiEvalHistory ?? []), historyEntry]
+      const softExitAlert = history.length >= 2 && history.slice(-2).every(e => e.holdTotal < 25)
+      const updated = { ...position, aiEvalHistory: history }
+      await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json({ ...updated, softExitAlert })
     }
 
     if (!exitPrice) return res.status(400).json({ error: 'id, exitPrice required' })
