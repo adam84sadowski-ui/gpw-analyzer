@@ -1,121 +1,175 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-sonnet-4-6'
+const MODEL  = 'claude-sonnet-4-6'
 
-export async function runLearningAgent(alertHistory, closedPositions = []) {
-  if ((!alertHistory || alertHistory.length === 0) && closedPositions.length === 0) return null
+export async function runLearningAgent(closedPositions = [], openPositions = []) {
+  if (closedPositions.length === 0) return null
 
-  const positionSummary = closedPositions.map(p => {
-    const pnlPct = p.exitPrice && p.entryPrice
-      ? Math.round((p.exitPrice - p.entryPrice) / p.entryPrice * 10000) / 100
-      : null
-    const hitTarget = pnlPct != null && p.target  && pnlPct >= p.target
-    const hitStop   = pnlPct != null && p.stopLoss && pnlPct <= -p.stopLoss
+  // ── Build closed position details for Claude ──────────────────────────────
+  const details = closedPositions.map(p => {
+    const ep  = p.avgEntryPrice ?? p.entryPrice
+    const pnl = p.pnlPct != null ? p.pnlPct
+      : (p.exitPrice && ep ? Math.round((p.exitPrice - ep) / ep * 10000) / 100 : null)
     return {
-      ticker:    p.ticker,
-      exchange:  p.exchange ?? 'GPW',
-      strategy:  p.strategy,
-      signal:    p.signal,
-      pnlPct,
-      hitTarget,
-      hitStop,
-      timeExit:  !hitTarget && !hitStop,
-      entryRsi:  p.entryRsi   ?? null,
-      entryVol:  p.entryVolMult ?? null,
+      ticker:     p.ticker,
+      exchange:   p.exchange ?? 'GPW',
+      strategy:   p.strategy,
+      signal:     p.signal,
+      pnl:        pnl,
+      hitTarget:  pnl != null && p.target   != null && pnl >=  p.target,
+      hitStop:    pnl != null && p.stopLoss != null && pnl <= -p.stopLoss,
+      daysHeld:   p.exitDate && p.entryDate
+        ? Math.round((new Date(p.exitDate) - new Date(p.entryDate)) / 86400000) : null,
+      entryRsi:   p.entryRsi   ?? null,
+      entryVol:   p.entryVolMult ?? null,
       entryScore: p.entryScore ?? null,
-      daysHeld:  p.exitDate && p.entryDate
-        ? Math.round((new Date(p.exitDate) - new Date(p.entryDate)) / 86400000)
-        : null,
+      target:     p.target    ?? null,
+      stopLoss:   p.stopLoss  ?? null,
     }
   })
 
-  const losers  = positionSummary.filter(p => p.pnlPct != null && p.pnlPct < 0)
-  const winners = positionSummary.filter(p => p.pnlPct != null && p.pnlPct > 0)
-  const avgLoss = losers.length
-    ? Math.round(losers.reduce((s, p) => s + p.pnlPct, 0) / losers.length * 10) / 10
-    : null
-  const avgWin  = winners.length
-    ? Math.round(winners.reduce((s, p) => s + p.pnlPct, 0) / winners.length * 10) / 10
-    : null
+  // ── Per-strategy summary for prompt ──────────────────────────────────────
+  const byStrategy = {}
+  for (const d of details) {
+    const s = d.strategy ?? 'unknown'
+    if (!byStrategy[s]) byStrategy[s] = { wins: [], losses: [] }
+    if (d.pnl == null) continue
+    if (d.pnl >= 0) byStrategy[s].wins.push(d)
+    else             byStrategy[s].losses.push(d)
+  }
 
-  const prompt = `Jesteś Learning Agentem GPW Analyzer. Analizujesz realne wyniki inwestycyjne.
+  const stratSummary = Object.entries(byStrategy).map(([s, data]) => {
+    const wins   = data.wins, losses = data.losses
+    const avgWin  = wins.length   ? (wins.reduce((a, p) => a + p.pnl, 0)   / wins.length).toFixed(1)   : 'N/A'
+    const avgLoss = losses.length ? (losses.reduce((a, p) => a + p.pnl, 0) / losses.length).toFixed(1) : 'N/A'
+    const lossRsis = losses.map(p => p.entryRsi).filter(Boolean)
+    const winRsis  = wins.map(p => p.entryRsi).filter(Boolean)
+    return `${s}: ${wins.length}W/${losses.length}L | śr. zysk ${avgWin}% | śr. strata ${avgLoss}%`
+      + (winRsis.length  ? ` | RSI przy zyskach: ${winRsis.join(', ')}`   : '')
+      + (lossRsis.length ? ` | RSI przy stratach: ${lossRsis.join(', ')}` : '')
+  }).join('\n')
 
-ZAMKNIĘTE POZYCJE (${closedPositions.length} łącznie, ${winners.length} zysk, ${losers.length} strata):
-Średni zysk: ${avgWin ?? 'brak'}% | Średnia strata: ${avgLoss ?? 'brak'}%
-${JSON.stringify(positionSummary, null, 2)}
+  // ── Open positions context ─────────────────────────────────────────────────
+  const now = Date.now()
+  const HORIZON = { scalping: 5, swing: 40, aggressive: 30 }
+  const openCtx = openPositions.map(p => {
+    const daysHeld = p.entryDate ? Math.round((now - new Date(p.entryDate)) / 86400000) : null
+    return `${p.ticker} (${p.strategy}, ${p.exchange}) — ${daysHeld ?? '?'} dni, cel +${p.target}%, stop -${p.stopLoss}%, RSI wejścia: ${p.entryRsi ?? '?'}, max horyzont: ${HORIZON[p.strategy] ?? 30} dni`
+  }).join('\n') || 'Brak otwartych pozycji'
 
-HISTORIA ALERTÓW (${alertHistory.length} sygnałów):
-${JSON.stringify(alertHistory.slice(0, 20).map(a => ({
-  ticker: a.ticker, exchange: a.exchange ?? 'GPW', strategy: a.strategy,
-  signal: a.signal, score: a.score, rsi: a.rsi, indexTrend: a.indexTrend,
-  timestamp: a.timestamp,
-})), null, 2)}
+  const prompt = `Jesteś Learning Agentem systemu analizy technicznej GPW/NYSE.
+Analizujesz realne wyniki zamkniętych pozycji i stan otwartych.
+
+═══ ZAMKNIĘTE POZYCJE — PODSUMOWANIE PER STRATEGIA ═══
+${stratSummary}
+
+═══ ZAMKNIĘTE POZYCJE — SZCZEGÓŁY (${details.length} pozycji) ═══
+${JSON.stringify(details, null, 2)}
+
+═══ OTWARTE POZYCJE (${openPositions.length}) ═══
+${openCtx}
+
+═══ KONTEKST SYSTEMU ═══
+Strategie:
+- scalping: RSI(9) w oknie [34,46] GPW / [35,50] NYSE, price > SMA50, blisko SMA20, vol ≥ 1.1x. Cel +5%, stop -3%, horyzont 2-5 dni.
+- swing (PULLBACK_TO_SMA50): cena ±3-5% od SMA50, RSI(14) [36,55] GPW / [40,58] NYSE, vol ≥ 1.1x. Cel +15%, stop -5%, horyzont 4-8 tyg.
+- aggressive (BREAKOUT): cena > max20d, RSI [60,70] GPW / [60,75] NYSE, vol ≥ 2.0-2.5x. Cel +35%, stop -8%.
+
+Parametry które można kalibrować (podaj zmiany TYLKO jeśli dane to uzasadniają):
+- scalping: rsi_threshold_min (dolna granica RSI), rsi_threshold (górna granica RSI), volume_multiplier
+- swing: swing_volume_multiplier
+- aggressive: rsi_min, rsi_max, aggressive_volume_multiplier
 
 Zadanie:
-1. Zidentyfikuj które warunki wejścia (RSI, wolumen, score) korelują ze stratami
-2. Zaproponuj ODDZIELNE korekty progów dla GPW i NYSE
-3. Jeśli widzisz wzorzec strat (np. "zbyt wysokie RSI przy wejściu" lub "za niski score") — napisz wprost
-4. Oceń czy obecne progi są za luźne czy za restrykcyjne
+1. Który wzorzec RSI / wolumenu / daysHeld koreluje ze stratami?
+2. Czy są otwarte pozycje które powinny być zamknięte (przekroczony horyzont)?
+3. Jakie korekty progów uzasadniają dane? (tylko jeśli min. 5 pozycji w strategii)
+4. Napisz konkretny wniosek edukacyjny który pomoże Adamowi podejmować lepsze decyzje.
 
 Odpowiedz TYLKO w JSON bez żadnego tekstu:
 {
-  "GPW": {
-    "rsi_threshold": number,
-    "volume_multiplier": number,
-    "sma_buffer_percent": number
+  "insights": "string po polsku, max 4 zdania — konkretne wnioski z danych P&L",
+  "loss_pattern": "string — główna przyczyna strat lub null jeśli za mało danych",
+  "open_position_warnings": ["ticker: powód" lub pustą tablicę],
+  "threshold_recommendations": {
+    "GPW":  { "rsi_threshold_min": number|null, "rsi_threshold": number|null, "volume_multiplier": number|null, "swing_volume_multiplier": number|null },
+    "NYSE": { "rsi_threshold_min": number|null, "rsi_threshold": number|null, "volume_multiplier": number|null, "swing_volume_multiplier": number|null }
   },
-  "NYSE": {
-    "rsi_threshold": number,
-    "volume_multiplier": number,
-    "sma_buffer_percent": number
-  },
-  "insights": "string po polsku, max 4 zdania — konkretne wnioski z danych o stratach",
-  "loss_pattern": "string — główna przyczyna strat lub null",
-  "best_stocks": ["ticker1", "ticker2"],
-  "worst_stocks": ["ticker1", "ticker2"],
-  "confidence": number (0-100)
+  "recommendation_confidence": number (0-100),
+  "best_strategy": "scalping|swing|aggressive|null",
+  "worst_strategy": "scalping|swing|aggressive|null"
 }`
 
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
-    system: 'Jesteś Learning Agentem GPW Analyzer. Analizujesz realne P&L pozycji i zwracasz JSON z korektami progów.',
+    system: 'Jesteś Learning Agentem GPW Analyzer. Analizujesz realne P&L pozycji. Zwracasz wyłącznie JSON.',
     messages: [{ role: 'user', content: prompt }],
   })
 
   const text  = response.content[0].text
   const match = text?.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error(`Invalid JSON from Learning Agent: ${text?.slice(0, 50)}`)
+  if (!match) throw new Error(`Invalid JSON from Learning Agent: ${text?.slice(0, 100)}`)
   return JSON.parse(match[0])
 }
 
-export function formatWeeklyReport({ scalping, swing, aggressive, bestStock, worstStock, newThresholds, insights, lossPattern, focusTickers, aiHit = 0, aiTotal = 0, positionStats }) {
-  const pct    = (a, b) => b > 0 ? Math.round((a / b) * 100) : 0
-  const aiLine = aiTotal > 0
-    ? `\n🤖 <b>TRAFNOŚĆ AI:</b> ${aiHit}/${aiTotal} (${pct(aiHit, aiTotal)}%)`
+export function formatWeeklyReport({ posReport, aiResult, totalAlerts }) {
+  const { perStrategy, bestPosition, worstPosition, openSummary, overduePositions, totalClosed, totalOpen } = posReport
+
+  const stratLine = s => {
+    const d = perStrategy[s]
+    if (!d || d.total === 0) return `${_icon(s)} ${_label(s)}: brak danych`
+    return `${_icon(s)} ${_label(s)}: ${d.wins}W/${d.losses}L (${d.winRate}%) | śr. zysk ${d.avgWin ?? '—'}% | śr. strata ${d.avgLoss ?? '—'}%`
+  }
+
+  const openSection = totalOpen === 0 ? '📭 Brak otwartych pozycji' : [
+    `📂 Otwarte: ${totalOpen} pozycji`,
+    ...overduePositions.map(p => `⏰ ${p.ticker} (${p.strategy}) — ${p.daysHeld}/${p.maxDays} dni — PRZEKROCZONY HORYZONT`),
+    overduePositions.length === 0 ? '✅ Żadna nie przekroczyła horyzontu' : '',
+  ].filter(Boolean).join('\n')
+
+  const recSection = _buildRecommendationSection(aiResult)
+
+  const warningsSection = aiResult?.open_position_warnings?.length
+    ? '\n⚠️ <b>OSTRZEŻENIA AI:</b>\n' + aiResult.open_position_warnings.map(w => `• ${w}`).join('\n')
     : ''
-  const posLine = positionStats
-    ? `\n💰 <b>POZYCJE:</b> ${positionStats.winners}W / ${positionStats.losers}L | śr. zysk ${positionStats.avgWin ?? '—'}% | śr. strata ${positionStats.avgLoss ?? '—'}%`
-    : ''
-  const lossLine = lossPattern ? `\n⚠️ <b>WZORZEC STRAT:</b> ${lossPattern}` : ''
 
   return `🧠 <b>RAPORT TYGODNIOWY — Learning Agent</b>
 
-📊 <b>SKUTECZNOŚĆ (30 dni):</b>
-⚡ Scalping:   ${scalping.hit}/${scalping.total} (${pct(scalping.hit, scalping.total)}%)
-📈 Swing:      ${swing.hit}/${swing.total} (${pct(swing.hit, swing.total)}%)
-🚀 Agresywna:  ${aggressive.hit}/${aggressive.total} (${pct(aggressive.hit, aggressive.total)}%)${posLine}${aiLine}${lossLine}
+📊 <b>WYNIKI ZAMKNIĘTYCH POZYCJI (${totalClosed}):</b>
+${stratLine('scalping')}
+${stratLine('swing')}
+${stratLine('aggressive')}
 
-🏆 <b>NAJLEPSZA:</b> ${bestStock?.ticker ?? 'N/A'} (${bestStock?.pct ?? 0}%)
-📉 <b>NAJSŁABSZA:</b> ${worstStock?.ticker ?? 'N/A'} (${worstStock?.pct ?? 0}%)
+🏆 <b>NAJLEPSZA:</b> ${bestPosition ? `${bestPosition.ticker} ${bestPosition._pnl > 0 ? '+' : ''}${bestPosition._pnl}%` : 'N/A'}
+📉 <b>NAJSŁABSZA:</b> ${worstPosition ? `${worstPosition.ticker} ${worstPosition._pnl > 0 ? '+' : ''}${worstPosition._pnl}%` : 'N/A'}
 
-🔧 <b>KOREKTY PROGÓW:</b>
-GPW — RSI: ${newThresholds.gpwRsiOld} → ${newThresholds.gpwRsiNew} | Vol: ${newThresholds.gpwVolNew}x
-NYSE — RSI: ${newThresholds.nyseRsiOld} → ${newThresholds.nyseRsiNew} | Vol: ${newThresholds.nyseVolNew}x
+${openSection}${warningsSection}
 
-💡 <b>WNIOSEK:</b>
-${insights}
+💡 <b>WNIOSEK AI:</b>
+${aiResult?.insights ?? 'Brak wniosków — za mało danych.'}
+${aiResult?.loss_pattern ? `\n⚠️ <b>WZORZEC STRAT:</b> ${aiResult.loss_pattern}` : ''}
 
-📈 Fokus: ${focusTickers.join(', ')}`
+${recSection}
+📡 Alertów w bazie: ${totalAlerts}`
 }
+
+function _buildRecommendationSection(aiResult) {
+  if (!aiResult?.threshold_recommendations) return ''
+  const conf = aiResult.recommendation_confidence ?? 0
+  if (conf < 60) return `🔧 <b>REKOMENDACJE PROGÓW:</b> za mało danych (pewność AI: ${conf}%) — brak sugestii`
+  const r = aiResult.threshold_recommendations
+  const lines = []
+  for (const [exch, vals] of Object.entries(r)) {
+    const parts = Object.entries(vals)
+      .filter(([, v]) => v != null)
+      .map(([k, v]) => `${k}=${v}`)
+    if (parts.length) lines.push(`${exch}: ${parts.join(', ')}`)
+  }
+  if (!lines.length) return ''
+  return `🔧 <b>REKOMENDOWANE KOREKTY PROGÓW</b> (pewność: ${conf}%, wymaga zatwierdzenia):\n${lines.join('\n')}\n<i>→ Sprawdź GitHub issue #learning do zatwierdzenia</i>`
+}
+
+function _icon(s)  { return { scalping: '⚡', swing: '📈', aggressive: '🚀' }[s] ?? '📊' }
+function _label(s) { return { scalping: 'Scalping', swing: 'Swing', aggressive: 'Agresywna' }[s] ?? s }

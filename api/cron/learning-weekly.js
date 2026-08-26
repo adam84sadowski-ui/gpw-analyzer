@@ -1,10 +1,11 @@
 import { createClient } from '@vercel/kv'
 import { runLearningAgent, formatWeeklyReport } from '../../src/agents/learningAgent.js'
-import { generateAlertReport } from '../../src/agents/reportGenerator.js'
+import { buildPositionReport, generateAlertReport } from '../../src/agents/reportGenerator.js'
 import { sendTelegram } from '../../src/services/telegram.js'
 
 const IS_STAGING = process.env.VITE_ENV === 'staging'
 const ENV_PREFIX = IS_STAGING ? 'staging' : 'prod'
+const MIN_CLOSED_POSITIONS = 5
 
 const kv = createClient({
   url:   process.env.KV_REST_API_URL,
@@ -16,100 +17,126 @@ export default async function handler(req, res) {
     return res.status(401).end()
   }
 
-  // Pobierz alerty z ostatnich 30 dni
-  const alertKeys = await kv.keys(`${ENV_PREFIX}:alert:*`).catch(() => [])
-  const alertHistory = alertKeys.length
-    ? (await Promise.all(alertKeys.map(k => kv.get(k).catch(() => null)))).filter(Boolean)
-    : []
-
-  const recent = alertHistory.filter(a => {
-    if (!a?.timestamp) return false
-    return Date.now() - new Date(a.timestamp).getTime() < 30 * 24 * 60 * 60 * 1000
-  })
-
-  // Pobierz zamknięte pozycje — główne źródło wiedzy o stratach/zyskach
+  // ── Fetch all positions ───────────────────────────────────────────────────
   const positionKeys = await kv.keys(`${ENV_PREFIX}:position:*`).catch(() => [])
   const allPositions = positionKeys.length
     ? (await Promise.all(positionKeys.map(k => kv.get(k).catch(() => null)))).filter(Boolean)
     : []
+
   const closedPositions = allPositions.filter(p =>
-    p?.status === 'closed' && p?.exitPrice && p?.entryPrice
+    p?.status === 'closed' && p?.exitPrice != null && p?.entryPrice != null
   )
+  const openPositions = allPositions.filter(p => p?.status === 'open')
 
-  const totalData = recent.length + closedPositions.length
-
-  if (totalData < 2) {
+  // ── Guard: minimum closed positions for meaningful stats ──────────────────
+  if (closedPositions.length < MIN_CLOSED_POSITIONS) {
     await sendTelegram(
-      `🧠 Learning Agent: za mało danych (${recent.length} alertów, ${closedPositions.length} zamkniętych pozycji). Raport pominięty.`,
+      `🧠 Learning Agent: za mało zamkniętych pozycji (${closedPositions.length}/${MIN_CLOSED_POSITIONS} wymaganych). Raport pominięty.`,
       IS_STAGING
     )
-    return res.json({ skipped: 'insufficient_data', alerts: recent.length, positions: closedPositions.length })
+    return res.json({ skipped: 'insufficient_closed_positions', closed: closedPositions.length, open: openPositions.length })
   }
 
+  // ── Alert count (informational only — not used for stats) ────────────────
+  const alertKeys  = await kv.keys(`${ENV_PREFIX}:alert:*`).catch(() => [])
+  const totalAlerts = alertKeys.length
+
   try {
-    const report       = generateAlertReport(recent)
-    const newThresholds = await runLearningAgent(recent, closedPositions)
+    // ── Build position report (no Claude needed for this) ─────────────────
+    const posReport = buildPositionReport(closedPositions, openPositions)
 
-    // Zapisz per-exchange progi w KV (backward compatible — zachowaj też flat format)
-    const thresholdsToSave = {
-      GPW:  newThresholds.GPW  ?? { rsi_threshold: 30, volume_multiplier: 1.5,  sma_buffer_percent: 0 },
-      NYSE: newThresholds.NYSE ?? { rsi_threshold: 32, volume_multiplier: 1.15, sma_buffer_percent: 0 },
-      // flat fallback dla backward compat z fetch.js
-      rsi_threshold:     newThresholds.NYSE?.rsi_threshold ?? 32,
-      volume_multiplier: newThresholds.NYSE?.volume_multiplier ?? 1.15,
-      sma_buffer_percent: 0,
-      insights:          newThresholds.insights,
-      updated_at:        new Date().toISOString(),
+    // ── Run Learning Agent (Claude analysis) ─────────────────────────────
+    const aiResult = await runLearningAgent(closedPositions, openPositions)
+
+    // ── Create GitHub issue for threshold recommendations ─────────────────
+    if (aiResult?.threshold_recommendations && (aiResult.recommendation_confidence ?? 0) >= 60) {
+      await createThresholdIssue(aiResult, posReport).catch(err => {
+        console.warn('GitHub issue creation failed:', err.message)
+      })
     }
-    await kv.set(`${ENV_PREFIX}:thresholds`, thresholdsToSave)
 
-    // Statystyki pozycji
-    const winners  = closedPositions.filter(p => (p.exitPrice - p.entryPrice) / p.entryPrice > 0)
-    const losers   = closedPositions.filter(p => (p.exitPrice - p.entryPrice) / p.entryPrice < 0)
-    const avgWin   = winners.length
-      ? Math.round(winners.reduce((s, p) => s + (p.exitPrice - p.entryPrice) / p.entryPrice * 100, 0) / winners.length * 10) / 10
-      : null
-    const avgLoss  = losers.length
-      ? Math.round(losers.reduce((s, p) => s + (p.exitPrice - p.entryPrice) / p.entryPrice * 100, 0) / losers.length * 10) / 10
-      : null
+    // ── Save analysis snapshot to KV (NOT the thresholds — for audit trail) ─
+    await kv.set(`${ENV_PREFIX}:learning:last_report`, {
+      generatedAt:              new Date().toISOString(),
+      closedPositions:          closedPositions.length,
+      openPositions:            openPositions.length,
+      perStrategy:              posReport.perStrategy,
+      aiInsights:               aiResult?.insights ?? null,
+      aiLossPattern:            aiResult?.loss_pattern ?? null,
+      thresholdRecommendations: aiResult?.threshold_recommendations ?? null,
+      recommendationConfidence: aiResult?.recommendation_confidence ?? null,
+    }, { ex: 8 * 24 * 60 * 60 }).catch(() => {})
 
-    // AI accuracy from lifecycle outcomes
-    const lifecycleKeys = await kv.keys(`${ENV_PREFIX}:lifecycle:*`).catch(() => [])
-    const lifecycles    = lifecycleKeys.length
-      ? (await Promise.all(lifecycleKeys.map(k => kv.get(k).catch(() => null)))).filter(Boolean)
-      : []
-    const withOutcomes = lifecycles.filter(lc => lc?.aiEntry && lc?.aiOutcomes?.length)
-    const aiHit        = withOutcomes.filter(lc => lc.aiOutcomes[lc.aiOutcomes.length - 1]?.hit).length
-    const aiTotal      = withOutcomes.length
-
-    const gpwOld  = 30, nyseOld = 32
-    const msg = formatWeeklyReport({
-      scalping:      report.byStrategy.scalping   ?? { hit: 0, total: 0 },
-      swing:         report.byStrategy.swing      ?? { hit: 0, total: 0 },
-      aggressive:    report.byStrategy.aggressive ?? { hit: 0, total: 0 },
-      bestStock:     report.bestStock,
-      worstStock:    report.worstStock,
-      newThresholds: {
-        gpwRsiOld:  gpwOld,
-        gpwRsiNew:  thresholdsToSave.GPW.rsi_threshold,
-        gpwVolNew:  thresholdsToSave.GPW.volume_multiplier,
-        nyseRsiOld: nyseOld,
-        nyseRsiNew: thresholdsToSave.NYSE.rsi_threshold,
-        nyseVolNew: thresholdsToSave.NYSE.volume_multiplier,
-      },
-      insights:     newThresholds.insights,
-      lossPattern:  newThresholds.loss_pattern ?? null,
-      focusTickers: report.focusTickers,
-      aiHit,
-      aiTotal,
-      positionStats: { winners: winners.length, losers: losers.length, avgWin, avgLoss },
-    })
-
+    // ── Format and send Telegram ──────────────────────────────────────────
+    const msg = formatWeeklyReport({ posReport, aiResult, totalAlerts })
     await sendTelegram(msg, IS_STAGING)
-    res.json({ success: true, newThresholds: thresholdsToSave, positions: closedPositions.length, alerts: recent.length })
+
+    res.json({
+      success:        true,
+      closedPositions: closedPositions.length,
+      openPositions:  openPositions.length,
+      perStrategy:    posReport.perStrategy,
+      aiConfidence:   aiResult?.recommendation_confidence ?? null,
+    })
   } catch (e) {
     console.error('Learning weekly error:', e)
     await sendTelegram(`🧠 Learning Agent: błąd\n<code>${e.message}</code>`, IS_STAGING).catch(() => {})
     res.status(500).json({ error: e.message })
   }
+}
+
+async function createThresholdIssue(aiResult, posReport) {
+  const token = process.env.GITHUB_TOKEN
+  if (!token) return  // skip silently if no token configured
+
+  const rec = aiResult.threshold_recommendations
+  const lines = []
+  for (const [exch, vals] of Object.entries(rec)) {
+    const parts = Object.entries(vals).filter(([, v]) => v != null).map(([k, v]) => `- ${k}: ${v}`)
+    if (parts.length) lines.push(`**${exch}:**\n${parts.join('\n')}`)
+  }
+
+  const stratSummary = Object.entries(posReport.perStrategy)
+    .map(([s, d]) => `- ${s}: ${d.wins}W/${d.losses}L (${d.winRate}%) | śr. zysk: ${d.avgWin ?? '—'}% | śr. strata: ${d.avgLoss ?? '—'}%`)
+    .join('\n')
+
+  const body = `## Rekomendacja Learning Agenta
+
+**Data:** ${new Date().toISOString().slice(0, 10)}
+**Pewność AI:** ${aiResult.recommendation_confidence}%
+**Zamkniętych pozycji w analizie:** ${posReport.totalClosed}
+
+## Wyniki per-strategia (podstawa rekomendacji)
+${stratSummary}
+
+## Rekomendowane korekty progów
+${lines.join('\n\n') || 'Brak konkretnych zmian.'}
+
+## Wniosek AI
+${aiResult.insights ?? '—'}
+
+## Wzorzec strat
+${aiResult.loss_pattern ?? '—'}
+
+## Kryteria akceptacji
+- [ ] PO zatwierdził rekomendację
+- [ ] Developer zaktualizował SIGNAL_DEFAULTS w signals.js
+- [ ] Testy przechodzą po zmianie
+- [ ] Deploy na staging + QA
+
+> Wygenerowano automatycznie przez Learning Agent. Wymaga zatwierdzenia przed wdrożeniem.`
+
+  await fetch('https://api.github.com/repos/adam84sadowski-ui/gpw-analyzer/issues', {
+    method:  'POST',
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept:         'application/vnd.github+json',
+    },
+    body: JSON.stringify({
+      title:  `learning: rekomendacja kalibracji progów ${new Date().toISOString().slice(0, 10)}`,
+      body,
+      labels: ['learning', 'Learning-Agent'],
+    }),
+  })
 }
