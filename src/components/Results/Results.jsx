@@ -217,6 +217,8 @@ export default function Results() {
   const [copiedEval,    setCopiedEval]    = useState({})
   const [addSizeState,  setAddSizeState]  = useState({}) // posId → { pct, price, loading, error, confirmed }
   const [paramAction,   setParamAction]   = useState({}) // posId → { target: 'confirmed'|'rejected'|null, stop: 'confirmed'|'rejected'|null }
+  const [horizonEvals,  setHorizonEvals]  = useState({}) // posId → { loading, result }
+  const [horizonConfirm, setHorizonConfirm] = useState({}) // posId → null|'tactical_loading'|'tactical_done'|'longterm_loading'|'longterm_done'|'upgrade_confirm'|'upgrade_loading'|'upgrade_done'
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -507,6 +509,53 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       setParamAction(s => ({ ...s, [pos.id]: { target: null, stop: null } }))
     } catch {
       setAiEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
+    }
+  }
+
+  async function evaluateHorizonFn(pos) {
+    const cp = prices[pos.ticker]
+    const entryDay = new Date(pos.entryDate.slice(0, 10))
+    const today    = new Date(new Date().toISOString().slice(0, 10))
+    const daysHeld = Math.round((today - entryDay) / 86400000)
+    const pnlPct   = cp ? ((cp - pos.entryPrice) / pos.entryPrice * 100).toFixed(2) : 0
+    setHorizonEvals(prev => ({ ...prev, [pos.id]: { loading: true, result: null } }))
+    try {
+      const params = new URLSearchParams({
+        mode:         'horizon-evaluate',
+        ticker:       pos.ticker,
+        exchange:     pos.exchange ?? 'GPW',
+        posId:        pos.id,
+        strategy:     pos.strategy ?? 'swing',
+        currentPrice: cp ?? pos.entryPrice,
+        pnlPct,
+        daysHeld,
+      })
+      const res  = await fetch(`/api/market?${params}`)
+      const data = await res.json()
+      setHorizonEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: data } }))
+    } catch {
+      setHorizonEvals(prev => ({ ...prev, [pos.id]: { loading: false, result: null } }))
+    }
+  }
+
+  async function confirmHorizonOption(pos, optType, opts) {
+    setHorizonConfirm(s => ({ ...s, [pos.id]: optType + '_loading' }))
+    try {
+      const body = { id: pos.id }
+      if (opts.target        != null) body.target        = opts.target
+      if (opts.stopLoss      != null) body.stopLoss      = opts.stopLoss
+      if (opts.strategy      != null) body.strategy      = opts.strategy
+      if (opts.nextReviewDate)        body.nextReviewDate = opts.nextReviewDate
+      const res     = await fetch('/api/positions', {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      })
+      const updated = await res.json()
+      setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, ...updated }))
+      setHorizonConfirm(s => ({ ...s, [pos.id]: optType + '_done' }))
+    } catch {
+      setHorizonConfirm(s => ({ ...s, [pos.id]: null }))
     }
   }
 
@@ -1071,6 +1120,145 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                     })()}
                   </div>
                 )}
+
+                {/* ── Co dalej z pozycją? (horizon review) ── */}
+                {pos.status === 'open' && (() => {
+                  const entryDay     = new Date(pos.entryDate.slice(0, 10))
+                  const today        = new Date(new Date().toISOString().slice(0, 10))
+                  const daysHeld     = Math.round((today - entryDay) / 86400000)
+                  const horizon      = HOLD_HORIZON[pos.strategy] ?? 30
+                  const triggered    = pos.strategy === 'scalping' ? daysHeld >= 3 : daysHeld >= Math.round(horizon * 0.8)
+                  if (!triggered) return null
+                  const he   = horizonEvals[pos.id]
+                  const hc   = horizonConfirm[pos.id]
+                  const r    = he?.result
+                  const optClr = { blue: 'border-gpw-blue/40 bg-gpw-blue/5', purple: 'border-purple-600/40 bg-purple-900/10', orange: 'border-orange-600/40 bg-orange-900/10' }
+                  const btnClr = { blue: 'bg-gpw-blue/20 hover:bg-gpw-blue/30 border-gpw-blue/40 text-blue-300', purple: 'bg-purple-800/20 hover:bg-purple-800/30 border-purple-700/40 text-purple-300', orange: 'bg-orange-800/20 hover:bg-orange-800/30 border-orange-700/40 text-orange-300' }
+                  return (
+                    <div className="border-t border-yellow-700/40 pt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-yellow-400 font-semibold">⏱ Co dalej z pozycją?</span>
+                        {!r && (
+                          <button
+                            onClick={() => evaluateHorizonFn(pos)}
+                            disabled={he?.loading}
+                            className="text-xs bg-yellow-700/20 hover:bg-yellow-700/30 border border-yellow-700/40 text-yellow-300 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                          >
+                            {he?.loading ? 'Analizuję…' : 'Analizuj opcje'}
+                          </button>
+                        )}
+                        {r && (
+                          <button onClick={() => setHorizonEvals(prev => ({ ...prev, [pos.id]: null }))} className="text-[10px] text-gray-600 hover:text-gray-400">✕</button>
+                        )}
+                      </div>
+                      {r && (
+                        <div className="space-y-2 text-xs">
+                          {/* Opcja 1: Przedłuż taktycznie */}
+                          {r.tacticalOption && (
+                            <div className={`border rounded-lg p-2.5 space-y-1.5 ${optClr.blue}`}>
+                              <p className="font-semibold text-blue-300">📈 Opcja 1: Przedłuż o {r.tacticalOption.weeks ?? '?'} tygodni (ta sama strategia)</p>
+                              <p className="text-gray-400 leading-relaxed">{r.tacticalOption.rationale}</p>
+                              <div className="flex flex-wrap gap-2 text-[10px] text-gray-500">
+                                {r.tacticalOption.newTarget && <span>Cel: <span className="text-white">+{r.tacticalOption.newTarget}%</span></span>}
+                                {r.tacticalOption.checkpoint && <span>Przegląd: <span className="text-white">{r.tacticalOption.checkpoint}</span></span>}
+                              </div>
+                              {hc === 'tactical_done'
+                                ? <p className="text-gpw-green text-[10px]">✅ Zapisano — checkpoint i cel zaktualizowane</p>
+                                : (
+                                  <button
+                                    onClick={() => confirmHorizonOption(pos, 'tactical', { target: r.tacticalOption.newTarget, nextReviewDate: r.tacticalOption.checkpoint })}
+                                    disabled={hc === 'tactical_loading'}
+                                    className={`text-[10px] border px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${btnClr.blue}`}
+                                  >
+                                    {hc === 'tactical_loading' ? 'Zapisuję…' : 'Potwierdź'}
+                                  </button>
+                                )
+                              }
+                            </div>
+                          )}
+                          {/* Opcja 2: Długoterminowe */}
+                          {r.longTermOption?.applicable
+                            ? (
+                              <div className={`border rounded-lg p-2.5 space-y-1.5 ${optClr.purple}`}>
+                                <p className="font-semibold text-purple-300">🕰️ Opcja 2: Długoterminowo ({r.longTermOption.months ?? '?'} mcy)</p>
+                                <p className="text-gray-400 leading-relaxed">{r.longTermOption.rationale}</p>
+                                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500">
+                                  {r.longTermOption.newTarget && <span>Cel: <span className="text-white">+{r.longTermOption.newTarget}%</span></span>}
+                                  {r.longTermOption.nextCheckpoint && <span>Przegląd za 30 dni: <span className="text-white">{r.longTermOption.nextCheckpoint}</span></span>}
+                                </div>
+                                {hc === 'longterm_done'
+                                  ? <p className="text-gpw-green text-[10px]">✅ Zapisano — strategia zmieniona na długoterminową</p>
+                                  : (
+                                    <button
+                                      onClick={() => confirmHorizonOption(pos, 'longterm', { strategy: 'long_term', target: r.longTermOption.newTarget, nextReviewDate: r.longTermOption.nextCheckpoint })}
+                                      disabled={hc === 'longterm_loading'}
+                                      className={`text-[10px] border px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${btnClr.purple}`}
+                                    >
+                                      {hc === 'longterm_loading' ? 'Zapisuję…' : 'Potwierdź'}
+                                    </button>
+                                  )
+                                }
+                              </div>
+                            )
+                            : (
+                              <div className="border border-gray-700/40 rounded-lg p-2.5 space-y-1">
+                                <p className="text-gray-500 text-[10px]">🕰️ Opcja 2: Długoterminowe — <span className="italic">nieaplikowane</span></p>
+                                <p className="text-gray-600 leading-relaxed">{r.longTermOption?.rationale}</p>
+                              </div>
+                            )
+                          }
+                          {/* Opcja 3: Upgrade strategii */}
+                          {r.strategyUpgradeOption?.applicable
+                            ? (
+                              <div className={`border rounded-lg p-2.5 space-y-1.5 ${optClr.orange}`}>
+                                <p className="font-semibold text-orange-300">🚀 Opcja 3: Upgrade → {r.strategyUpgradeOption.upgradeTo}</p>
+                                <p className="text-gray-400 leading-relaxed">{r.strategyUpgradeOption.rationale}</p>
+                                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500">
+                                  {r.strategyUpgradeOption.newTarget && <span>Nowy cel: <span className="text-white">+{r.strategyUpgradeOption.newTarget}%</span></span>}
+                                  {r.strategyUpgradeOption.newStopLoss && <span>Nowy stop: <span className="text-white">-{r.strategyUpgradeOption.newStopLoss}%</span></span>}
+                                  {r.strategyUpgradeOption.checkpoint && <span>Przegląd: <span className="text-white">{r.strategyUpgradeOption.checkpoint}</span></span>}
+                                </div>
+                                {hc === 'upgrade_done'
+                                  ? <p className="text-gpw-green text-[10px]">✅ Zapisano — strategia zmieniona na {r.strategyUpgradeOption.upgradeTo}</p>
+                                  : hc === 'upgrade_confirm'
+                                  ? (
+                                    <div className="space-y-1">
+                                      <p className="text-yellow-400 text-[10px]">⚠️ Zmiana strategii zmienia cel i stop loss. Czy na pewno?</p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => confirmHorizonOption(pos, 'upgrade', { strategy: r.strategyUpgradeOption.upgradeTo, target: r.strategyUpgradeOption.newTarget, stopLoss: r.strategyUpgradeOption.newStopLoss, nextReviewDate: r.strategyUpgradeOption.checkpoint })}
+                                          className={`text-[10px] border px-2 py-0.5 rounded transition-colors ${btnClr.orange}`}
+                                        >
+                                          Tak, zmień strategię
+                                        </button>
+                                        <button onClick={() => setHorizonConfirm(s => ({ ...s, [pos.id]: null }))} className="text-[10px] text-gray-500 hover:text-gray-300">Anuluj</button>
+                                      </div>
+                                    </div>
+                                  )
+                                  : (
+                                    <button
+                                      onClick={() => setHorizonConfirm(s => ({ ...s, [pos.id]: 'upgrade_confirm' }))}
+                                      disabled={hc === 'upgrade_loading'}
+                                      className={`text-[10px] border px-2 py-0.5 rounded transition-colors disabled:opacity-50 ${btnClr.orange}`}
+                                    >
+                                      {hc === 'upgrade_loading' ? 'Zapisuję…' : 'Potwierdź'}
+                                    </button>
+                                  )
+                                }
+                              </div>
+                            )
+                            : (
+                              <div className="border border-gray-700/40 rounded-lg p-2.5 space-y-1">
+                                <p className="text-gray-500 text-[10px]">🚀 Opcja 3: Upgrade strategii — <span className="italic">nieaplikowany</span></p>
+                                <p className="text-gray-600 leading-relaxed">{r.strategyUpgradeOption?.rationale}</p>
+                              </div>
+                            )
+                          }
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {/* ── Chat per pozycja ── */}
                 {pos.status === 'open' && (

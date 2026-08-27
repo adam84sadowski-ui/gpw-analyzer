@@ -11,7 +11,7 @@ import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
 import { runGEMAlgorithm, simulateGEM } from '../src/strategies/gem.js'
-import { fetchNewsHeadlines, fetchQuoteSummary, buildSectorContext, validateEntry, evaluatePosition } from '../src/services/aiEvaluator.js'
+import { fetchNewsHeadlines, fetchQuoteSummary, buildSectorContext, validateEntry, evaluatePosition, evaluateHorizon } from '../src/services/aiEvaluator.js'
 
 const ENV = process.env.VITE_ENV === 'staging' ? 'staging' : 'prod'
 
@@ -184,6 +184,31 @@ export default async function handler(req, res) {
       analystSell:       fundamentals?.analystSell       ?? null,
       recommendationKey: fundamentals?.recommendationKey ?? null,
     })
+  }
+
+  if (mode === 'horizon-evaluate') {
+    if (!ticker) return res.status(400).json({ error: 'ticker required' })
+    const { posId, signal: hSignal, entryPrice: hEntry, currentPrice: hCurrent, pnlPct: hPnl, daysHeld: hDays } = req.query
+    const [hPos, hNews, hFund] = await Promise.all([
+      posId ? kv.get(posId).catch(() => null) : Promise.resolve(null),
+      fetchNewsHeadlines(ticker, exchange).catch(() => []),
+      fetchQuoteSummary(ticker, exchange).catch(() => null),
+    ])
+    const horizonResult = await evaluateHorizon({
+      ticker,
+      exchange,
+      signal:       hPos?.signal         ?? hSignal,
+      strategy:     hPos?.strategy       ?? strategy ?? 'swing',
+      daysHeld:     Number(hDays ?? 0),
+      entryPrice:   hPos?.entryPrice     ?? Number(hEntry ?? 0),
+      currentPrice: Number(hCurrent ?? 0),
+      pnlPct:       Number(hPnl ?? 0),
+      target:       hPos?.target         ?? 0,
+      stopLoss:     hPos?.stopLoss       ?? 0,
+      news:         hNews,
+      fundamentals: hFund,
+    })
+    return res.json(horizonResult)
   }
 
   if (mode === 'ai-evaluate') {

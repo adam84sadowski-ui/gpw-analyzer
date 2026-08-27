@@ -167,7 +167,7 @@ export default async function handler(req, res) {
 
   if (method === 'PATCH') {
     const { id, exitPrice, target, stopLoss, suggestedAddSizePct, nextReviewDate,
-            aiTargetRejected, aiStopRejected } = req.body
+            strategy: newStrategy, aiTargetRejected, aiStopRejected } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
@@ -181,13 +181,14 @@ export default async function handler(req, res) {
       return res.json(updated)
     }
 
-    // AI-revised target, stop loss, add-size suggestion, or next review date
-    if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null || nextReviewDate != null)) {
+    // AI-revised target, stop loss, add-size suggestion, next review date, or strategy upgrade
+    if (!exitPrice && (target != null || stopLoss != null || suggestedAddSizePct != null || nextReviewDate != null || newStrategy != null)) {
       const updated = { ...position }
       if (target              != null) updated.target              = target
       if (stopLoss            != null) updated.stopLoss            = stopLoss
       if (suggestedAddSizePct != null) updated.suggestedAddSizePct = suggestedAddSizePct
       if (nextReviewDate      != null) updated.nextReviewDate      = nextReviewDate
+      if (newStrategy         != null) updated.strategy            = newStrategy
       await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
       return res.json(updated)
     }
