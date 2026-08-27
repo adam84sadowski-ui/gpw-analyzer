@@ -137,6 +137,7 @@ export default async function handler(req, res) {
       : null
 
     // Recent price action indicators from candle history
+    let priceAction = null
     if (candles && candles.length >= 6) {
       const c = candles
       const last = c.length - 1
