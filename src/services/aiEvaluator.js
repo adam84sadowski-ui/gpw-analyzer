@@ -341,12 +341,20 @@ ${newsLines}`
 
   let prompt
   if (strategy === 'scalping') {
-    const setupType = rsi <= 37
-      ? `OVERSOLD BOUNCE (RSI=${rsi} ≤ 37)`
-      : `PULLBACK IN UPTREND (RSI=${rsi} 38-50)`
-    const setupInstruction = rsi <= 37
-      ? `Kapitulacja sprzedających — oceń: (a) wolumen potwierdza wyczerpanie podaży, (b) świeca odwrócenia/pin bar, (c) RSI ≤ 37 = autentyczne wyprzedanie?`
-      : `Cofnięcie w uptrendzie — oceń: (a) SMA50 trzyma jako wsparcie (sma50Delta=${sma50Delta}%), (b) SMA150 intaktne (primary trend up), (c) RSI 38-50 = zdrowy reset. MACD nie jest w głębokiej dywergencji?`
+    let setupType, setupInstruction
+    if (signal === 'BB_BOUNCE') {
+      setupType = 'BOLLINGER BAND BOUNCE'
+      setupInstruction = `Matematycznie zdefiniowane odchylenie — dolna wstęga BB (2σ). Oceń: (a) cena odbiła od dolnej BB, (b) wolumen potwierdza zainteresowanie kupujących, (c) świeca odwrócenia/pin bar widoczna?`
+    } else if (signal === 'VOLUME_CLIMAX_REVERSAL') {
+      setupType = `VOLUME CLIMAX REVERSAL (${volMult}x wolumen)`
+      setupInstruction = `Wyczerpanie sprzedających: ekstremalny wolumen + hammer candle. Oceń: (a) volMult ≥ 3x = autentyczny climax, (b) dolny cień ≥ 2× korpus (hammer), (c) close w górnych 30% zakresu sesji?`
+    } else if (signal === 'PULLBACK_UPTREND') {
+      setupType = `PULLBACK IN UPTREND (RSI=${rsi} 38-50)`
+      setupInstruction = `Cofnięcie w uptrendzie — oceń: (a) SMA50 trzyma jako wsparcie (sma50Delta=${sma50Delta}%), (b) SMA150 intaktne (primary trend up), (c) RSI 38-50 = zdrowy reset. MACD nie jest w głębokiej dywergencji?`
+    } else {
+      setupType = `OVERSOLD BOUNCE (RSI=${rsi} ≤ 37)`
+      setupInstruction = `Kapitulacja sprzedających — oceń: (a) wolumen potwierdza wyczerpanie podaży, (b) świeca odwrócenia/pin bar, (c) RSI ≤ 37 = autentyczne wyprzedanie?`
+    }
     prompt = `Jesteś traderem momentum w stylu Paul Tudor Jones (PTJ). Filozofia: dyscyplina ryzyka absolutna, R/R ≥ 2:1, natychmiastowe cięcie gdy rynek mówi "nie". Horyzont: 2-5 dni. Target +5%, Stop -3%.
 
 Twoje zadanie: oceń ten setup SCALPINGOWY — czy wchodzisz, czy czekasz, czy omijasz.
@@ -429,7 +437,7 @@ ${dataBlock}
 ${jsonSchema}
 
 Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
-1. PULLBACK DO SMA50 — vs SMA50: ${sma50Delta}% | Cofnięcie do SMA50 (<5%) = optymalna strefa wejścia. Czy SMA50 trzyma jako wsparcie dynamiczne? Czy widoczne odbicie?
+1. ${signal === 'PULLBACK_TO_SMA20' ? `PULLBACK DO SMA20 — vs SMA20: ${sma50Delta}% | Wcześniejsze wejście w silnym trendzie (SMA20 > SMA50 > SMA150). Czy SMA20 trzyma jako wsparcie? Alignment wszystkich średnich potwierdzony?` : `PULLBACK DO SMA50 — vs SMA50: ${sma50Delta}% | Cofnięcie do SMA50 (<5%) = optymalna strefa wejścia. Czy SMA50 trzyma jako wsparcie dynamiczne? Czy widoczne odbicie?`}
 2. ECONOMIC MOAT — przewaga konkurencyjna: marka, sieć, koszty przełączenia?
 3. EARNINGS CONSISTENCY — zyski stabilne od 3+ lat?
 4. RETURN ON EQUITY — ROE: > 15% = dobry, > 20% = świetny

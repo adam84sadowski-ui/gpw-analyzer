@@ -101,6 +101,43 @@ describe('interpretPositionState — premise validation', () => {
     const result = interpretPositionState(pos, 6.00, { rsi: 50, volMult: 1.2, sma50Delta: -2 })
     expect(result).toMatch(/wróciła pod SMA50/)
   })
+
+  it('PULLBACK_UPTREND: positive when RSI returns above 55', () => {
+    const pos = { ...BASE_POS, signal: 'PULLBACK_UPTREND' }
+    const result = interpretPositionState(pos, 6.50, { rsi: 58, volMult: 1.3, sma50Delta: 3 })
+    expect(result).toMatch(/RSI wrócił powyżej 55/)
+  })
+
+  it('PULLBACK_UPTREND: warns when price drops below SMA50', () => {
+    const pos = { ...BASE_POS, signal: 'PULLBACK_UPTREND' }
+    const result = interpretPositionState(pos, 5.50, { rsi: 42, volMult: 1.1, sma50Delta: -6 })
+    expect(result).toMatch(/SMA50/)
+  })
+
+  it('BB_BOUNCE: returns status string', () => {
+    const pos = { ...BASE_POS, signal: 'BB_BOUNCE' }
+    const result = interpretPositionState(pos, 6.20, { rsi: 48, volMult: 1.4, sma50Delta: 2 })
+    expect(typeof result).toBe('string')
+    expect(result?.length).toBeGreaterThan(0)
+  })
+
+  it('VOLUME_CLIMAX_REVERSAL: warns when price drops below entry', () => {
+    const pos = { ...BASE_POS, signal: 'VOLUME_CLIMAX_REVERSAL' }
+    const result = interpretPositionState(pos, 5.60, { rsi: 45, volMult: 1.2, sma50Delta: 0 })
+    expect(result).toMatch(/⚠️/)
+  })
+
+  it('PULLBACK_TO_SMA20: positive when price bounces above SMA20', () => {
+    const pos = { ...BASE_POS, signal: 'PULLBACK_TO_SMA20' }
+    const result = interpretPositionState(pos, 6.20, { rsi: 52, volMult: 1.3, sma50Delta: 3 })
+    expect(result).toMatch(/SMA20/)
+  })
+
+  it('PULLBACK_TO_SMA20: warns when price falls through SMA20 (-5%)', () => {
+    const pos = { ...BASE_POS, signal: 'PULLBACK_TO_SMA20' }
+    const result = interpretPositionState(pos, 5.40, { rsi: 38, volMult: 1.0, sma50Delta: -5 })
+    expect(result).toMatch(/⚠️/)
+  })
 })
 
 // ── Edge cases ────────────────────────────────────────────────────────────

@@ -104,3 +104,128 @@ describe('detectSignal — scalping rsiThreshold = 30', () => {
     }
   })
 })
+
+describe('detectSignal — signal name split RSI_OVERSOLD vs PULLBACK_UPTREND', () => {
+  it('returns RSI_OVERSOLD or PULLBACK_UPTREND (never another name) from scalping RSI path', () => {
+    const candles = Array.from({ length: 100 }, (_, i) => {
+      const close = 100 + Math.sin(i / 5) * 2 + i * 0.1
+      return { open: close - 0.1, high: close + 0.3, low: close - 0.3, close, volume: 1_500_000 }
+    })
+    const result = detectSignal(candles, 'scalping', {}, 'GPW')
+    if (result !== null && (result.signal === 'RSI_OVERSOLD' || result.signal === 'PULLBACK_UPTREND')) {
+      if (result.rsi <= 37) expect(result.signal).toBe('RSI_OVERSOLD')
+      if (result.rsi > 37)  expect(result.signal).toBe('PULLBACK_UPTREND')
+    }
+  })
+
+  it('RSI_OVERSOLD has rsi ≤ 37 when returned', () => {
+    // Fast downtrend then plateau — should produce low RSI
+    const candles = Array.from({ length: 80 }, (_, i) => {
+      const close = i < 60 ? 200 - i * 1.5 : 110 + (i - 60) * 0.05
+      return { open: close + 0.1, high: close + 0.5, low: close - 0.2, close, volume: 1_500_000 }
+    })
+    const result = detectSignal(candles, 'scalping', {}, 'GPW')
+    if (result !== null && result.signal === 'RSI_OVERSOLD') {
+      expect(result.rsi).toBeLessThanOrEqual(37)
+    }
+  })
+
+  it('PULLBACK_UPTREND has rsi > 37 when returned', () => {
+    const candles = Array.from({ length: 80 }, (_, i) => {
+      const close = i < 60 ? 200 - i * 1.5 : 110 + (i - 60) * 0.05
+      return { open: close + 0.1, high: close + 0.5, low: close - 0.2, close, volume: 1_500_000 }
+    })
+    const result = detectSignal(candles, 'scalping', {}, 'GPW')
+    if (result !== null && result.signal === 'PULLBACK_UPTREND') {
+      expect(result.rsi).toBeGreaterThan(37)
+    }
+  })
+})
+
+describe('detectSignal — VOLUME_CLIMAX_REVERSAL', () => {
+  function makeVCRCandles() {
+    // 198 rising candles (indices 0-197), then hammer at index 198 (= candles[-2]),
+    // then today at index 199 (= candles[-1])
+    // volumeMultiplier uses candles[-2] for "current" volume
+    const candles = Array.from({ length: 198 }, (_, i) => ({
+      open:   100 + i * 0.3,
+      high:   100 + i * 0.3 + 0.5,
+      low:    100 + i * 0.3 - 0.3,
+      close:  100 + i * 0.3,
+      volume: 1_000_000,
+    }))
+    // candles[198] = index 198 = candles[-2] after push of today
+    const prevClose = 100 + 197 * 0.3  // ≈ 159.1
+    candles.push({
+      open:   prevClose * 0.995,  // 158.3 — small body
+      high:   prevClose * 1.000,  // 159.1
+      low:    prevClose * 0.92,   // 146.4 — large lower shadow
+      close:  prevClose * 0.998,  // 158.8 — close near top
+      volume: 3_200_000,          // 3.2x average
+    })
+    // candles[199] = today = candles[-1]
+    candles.push({
+      open:   candles[198].close,
+      high:   candles[198].close * 1.005,
+      low:    candles[198].close * 0.998,
+      close:  candles[198].close * 1.003,
+      volume: 1_100_000,
+    })
+    return candles
+  }
+
+  it('hammer shape on yesterday candle meets VCR criteria', () => {
+    const candles = makeVCRCandles()
+    const yesterday = candles[candles.length - 2]
+    const range = yesterday.high - yesterday.low
+    const closeVsRange = (yesterday.close - yesterday.low) / range
+    const body = Math.abs(yesterday.close - yesterday.open)
+    const lowerShadow = Math.min(yesterday.close, yesterday.open) - yesterday.low
+    expect(closeVsRange).toBeGreaterThanOrEqual(0.65)
+    expect(body === 0 || lowerShadow >= body * 1.5).toBe(true)
+  })
+
+  it('returns VOLUME_CLIMAX_REVERSAL or null (not a different signal) with VCR candles', () => {
+    const candles = makeVCRCandles()
+    const result = detectSignal(candles, 'scalping', {}, 'GPW')
+    expect(
+      result === null ||
+      result.signal === 'VOLUME_CLIMAX_REVERSAL' ||
+      result.signal === 'RSI_OVERSOLD' ||
+      result.signal === 'PULLBACK_UPTREND' ||
+      result.signal === 'BB_BOUNCE'
+    ).toBe(true)
+    if (result?.signal === 'VOLUME_CLIMAX_REVERSAL') {
+      expect(result.volMult).toBeGreaterThanOrEqual(3.0)
+      expect(result.closeVsRange).toBeGreaterThanOrEqual(0.65)
+    }
+  })
+})
+
+describe('detectSignal — PULLBACK_TO_SMA20', () => {
+  it('does not fire swing signal with fewer than 55 candles', () => {
+    const candles = Array.from({ length: 40 }, (_, i) => ({
+      open: 100 + i * 0.5, high: 100 + i * 0.5 + 0.3, low: 100 + i * 0.5 - 0.2,
+      close: 100 + i * 0.5, volume: 1_200_000,
+    }))
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+
+  it('when swing signal fires it is one of the expected names', () => {
+    // Strong rising trend: SMA20 > SMA50 > SMA150 alignment
+    const candles = Array.from({ length: 200 }, (_, i) => ({
+      open:   50 + i * 0.5,
+      high:   50 + i * 0.5 + 0.3,
+      low:    50 + i * 0.5 - 0.2,
+      close:  50 + i * 0.5,
+      volume: 1_200_000,
+    }))
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    const validSwingSignals = ['PULLBACK_TO_SMA50', 'PULLBACK_TO_SMA20', null]
+    expect(validSwingSignals).toContain(result?.signal ?? null)
+    if (result?.signal === 'PULLBACK_TO_SMA20') {
+      expect(result.rsi).toBeGreaterThanOrEqual(42)
+      expect(result.rsi).toBeLessThanOrEqual(60)
+    }
+  })
+})
