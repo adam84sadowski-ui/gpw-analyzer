@@ -260,7 +260,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing' }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -309,6 +309,22 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
 → Jeśli Kup ≥60% i potencjał > 2× domyślny cel strategii → suggestedTargetPct = targetUpside. Uzasadnij w recommendation.\n`
     : `\n🎯 WERYFIKACJA CELU ANALITYKÓW: brak danych → suggestedTargetPct = domyślny cel strategii.\n`
 
+  const macdBlock = macd
+    ? `MACD: linia=${macd.line?.toFixed(3) ?? '?'}, sygnał=${macd.signal?.toFixed(3) ?? '?'}, histogram=${macd.histogram?.toFixed(3) ?? '?'} | Trend: ${macd.trend === 'bullish' ? 'BULLISH ↑' : macd.trend === 'bearish' ? 'BEARISH ↓' : 'NEUTRAL →'}`
+    : 'MACD: brak danych'
+  const sma150Block = sma150trend
+    ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ (primary uptrend intaktny)' : 'PONIŻEJ ❌ (primary downtrend — unikaj long)'}`
+    : ''
+  const sma20Block = sma20 != null ? `SMA20: ${sma20.toFixed(2)}` : ''
+  const bollingerBlock = bollinger
+    ? `Bollinger (20,2σ): upper=${bollinger.upper?.toFixed(2) ?? '?'}, middle=${bollinger.middle?.toFixed(2) ?? '?'}, lower=${bollinger.lower?.toFixed(2) ?? '?'} | bandwidth=${bollinger.bandwidth?.toFixed(1) ?? '?'}% | Status: ${bollinger.status ?? 'normal'}`
+    : ''
+  const nearSupportBlock = nearSupport != null
+    ? `Wsparcie techniczne: ${nearSupport ? '✅ cena blisko wsparcia' : '❌ daleko od wsparcia'}`
+    : ''
+  const divergenceBlock = divergence ? `Dywergencja RSI: ${divergence}` : ''
+  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock].filter(Boolean).join('\n')
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
 RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}${earningsLine ? `\n${earningsLine}` : ''}
@@ -316,6 +332,9 @@ Inne pozycje w sektorze: ${sectorPositions} | Korelowane: ${correlated.join(', '
 ${analystVerBlock}
 📅 EVENTY SEKTOROWE — uwzględnij w analizie:
 ${sectorEvents}
+
+WSKAŹNIKI TECHNICZNE (obliczone z danych historycznych):
+${techLines}
 
 WSKAŹNIKI FUNDAMENTALNE:
 ${fundBlock}
@@ -350,7 +369,8 @@ ${newsLines}`
       setupInstruction = `Wyczerpanie sprzedających: ekstremalny wolumen + hammer candle. Oceń: (a) volMult ≥ 3x = autentyczny climax, (b) dolny cień ≥ 2× korpus (hammer), (c) close w górnych 30% zakresu sesji?`
     } else if (signal === 'PULLBACK_UPTREND') {
       setupType = `PULLBACK IN UPTREND (RSI=${rsi} 38-50)`
-      setupInstruction = `Cofnięcie w uptrendzie — oceń: (a) SMA50 trzyma jako wsparcie (sma50Delta=${sma50Delta}%), (b) SMA150 intaktne (primary trend up), (c) RSI 38-50 = zdrowy reset. MACD nie jest w głębokiej dywergencji?`
+      const macdDesc = macd ? `MACD linia=${macd.line?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} (${macd.trend ?? '?'})` : 'MACD: brak danych'
+      setupInstruction = `Cofnięcie w uptrendzie — oceń: (a) SMA50 trzyma jako wsparcie (sma50Delta=${sma50Delta}%), (b) SMA150 intaktne (primary trend up), (c) RSI=${rsi} zdrowy reset 38-50. ${macdDesc} — czy MACD w głębokiej dywergencji bearish?`
     } else {
       setupType = `OVERSOLD BOUNCE (RSI=${rsi} ≤ 37)`
       setupInstruction = `Kapitulacja sprzedających — oceń: (a) wolumen potwierdza wyczerpanie podaży, (b) świeca odwrócenia/pin bar, (c) RSI ≤ 37 = autentyczne wyprzedanie?`
@@ -368,9 +388,9 @@ Punkty w "analysis" (12 kryteriów PTJ):
 1. MOMENTUM SETUP — Typ: ${setupType} — ${setupInstruction}
 2. VOLUME CONFIRMATION — wolumen ≥ 1.5x: czy popyt rzeczywiście rośnie?
 3. RISK/REWARD — target +5% / stop -3% = 1.67x R/R; czy akceptowalne w tym kontekście?
-4. TREND RYNKOWY — indeks w up/sideways/down? "Never fight the tape"
+4. TREND RYNKOWY — SMA150: ${sma150trend === 'above' ? 'cena POWYŻEJ ✅ (uptrend)' : sma150trend === 'below' ? 'cena PONIŻEJ ❌ (downtrend — dealbreaker dla long)' : 'brak danych'} | "Never fight the tape"
 5. RELATIVE STRENGTH — czy spółka zachowuje się silniej niż sektor?
-6. STOP TECHNICZNY — czy istnieje czyste wsparcie poniżej ceny wejścia?
+6. STOP TECHNICZNY — ${nearSupport != null ? (nearSupport ? '✅ czyste wsparcie blisko ceny wejścia' : '❌ brak wsparcia w pobliżu — ryzyko głębszego cięcia') : 'Czy istnieje czyste wsparcie poniżej ceny wejścia?'} | Bollinger lower: ${bollinger?.lower?.toFixed(2) ?? 'brak'}
 7. CATALYST RYZYKA — earnings, dywidenda, event w ciągu 5 dni sesji?
 8. PŁYNNOŚĆ — czy wolumen pozwala na wyjście bez slippage?
 9. SENTIMENT NEWSOWY — newsy neutralne/pozytywne? Negatywne to dealbreaker
@@ -395,7 +415,7 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 4. S — SUPPLY/DEMAND — wolumen na wybiciu: ≥ 1.5x = instytucjonalne zainteresowanie
 5. L — LEADER OR LAGGARD — siła relatywna vs sektor: top 15%?
 6. I — INSTITUTIONAL SPONSORSHIP — rekomendacje Kup vs Sprzedaj
-7. M — MARKET DIRECTION — indeks w uptrend? Nie kupuj podczas korekty rynku
+7. M — MARKET DIRECTION — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary trend up' : 'PONIŻEJ ❌ — primary trend down'}` : 'indeks w uptrend?'} | Nie kupuj podczas korekty rynku
 8. BAZA TECHNICZNA — jak długo konsolidacja przed wybieniem? (min. 3 tygodnie = lepsza baza)
 9. JAKOŚĆ WYBICIA — RSI > 60 + close blisko high dnia = siłowe wybicie
 10. BETA / ZMIENNOŚĆ — ryzyko specyficzne dla tego setup'u agresywnego
@@ -443,12 +463,12 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
 4. RETURN ON EQUITY — ROE: > 15% = dobry, > 20% = świetny
 5. FREE CASH FLOW — FCF Yield: > 5% = atrakcyjny
 6. DŁUG — Dług/Equity: < 0.5 bezpieczne, > 1.0 ryzykowne
-7. TREND SMA150 I RSI — czy price > SMA150 (primary uptrend intaktny)? RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.
+7. TREND SMA150 I RSI — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary uptrend intaktny' : 'PONIŻEJ ❌ — ostrzeżenie'}` : 'SMA150: brak danych'} | RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.
 8. MARGIN OF SAFETY — cena vs cel analityków: upside > 20%?
 9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
 10. LYNCH — WZROST vs WYCENA (PEG) — P/E / wzrost przych.: PEG < 1 tanie, > 2 drogie
 11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor
-12. MACD PRZY COFNIĘCIU — MACD nie powinien wskazywać głębokiej bessy przy pullbacku. Bullish bias: MACD ≥ signal lub MACD > 0 = swing gotowy. Deeply negative MACD = ryzyko fałszywego sygnału.
+12. MACD PRZY COFNIĘCIU — ${macd ? `MACD: linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | Trend: ${macd.trend?.toUpperCase() ?? '?'}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.` : 'MACD: brak danych — oceń z kontekstu'}
 13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
   }
 
