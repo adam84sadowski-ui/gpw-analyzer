@@ -66,7 +66,7 @@ function buildPositionShareText(pos, r, cur) {
   return lines.join('\n')
 }
 
-const HOLD_HORIZON = { scalping: 5, swing: 40, aggressive: 30 }
+const HOLD_HORIZON = { scalping: 5, swing: 40, aggressive: 30, long_term: 365 }
 
 function computeHoldStrength(pos, cp, cur, aiEval) {
   const ep       = pos.avgEntryPrice ?? pos.entryPrice
