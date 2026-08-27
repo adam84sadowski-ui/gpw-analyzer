@@ -209,7 +209,7 @@ Każda strategia ma osobne universum dla GPW i NYSE. **Oba miejsca muszą być z
 - NYSE: `AAPL, MSFT, NVDA, AMZN, META, GOOGL, JPM, BAC, JNJ, PG, TSLA, AMD, CRM, SNOW, PLTR`
 
 ### Swing (📈)
-- Sygnał: `SMA50_CROSSOVER` (cena > SMA50 po przejściu z poniżej, okno 3 dni + volMult ≥ 1.2 GPW / 1.3 NYSE)
+- Sygnały: `PULLBACK_TO_SMA50` (cofnięcie do SMA50 ±3-5%, RSI 36-55 GPW / 40-58 NYSE + volMult ≥ 1.1), `PULLBACK_TO_SMA20` (SMA20 > SMA50 > SMA150, cena w zakresie -3%/+2% SMA20, RSI 42-60)
 - Cel: +15%, Stop: -5%, Horyzont: 4-8 tygodni
 - Wymaga min. 55 świec
 - GPW: `kru.pl, acp.pl, bdx.pl, car.pl, cln.pl, dom.pl, eat.pl, gpw.pl, ing.pl, ker.pl, opl.pl, vrg.pl, pcf.pl, brs.pl, mlp.pl`
@@ -229,9 +229,14 @@ Moduł `src/lib/interpretSignal.js` — `interpretSignal(signal, values, strateg
 
 | Sygnał | Warunek | Interpretacja |
 |--------|---------|---------------|
-| `RSI_OVERSOLD` | RSI < próg + wolumen | Spółka wyprzedana, oczekiwane odbicie. Zamknij gdy RSI > 55. |
-| `SMA50_CROSSOVER` | Cena przebiła SMA50 od dołu | Zmiana trendu na wzrostowy. Swing trade, kilka tygodni. |
-| `BREAKOUT` | Cena > max20d + wolumen | Wybicie z konsolidacji. Spekulacyjne, ścisły stop loss. |
+| `RSI_OVERSOLD` | RSI ≤ 37 + wolumen + price > SMA50/SMA150 | Kapitulacja sprzedających, oczekiwane odbicie. Zamknij gdy RSI > 55. |
+| `PULLBACK_UPTREND` | RSI 38-50 + price > SMA50/SMA150 + near SMA20 | Zdrowe cofnięcie w uptrendzie. Wejdź przy odbiciu od wsparcia. |
+| `BB_BOUNCE` | Cena ≤ dolna BB (2σ) + volMult ≥ 1.3 + SMA150 above | Matematycznie zdefiniowane odchylenie, powrót do średniej. |
+| `VOLUME_CLIMAX_REVERSAL` | volMult ≥ 3x + hammer candle (ta sama sesja) + SMA150 above | Wyczerpanie sprzedających, odwrócenie krótkoterminowe. |
+| `PULLBACK_TO_SMA50` | Cena w ±3-5% SMA50 + RSI 36-55 + volMult ≥ 1.1 | Klasyczny swing pullback. Trzymaj kilka tygodni. |
+| `PULLBACK_TO_SMA20` | SMA20 > SMA50 > SMA150 + price przy SMA20 (-3%/+2%) + RSI 42-60 | Wcześniejsze wejście w silnym trendzie. Horyzont 2-4 tyg. |
+| `BREAKOUT` | Cena > max20d + RSI 60-70 + volMult ≥ 2.0 | Wybicie z konsolidacji. Spekulacyjne, ścisły stop loss. |
+| `VOL_SURGE` | NYSE only: volMult ≥ 2.5x + priceChange +3-8% + RSI 50-70 + MACD bullish | Instytucjonalny katalizator. Horyzont 1-2 dni. |
 
 Dynamiczne ostrzeżenia:
 - RSI > 80 przy BREAKOUT → ryzyko fałszywego wybicia

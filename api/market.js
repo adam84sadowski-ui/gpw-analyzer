@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
-    const [positions, news, fundamentals, candleData] = await Promise.all([
+    const [positions, news, fundamentals, candleData, indexTrend] = await Promise.all([
       kv.keys(`${ENV}:position:*`)
         .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
         .then(all => all.filter(Boolean))
@@ -124,14 +124,19 @@ export default async function handler(req, res) {
       fetchNewsHeadlines(ticker, exchange).catch(() => []),
       fetchQuoteSummary(ticker, exchange).catch(() => null),
       getCachedData(ticker, exchange, true).catch(() => null), // cache-only, no extra fetch
+      fetchIndexTrend(exchange).catch(() => 'neutral'),
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
     const spNum = signalPrice ? Number(signalPrice) : null
     const lpNum = livePriceQ  ? Number(livePriceQ)  : null
 
-    // Recent price action indicators from candle history
-    let priceAction = null
+    // Compute full technical indicators from candle history
     const candles = candleData?.candles
+    const indicators = candles?.length >= 25
+      ? calcIndicators(candles, strategy ?? 'swing', {}, exchange, indexTrend ?? 'neutral')
+      : null
+
+    // Recent price action indicators from candle history
     if (candles && candles.length >= 6) {
       const c = candles
       const last = c.length - 1
@@ -157,6 +162,12 @@ export default async function handler(req, res) {
       livePrice:   lpNum,
       strategy:    strategy ?? 'swing',
       priceAction,
+      macd:        indicators?.macd ?? null,
+      sma150trend: indicators?.sma150trend ?? null,
+      sma20:       indicators?.sma20 ?? null,
+      bollinger:   indicators?.bollinger ?? null,
+      nearSupport: indicators?.nearSupport ?? null,
+      divergence:  indicators?.divergence ?? null,
       ...sectorCtx,
       news,
       fundamentals,
