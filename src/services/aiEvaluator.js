@@ -548,3 +548,71 @@ ${jsonSchema}`
   }
   return parsed
 }
+
+// AI horizon review — called when position nears end of strategy horizon
+// Returns { tacticalOption, longTermOption, strategyUpgradeOption }
+export async function evaluateHorizon({ ticker, exchange, signal, strategy, daysHeld, entryPrice, currentPrice, pnlPct, target, stopLoss, fundamentals, news }) {
+  const newsLines = news?.length
+    ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
+    : 'Brak nagłówków'
+  const fundBlock = buildFundBlock(fundamentals, ticker)
+  const today = new Date().toISOString().slice(0, 10)
+  const addDays = n => { const d = new Date(today); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+
+  const dataBlock = `DANE POZYCJI:
+- Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał: ${signal ?? 'brak'}
+- Cena wejścia: ${entryPrice} | Cena bieżąca: ${currentPrice} | P&L: ${pnlPct > 0 ? '+' : ''}${pnlPct}%
+- Dni trzymania: ${daysHeld} | Cel: +${target}% | Stop: -${stopLoss}%
+- Dzisiaj: ${today}
+
+FUNDAMENTY:
+${fundBlock}
+
+NEWSY:
+${newsLines}`
+
+  const upgradeInfo = strategy === 'scalping'
+    ? 'Strategia: SCALPING (cel +5%, stop -3%, horyzont 2-5 dni). Upgrade do swing = cel +15%, stop -5%, horyzont 4-8 tygodni.'
+    : strategy === 'swing'
+    ? 'Strategia: SWING (cel +15%, stop -5%, horyzont 4-8 tygodni). Upgrade do aggressive = cel +25-35%, stop -8%, horyzont 4-12 tygodni.'
+    : 'Strategia: AGGRESSIVE (cel +35%, stop -8%). Brak opcji upgrade — to najszersza strategia.'
+
+  const prompt = `Jesteś doradcą inwestycyjnym oceniającym co zrobić z pozycją po zbliżeniu się do końca horyzontu. Pozycja nadal otwarta — użytkownik rozważa kontynuację.
+
+${dataBlock}
+
+${upgradeInfo}
+
+Zaproponuj TRZY niezależne opcje. Oceniaj realistycznie — nie wszystkie muszą być "applicable: true". Odpowiedz TYLKO w JSON bez markdown:
+
+{
+  "tacticalOption": {
+    "weeks": <integer 1-6 — ile tygodni przedłużenia w ramach tej samej strategii>,
+    "newTarget": <integer % od ceny wejścia — nowy lub taki sam cel>,
+    "checkpoint": "<YYYY-MM-DD — data wymuszonego przeglądu>",
+    "rationale": "<2-3 zdania PL: dlaczego warto przedłużyć? Co konkretnie monitorować?>"
+  },
+  "longTermOption": {
+    "applicable": <true jeśli fundamenty uzasadniają 6-18 mcy: silny EPS, moat, strukturalny wzrost | false jeśli spekulacja lub brak danych>,
+    "months": <integer 6-18 lub null>,
+    "newTarget": <integer % od ceny wejścia lub null>,
+    "nextCheckpoint": "<YYYY-MM-DD — przegląd za ~30 dni lub null>",
+    "rationale": "<2-3 zdania PL: czy fundamenty uzasadniają długoterminowe trzymanie? Główne ryzyka?>"
+  },
+  "strategyUpgradeOption": {
+    "applicable": <true TYLKO gdy strategia to scalping lub swing i fundamenty są mocne lub trend wyraźny | false dla aggressive lub gdy brak podstaw>,
+    "upgradeTo": <"swing" gdy strategia=scalping | "aggressive" gdy strategia=swing | null>,
+    "newTarget": <integer % od ceny wejścia lub null>,
+    "newStopLoss": <integer % — szerszy stop dopasowany do nowej strategii lub null>,
+    "checkpoint": "<YYYY-MM-DD lub null>",
+    "rationale": "<2-3 zdania PL: czy upgrade jest uzasadniony? Jakie warunki muszą być spełnione?>"
+  }
+}`
+
+  const text = await callClaudeAPI(prompt, 800)
+  return parseJSON(text, {
+    tacticalOption: { weeks: 2, newTarget: target, checkpoint: addDays(14), rationale: 'Brak danych — spróbuj ponownie.' },
+    longTermOption: { applicable: false, months: null, newTarget: null, nextCheckpoint: null, rationale: 'Analiza niedostępna.' },
+    strategyUpgradeOption: { applicable: false, upgradeTo: null, newTarget: null, newStopLoss: null, checkpoint: null, rationale: 'Analiza niedostępna.' },
+  })
+}
