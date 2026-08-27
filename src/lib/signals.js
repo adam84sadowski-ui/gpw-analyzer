@@ -84,11 +84,44 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const aboveSma50 = sma50 != null && price > sma50
     const nearSma20  = sma20 != null && price >= sma20 * 0.95 && price <= sma20 * 1.03
     if (rsi !== null && rsi >= rsiMin && rsi <= rsiMax && aboveSma50 && nearSma20 && volMult && volMult >= volThr) {
+      const signalName = rsi <= 37 ? 'RSI_OVERSOLD' : 'PULLBACK_UPTREND'
       const score = calcScore('scalping', { ...scoreInputs, rsi })
-      return { signal: 'RSI_OVERSOLD', price, rsi, rsiPeriod, volMult,
+      return { signal: signalName, price, rsi, rsiPeriod, volMult,
         sma20, sma50,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
         score, ...extra }
+    }
+
+    // BB_BOUNCE — price at/below lower Bollinger Band, no RSI requirement
+    if (bands?.lower != null && price <= bands.lower * 1.01 && sma150trend === 'above' && volMult != null && volMult >= 1.3) {
+      const rsiForBB = calcRSI(closes, 14)
+      const score = calcScore('scalping', { ...scoreInputs, rsi: rsiForBB ?? 50 })
+      return { signal: 'BB_BOUNCE', price, rsi: rsiForBB, rsiPeriod: 14, volMult,
+        sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+        dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
+        score, ...extra }
+    }
+
+    // VOLUME_CLIMAX_REVERSAL — extreme volume + hammer candle on the same (yesterday's) session
+    // volMult uses candles[-2] (yesterday), so we check hammer on candles[-2] as well
+    if (candles.length >= 3 && volMult != null && volMult >= 3.0 && sma150trend === 'above') {
+      const yesterday = candles[candles.length - 2]
+      const range = yesterday.high - yesterday.low
+      if (range > 0) {
+        const closeVsRange = (yesterday.close - yesterday.low) / range
+        const body = Math.abs(yesterday.close - yesterday.open)
+        const lowerShadow = Math.min(yesterday.close, yesterday.open) - yesterday.low
+        const isHammer = closeVsRange >= 0.65 && (body === 0 || lowerShadow >= body * 1.5)
+        if (isHammer) {
+          const rsiVcr = calcRSI(closes, 14)
+          const score = calcScore('scalping', { ...scoreInputs, rsi: rsiVcr ?? 50 })
+          return { signal: 'VOLUME_CLIMAX_REVERSAL', price, rsi: rsiVcr, rsiPeriod: 14, volMult,
+            sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+            dynamicStopLoss: calcDynamicStopLoss(atr, price, 'scalping'),
+            closeVsRange: Math.round(closeVsRange * 100) / 100,
+            score, ...extra }
+        }
+      }
     }
 
     // VOL_SURGE — momentum/catalyst signal, NYSE only
@@ -139,9 +172,10 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const sma50  = sma50s[sma50s.length - 1]
     const sma50Delta = sma50 != null ? Math.round((price - sma50) / sma50 * 1000) / 10 : null
 
-    // NYSE: reject overbought entries and bearish MACD
-    if (rsi != null && rsi > rsiCeil) return null
+    // NYSE: reject bearish MACD
     if (exchange === 'NYSE' && macdSig.trend !== 'bullish') return null
+
+    const sma20 = calcSMA(closes, 20)
 
     // Pullback-to-SMA50: price within proximity band, RSI in reset zone, mild volume
     const inPullbackZone = sma50Delta != null && sma50Delta >= dMin && sma50Delta <= dMax
@@ -149,8 +183,22 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     if (inPullbackZone && rsiReset && volMult && volMult >= volThr) {
       const score = calcScore('swing', { ...scoreInputs, rsi })
       return { signal: 'PULLBACK_TO_SMA50', price, rsi, rsiPeriod, volMult,
-        sma20: calcSMA(closes, 20), sma50,
+        sma20, sma50,
         sma50Delta,
+        dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
+        score, ...extra }
+    }
+
+    // PULLBACK_TO_SMA20 — earlier entry in strong uptrends (SMA20 > SMA50 > SMA150)
+    const sma20Delta = sma20 != null ? Math.round((price - sma20) / sma20 * 1000) / 10 : null
+    const strongAlignment = sma20 != null && sma50 != null && sma150 != null && sma20 > sma50 && sma50 > sma150
+    const nearSma20Swing = sma20Delta != null && sma20Delta >= -3 && sma20Delta <= 2
+    const rsiSma20Valid = rsi != null && rsi >= 42 && rsi <= 60
+    if (strongAlignment && nearSma20Swing && rsiSma20Valid && volMult != null && volMult >= volThr) {
+      const score = calcScore('swing', { ...scoreInputs, rsi })
+      return { signal: 'PULLBACK_TO_SMA20', price, rsi, rsiPeriod, volMult,
+        sma20, sma50,
+        sma50Delta: sma20Delta,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
         score, ...extra }
     }

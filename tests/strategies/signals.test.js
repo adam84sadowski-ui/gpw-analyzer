@@ -63,24 +63,25 @@ describe('detectSignal — scalping (PULLBACK_IN_TREND)', () => {
     expect(detectSignal(candles, 'scalping', {}, 'GPW')).toBeNull()
   })
 
-  it('returns RSI_OVERSOLD signal when pullback-in-trend conditions are met', () => {
-    // 157 uptrend days + 3 pullback days → RSI(9) lands ~39, price stays above SMA50 and near SMA20
+  it('returns RSI_OVERSOLD or PULLBACK_UPTREND when pullback-in-trend conditions are met', () => {
+    // 157 uptrend days + 3 pullback days → RSI(9) lands ~38-42; signal name depends on RSI ≤/> 37
     const candles = makeUptrendCandles({ total: 160, pullbackDays: 3, pullbackRate: 0.985, volSpike: 1.3 })
     const result = detectSignal(candles, 'scalping', {}, 'GPW')
     expect(result).not.toBeNull()
-    expect(result.signal).toBe('RSI_OVERSOLD')
+    expect(['RSI_OVERSOLD', 'PULLBACK_UPTREND']).toContain(result.signal)
+    if (result.signal === 'RSI_OVERSOLD')    expect(result.rsi).toBeLessThanOrEqual(37)
+    if (result.signal === 'PULLBACK_UPTREND') expect(result.rsi).toBeGreaterThan(37)
     expect(result.rsi).toBeGreaterThanOrEqual(34)
     expect(result.rsi).toBeLessThanOrEqual(46)
-    expect(result.rsi).toBeDefined()
     expect(result.price).toBeGreaterThan(0)
     expect(result.volMult).toBeGreaterThanOrEqual(1.2)
   })
 
-  it('returns RSI_OVERSOLD signal for NYSE with wider RSI band', () => {
+  it('returns RSI_OVERSOLD or PULLBACK_UPTREND for NYSE with wider RSI band', () => {
     const candles = makeUptrendCandles({ total: 160, pullbackDays: 3, pullbackRate: 0.985, volSpike: 1.2 })
     const result = detectSignal(candles, 'scalping', {}, 'NYSE')
     expect(result).not.toBeNull()
-    expect(result.signal).toBe('RSI_OVERSOLD')
+    expect(['RSI_OVERSOLD', 'PULLBACK_UPTREND']).toContain(result.signal)
     expect(result.rsi).toBeGreaterThanOrEqual(35)
     expect(result.rsi).toBeLessThanOrEqual(50)
   })
