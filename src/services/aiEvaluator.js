@@ -260,7 +260,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -323,7 +323,10 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
     ? `Wsparcie techniczne: ${nearSupport ? '✅ cena blisko wsparcia' : '❌ daleko od wsparcia'}`
     : ''
   const divergenceBlock = divergence ? `Dywergencja RSI: ${divergence}` : ''
-  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock].filter(Boolean).join('\n')
+  const stopBlock = dynamicStopLoss != null
+    ? `Stop ATR (dynamiczny): -${dynamicStopLoss}% | Stop strategii (fixed): ${strategy === 'scalping' ? '-3%' : strategy === 'aggressive' ? '-8%' : strategy === 'long_term' ? '-10%' : '-5%'}${dynamicStopLoss > (strategy === 'scalping' ? 3 : strategy === 'aggressive' ? 8 : strategy === 'long_term' ? 10 : 5) ? ' ⚠️ ATR sugeruje szerszy stop niż domyślny — rynek zmienniejszy niż standard' : ''}`
+    : ''
+  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock].filter(Boolean).join('\n')
 
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
@@ -387,7 +390,7 @@ ${jsonSchema}
 Punkty w "analysis" (12 kryteriów PTJ):
 1. MOMENTUM SETUP — Typ: ${setupType} — ${setupInstruction}
 2. VOLUME CONFIRMATION — wolumen ≥ 1.5x: czy popyt rzeczywiście rośnie?
-3. RISK/REWARD — target +5% / stop -3% = 1.67x R/R; czy akceptowalne w tym kontekście?
+3. RISK/REWARD — target +5% / stop ${dynamicStopLoss != null ? `-${dynamicStopLoss}% (ATR-based)` : '-3% (fixed)'} = ${dynamicStopLoss != null ? `${Math.round(5 / dynamicStopLoss * 10) / 10}x` : '1.67x'} R/R${dynamicStopLoss != null && dynamicStopLoss > 3 ? ' ⚠️ zmienność wysoka — R/R poniżej 2:1' : ''}; czy akceptowalne w tym kontekście?
 4. TREND RYNKOWY — SMA150: ${sma150trend === 'above' ? 'cena POWYŻEJ ✅ (uptrend)' : sma150trend === 'below' ? 'cena PONIŻEJ ❌ (downtrend — dealbreaker dla long)' : 'brak danych'} | "Never fight the tape"
 5. RELATIVE STRENGTH — czy spółka zachowuje się silniej niż sektor?
 6. STOP TECHNICZNY — ${nearSupport != null ? (nearSupport ? '✅ czyste wsparcie blisko ceny wejścia' : '❌ brak wsparcia w pobliżu — ryzyko głębszego cięcia') : 'Czy istnieje czyste wsparcie poniżej ceny wejścia?'} | Bollinger lower: ${bollinger?.lower?.toFixed(2) ?? 'brak'}
@@ -420,7 +423,7 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 9. JAKOŚĆ WYBICIA — RSI > 60 + close blisko high dnia = siłowe wybicie
 10. BETA / ZMIENNOŚĆ — ryzyko specyficzne dla tego setup'u agresywnego
 11. MOMENTUM FUNDAMENTÓW — wzrost przychodów YoY: przyspiesza czy hamuje?
-12. REGUŁA SPRZEDAŻY O'NEIL — kiedy bezwarunkowo wychodzimy (-7-8% od wejścia lub specyficzne warunki)
+12. REGUŁA SPRZEDAŻY O'NEIL — stop ${dynamicStopLoss != null ? `-${dynamicStopLoss}% ATR-based` : '-7-8% fixed'}; kiedy bezwarunkowo wychodzimy${dynamicStopLoss != null && dynamicStopLoss > 8 ? ' ⚠️ ATR sugeruje szerszy stop niż -8% — rozważ redukcję size' : ''}
 13. EARNINGS RUN-UP — wyniki za 3-7 dni: czy historycznie spółka rośnie przed publikacją (earnings whisper)? Czy konsensus EPS rośnie? Jeśli tak: czyste momentum play — zaplanuj wyjście przed wynikami + tight stop`
   } else if (strategy === 'long_term') {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger. Oceniasz wejście w pozycję długoterminową (horyzont 6-18 miesięcy, stop -10%). Zasada: "Our favorite holding period is forever — unless the fundamentals change."
