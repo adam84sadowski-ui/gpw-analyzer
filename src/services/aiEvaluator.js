@@ -341,6 +341,12 @@ ${newsLines}`
 
   let prompt
   if (strategy === 'scalping') {
+    const setupType = rsi <= 37
+      ? `OVERSOLD BOUNCE (RSI=${rsi} ≤ 37)`
+      : `PULLBACK IN UPTREND (RSI=${rsi} 38-50)`
+    const setupInstruction = rsi <= 37
+      ? `Kapitulacja sprzedających — oceń: (a) wolumen potwierdza wyczerpanie podaży, (b) świeca odwrócenia/pin bar, (c) RSI ≤ 37 = autentyczne wyprzedanie?`
+      : `Cofnięcie w uptrendzie — oceń: (a) SMA50 trzyma jako wsparcie (sma50Delta=${sma50Delta}%), (b) SMA150 intaktne (primary trend up), (c) RSI 38-50 = zdrowy reset. MACD nie jest w głębokiej dywergencji?`
     prompt = `Jesteś traderem momentum w stylu Paul Tudor Jones (PTJ). Filozofia: dyscyplina ryzyka absolutna, R/R ≥ 2:1, natychmiastowe cięcie gdy rynek mówi "nie". Horyzont: 2-5 dni. Target +5%, Stop -3%.
 
 Twoje zadanie: oceń ten setup SCALPINGOWY — czy wchodzisz, czy czekasz, czy omijasz.
@@ -351,7 +357,7 @@ ${dataBlock}
 ${jsonSchema}
 
 Punkty w "analysis" (12 kryteriów PTJ):
-1. MOMENTUM SETUP — RSI < 35 + wolumen: czy wyprzedanie autentyczne?
+1. MOMENTUM SETUP — Typ: ${setupType} — ${setupInstruction}
 2. VOLUME CONFIRMATION — wolumen ≥ 1.5x: czy popyt rzeczywiście rośnie?
 3. RISK/REWARD — target +5% / stop -3% = 1.67x R/R; czy akceptowalne w tym kontekście?
 4. TREND RYNKOWY — indeks w up/sideways/down? "Never fight the tape"
@@ -388,30 +394,54 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 11. MOMENTUM FUNDAMENTÓW — wzrost przychodów YoY: przyspiesza czy hamuje?
 12. REGUŁA SPRZEDAŻY O'NEIL — kiedy bezwarunkowo wychodzimy (-7-8% od wejścia lub specyficzne warunki)
 13. EARNINGS RUN-UP — wyniki za 3-7 dni: czy historycznie spółka rośnie przed publikacją (earnings whisper)? Czy konsensus EPS rośnie? Jeśli tak: czyste momentum play — zaplanuj wyjście przed wynikami + tight stop`
-  } else {
-    prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia).
+  } else if (strategy === 'long_term') {
+    prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger. Oceniasz wejście w pozycję długoterminową (horyzont 6-18 miesięcy, stop -10%). Zasada: "Our favorite holding period is forever — unless the fundamentals change."
 
-Twoje zadanie: profesjonalna ocena czy warto wejść w tę spółkę i jak to zrobić optymalnie. Horyzont: 4-8 tygodni.
+Twoje zadanie: oceń czy warto otworzyć pozycję długoterminową w tej spółce.
 
 ${dataBlock}
 
 ═══════════════
 ${jsonSchema}
 
-Punkty w "analysis" (12 kryteriów Buffett/Lynch):
-1. CIRCLE OF COMPETENCE — czy rozumiemy model biznesowy tej spółki?
+Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
+1. CIRCLE OF COMPETENCE — czy rozumiemy model biznesowy i economic moat tej spółki?
+2. ECONOMIC MOAT — przewaga konkurencyjna: marka, sieć, koszty przełączenia, patenty?
+3. EARNINGS CONSISTENCY — zyski i FCF stabilne od 5+ lat? Recesja-proof?
+4. RETURN ON EQUITY — ROE > 15% = dobry, > 20% = świetny, > 25% = exceptional
+5. FREE CASH FLOW — FCF Yield: > 5% = atrakcyjny. Rosnący FCF YoY?
+6. DŁUG — Dług/Equity: < 0.5 bezpieczne, > 1.0 ryzykowne dla long-term hold
+7. MANAGEMENT QUALITY — alokacja kapitału, buybacki, historia decyzji zarządu
+8. MARGIN OF SAFETY — cena vs intrinsic value: upside > 30% dla long-term
+9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
+10. LYNCH — WZROST vs WYCENA (PEG) — PEG < 1 tanie, > 2 drogie dla growth stocks
+11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor i 5-letnia historyczna średnia
+12. RYZYKO STRUKTURALNE — regulatory risk, secular decline, disruption (nie korekty cenowe)
+13. ŚRODOWISKO MAKRO — długoterminowy trend stóp, rotacja sektorowa, mega-trendy (AI, energia, demografika)`
+  } else {
+    prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
+
+Twoje zadanie: oceń ten setup SWING — PULLBACK DO SMA50 w uptrendzie — czy wchodzisz, czy czekasz, czy omijasz. Horyzont: 4-8 tygodni.
+
+${dataBlock}
+
+═══════════════
+${jsonSchema}
+
+Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
+1. PULLBACK DO SMA50 — vs SMA50: ${sma50Delta}% | Cofnięcie do SMA50 (<5%) = optymalna strefa wejścia. Czy SMA50 trzyma jako wsparcie dynamiczne? Czy widoczne odbicie?
 2. ECONOMIC MOAT — przewaga konkurencyjna: marka, sieć, koszty przełączenia?
 3. EARNINGS CONSISTENCY — zyski stabilne od 3+ lat?
 4. RETURN ON EQUITY — ROE: > 15% = dobry, > 20% = świetny
 5. FREE CASH FLOW — FCF Yield: > 5% = atrakcyjny
 6. DŁUG — Dług/Equity: < 0.5 bezpieczne, > 1.0 ryzykowne
-7. MANAGEMENT QUALITY — alokacja kapitału, historia decyzji
+7. TREND SMA150 I RSI — czy price > SMA150 (primary uptrend intaktny)? RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.
 8. MARGIN OF SAFETY — cena vs cel analityków: upside > 20%?
 9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
 10. LYNCH — WZROST vs WYCENA (PEG) — P/E / wzrost przych.: PEG < 1 tanie, > 2 drogie
 11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor
-12. RYZYKO SPECYFICZNE — 2-3 konkretne ryzyka dla tej spółki
-13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych (rosnące = presja na growth/P/E, malejące = sprzyjające). Rotacja sektorowa instytucji: czy ten sektor jest w favor? Sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
+12. MACD PRZY COFNIĘCIU — MACD nie powinien wskazywać głębokiej bessy przy pullbacku. Bullish bias: MACD ≥ signal lub MACD > 0 = swing gotowy. Deeply negative MACD = ryzyko fałszywego sygnału.
+13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
   }
 
   prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
