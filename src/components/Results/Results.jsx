@@ -475,13 +475,23 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         }).catch(() => {})
         setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, suggestedAddSizePct: data.suggestedAddSizePct }))
       }
-      // Dynamic nextReviewDate = min(claude_date, hs_date)
+      // Dynamic nextReviewDate
       const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate() + n); return dt.toISOString().slice(0, 10) }
-      const hsDays = hs.total >= 75 ? 7 : hs.total >= 50 ? 3 : 1
-      const hsDate = addDays(todayStr, hsDays)
-      const finalReviewDate = data.nextReviewDate
-        ? (data.nextReviewDate < hsDate ? data.nextReviewDate : hsDate)
-        : hsDate
+      let finalReviewDate
+      if (pos.strategy === 'long_term') {
+        // long_term: 30-day review cycle — trust Claude's date, fallback to +30 days
+        // Never use hs_date (3-7 days) which would wrongly pull into the past or near-future
+        finalReviewDate = (data.nextReviewDate && data.nextReviewDate >= todayStr)
+          ? data.nextReviewDate
+          : addDays(todayStr, 30)
+      } else {
+        // short/medium strategies: min(claude_date, hs_date) to accelerate review when HS is low
+        const hsDays = hs.total >= 75 ? 7 : hs.total >= 50 ? 3 : 1
+        const hsDate = addDays(todayStr, hsDays)
+        finalReviewDate = data.nextReviewDate
+          ? (data.nextReviewDate < hsDate ? data.nextReviewDate : hsDate)
+          : hsDate
+      }
       fetch('/api/positions', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
