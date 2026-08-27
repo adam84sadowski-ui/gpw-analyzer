@@ -739,7 +739,13 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                     {names[pos.ticker] && (
                       <span className="ml-1.5 text-sm text-gray-400">({names[pos.ticker]})</span>
                     )}
-                    <span className="ml-2 text-xs text-gray-400">{pos.strategy}</span>
+                    <span className="ml-2 text-xs text-gray-400">{
+                      pos.strategy === 'long_term' ? '📅 Długoterminowa'
+                      : pos.strategy === 'scalping' ? '⚡ Scalping'
+                      : pos.strategy === 'swing' ? '📈 Swing'
+                      : pos.strategy === 'aggressive' ? '🚀 Agresywna'
+                      : pos.strategy
+                    }</span>
                     <span className="ml-1 text-xs text-gray-500">{cur}</span>
                     {pos.entryScore != null && (
                       <span className="ml-2 text-xs text-yellow-400">⭐ {pos.entryScore}/100</span>
@@ -883,7 +889,24 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 )}
 
-                {pos.status === 'open' && pos.strategy !== 'aggressive' && (() => {
+                {pos.status === 'open' && pos.strategy === 'long_term' && (
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">⏱ Czas pozycji</span>
+                      <span className="text-gray-300">
+                        {Math.round((new Date(new Date().toISOString().slice(0, 10)) - new Date(pos.entryDate.slice(0, 10))) / 86400000)} dni (długoterminowa)
+                      </span>
+                    </div>
+                    {pos.nextReviewDate && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">📅 Następny przegląd</span>
+                        <span className="text-purple-300 font-semibold">{pos.nextReviewDate}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {pos.status === 'open' && pos.strategy !== 'aggressive' && pos.strategy !== 'long_term' && (() => {
                   const maxDays  = HORIZON[pos.strategy]?.maxDays ?? 5
                   const entryDay = new Date(pos.entryDate.slice(0, 10))
                   const today    = new Date(new Date().toISOString().slice(0, 10))
@@ -1127,6 +1150,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   const today        = new Date(new Date().toISOString().slice(0, 10))
                   const daysHeld     = Math.round((today - entryDay) / 86400000)
                   const horizon      = HOLD_HORIZON[pos.strategy] ?? 30
+                  if (pos.strategy === 'long_term') return null
                   const triggered    = pos.strategy === 'scalping' ? daysHeld >= 3 : daysHeld >= Math.round(horizon * 0.8)
                   if (!triggered) return null
                   const he   = horizonEvals[pos.id]
