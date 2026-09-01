@@ -492,7 +492,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
           ? (data.nextReviewDate < hsDate ? data.nextReviewDate : hsDate)
           : hsDate
       }
-      fetch('/api/positions', {
+      await fetch('/api/positions', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ id: pos.id, nextReviewDate: finalReviewDate }),
@@ -556,13 +556,12 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
       if (opts.stopLoss      != null) body.stopLoss      = opts.stopLoss
       if (opts.strategy      != null) body.strategy      = opts.strategy
       if (opts.nextReviewDate)        body.nextReviewDate = opts.nextReviewDate
-      const res     = await fetch('/api/positions', {
+      await fetch('/api/positions', {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
       })
-      const updated = await res.json()
-      setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, ...updated }))
+      setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, ...body }))
       setHorizonConfirm(s => ({ ...s, [pos.id]: optType + '_done' }))
     } catch {
       setHorizonConfirm(s => ({ ...s, [pos.id]: null }))
@@ -593,23 +592,22 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
     <div className="space-y-4">
       {closing && <CloseModal position={closing} onClose={() => setClosing(null)} onConfirm={closePosition} currency={posCurrency(closing)} />}
 
-      {/* Podsumowanie */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
-          <div className="text-xs text-gray-400 mb-1">Portfel</div>
-          <div className="font-bold">{portfolio.toLocaleString('pl-PL')} PLN</div>
-        </div>
-        <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
-          <div className="text-xs text-gray-400 mb-1">Zainwestowane</div>
-          <div className="font-bold">{totalInvested.toLocaleString('pl-PL')} {exchangeCurrency}</div>
-        </div>
-        <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
-          <div className="text-xs text-gray-400 mb-1">P&L (otwarte)</div>
-          <div className={`font-bold ${totalPnL >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
-            {fmtCur(totalPnL, exchangeCurrency)}
+      {/* Podsumowanie — P&L otwartych pozycji */}
+      {openForExchange.length > 0 && (() => {
+        const totalPnLPct = openForExchange.reduce((s, p) => {
+          const cp = prices[p.ticker]
+          const ep = p.avgEntryPrice ?? p.entryPrice
+          return cp && ep ? s + ((cp - ep) / ep * 100) : s
+        }, 0) / openForExchange.length
+        return (
+          <div className="bg-gpw-card border border-gpw-border rounded-lg p-4 text-center">
+            <div className="text-xs text-gray-400 mb-1">P&L otwarte ({openForExchange.length} pozycji)</div>
+            <div className={`font-bold text-lg ${totalPnL >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+              {totalPnL >= 0 ? '+' : ''}{totalPnLPct.toFixed(2)}% <span className="text-xs text-gray-500">({totalPnL >= 0 ? '+' : ''}{fmtCur(totalPnL, exchangeCurrency)})</span>
+            </div>
           </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Tabs */}
       <div className="flex items-center border-b border-gpw-border">
@@ -788,7 +786,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-2 text-xs text-center">
+                <div className="grid grid-cols-2 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wejście</div>
                     <div className="font-bold">{pos.entryPrice} {cur}</div>
@@ -796,12 +794,6 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">{pos.status === 'open' ? 'Teraz' : 'Wyjście'}</div>
                     <div className="font-bold">{pos.status === 'open' ? (cp ?? '…') : pos.exitPrice} {cur}</div>
-                  </div>
-                  <div className="bg-gpw-dark rounded p-1.5">
-                    <div className="text-gray-400">Wartość P&L</div>
-                    <div className={`font-bold ${(pnlAmt ?? pos.pnlAmt ?? 0) >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
-                      {fmtCur(pnlAmt ?? pos.pnlAmt ?? 0, cur)}
-                    </div>
                   </div>
                 </div>
 

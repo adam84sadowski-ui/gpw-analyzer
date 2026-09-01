@@ -2,16 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import EntryValidationModal from '../Strategies/ReboundRadar/EntryValidationModal.jsx'
 import TechnicalPanel from '../TechnicalPanel.jsx'
 
-function zoneStatus(item) {
-  if (!item.livePrice) return null
-  if (item.entryZoneMin != null && item.entryZoneMax != null) {
-    if (item.livePrice >= item.entryZoneMin && item.livePrice <= item.entryZoneMax) return 'in'
-    if (item.livePrice < item.entryZoneMin) return 'below'
-    return 'above'
-  }
-  return null
-}
-
 function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate }) {
   const [confirming,    setConfirming]    = useState(false)
   const [opening,       setOpening]       = useState(false)
@@ -19,19 +9,20 @@ function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate
   const [indicsData,    setIndicsData]    = useState(null)
   const [indicsLoading, setIndicsLoading] = useState(false)
 
-  const status  = item.status === 'expired' ? 'expired' : zoneStatus(item)
   const currency = item.exchange === 'NYSE' ? 'USD' : 'PLN'
   const display  = item.exchange === 'NYSE'
     ? item.ticker.toUpperCase()
     : item.ticker.replace('.pl', '').toUpperCase()
 
-  const STATUS = {
-    in:      { label: '✅ W strefie wejścia', cls: 'text-gpw-green border-gpw-green/40 bg-gpw-green/10' },
-    below:   { label: '📉 Poniżej strefy', cls: 'text-blue-400 border-blue-400/40 bg-blue-400/10' },
-    above:   { label: '⬆️ Powyżej strefy', cls: 'text-gray-400 border-gray-600 bg-transparent' },
-    expired: { label: '⏰ Wygasło', cls: 'text-gray-500 border-gray-700 bg-transparent' },
-    null:    { label: '—', cls: 'text-gray-500 border-gray-700 bg-transparent' },
-  }[status ?? 'null']
+  const STATUS = item.status === 'expired'
+    ? { label: '⏰ Wygasło', cls: 'text-gray-500 border-gray-700 bg-transparent' }
+    : item.aiDecision === 'WEJDŹ'
+      ? { label: '✅ WEJDŹ', cls: 'text-gpw-green border-gpw-green/40 bg-gpw-green/10' }
+      : item.aiDecision === 'OBSERWUJ'
+        ? { label: '👁 OBSERWUJ', cls: 'text-yellow-400 border-yellow-600/40 bg-yellow-900/10' }
+        : item.aiDecision === 'UNIKAJ'
+          ? { label: '🚫 UNIKAJ', cls: 'text-gpw-red border-gpw-red/40 bg-gpw-red/10' }
+          : { label: '— brak oceny', cls: 'text-gray-500 border-gray-700 bg-transparent' }
 
   async function openPosition() {
     setOpening(true)
@@ -108,19 +99,22 @@ function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate
         )}
       </div>
 
-      {/* Indicators grid */}
-      <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
-        {[
-          { label: 'RSI', val: item.rsi != null ? item.rsi.toFixed(1) : '—' },
-          { label: 'Vol', val: item.volMult != null ? `${item.volMult}x` : '—' },
-          { label: 'Tech', val: item.score != null ? `${item.score}/100` : '—' },
-          { label: 'AI score', val: item.compositeScore != null ? `${item.compositeScore}/100` : item.buffettScore != null ? `${item.buffettScore}/10` : '—' },
-        ].map(({ label, val }) => (
-          <div key={label} className={`bg-gpw-dark rounded p-1.5 ${label === 'AI score' && item.compositeScore != null ? 'ring-1 ring-gpw-blue/40' : ''}`}>
-            <div className="text-gray-500 text-[10px]">{label}</div>
-            <div className={`font-bold ${label === 'AI score' && item.compositeScore != null ? (item.compositeScore >= 70 ? 'text-gpw-green' : item.compositeScore >= 50 ? 'text-yellow-400' : 'text-gpw-red') : 'text-gray-200'}`}>{val}</div>
-          </div>
-        ))}
+      {/* Indicators grid — snapshot at signal time */}
+      <div className="space-y-1">
+        <div className="text-[10px] text-gray-600 uppercase tracking-wide">Przy sygnale</div>
+        <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
+          {[
+            { label: 'RSI', val: item.rsi != null ? item.rsi.toFixed(1) : '—' },
+            { label: 'Vol', val: item.volMult != null ? `${item.volMult}x` : '—' },
+            { label: 'Tech', val: item.score != null ? `${item.score}/100` : '—' },
+            { label: 'AI score', val: item.compositeScore != null ? `${item.compositeScore}/100` : item.buffettScore != null ? `${item.buffettScore}/10` : '—' },
+          ].map(({ label, val }) => (
+            <div key={label} className={`bg-gpw-dark rounded p-1.5 ${label === 'AI score' && item.compositeScore != null ? 'ring-1 ring-gpw-blue/40' : ''}`}>
+              <div className="text-gray-500 text-[10px]">{label}</div>
+              <div className={`font-bold ${label === 'AI score' && item.compositeScore != null ? (item.compositeScore >= 70 ? 'text-gpw-green' : item.compositeScore >= 50 ? 'text-yellow-400' : 'text-gpw-red') : 'text-gray-200'}`}>{val}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Composite score bar */}
@@ -153,20 +147,10 @@ function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate
           <p className="text-gray-300 leading-relaxed">
             Otwarta pozycja <span className="font-bold text-white">{swapCandidate.ticker}</span> słabnie
             (Hold Strength: <span className="text-gpw-red font-bold">{swapCandidate.holdTotal}/100</span>
+            {swapCandidate.evalDays != null && <span className="text-gray-500"> · ocenione {swapCandidate.evalDays === 0 ? 'dziś' : `${swapCandidate.evalDays}d temu`}</span>}
             {swapCandidate.aiAction && <span className="text-gray-500"> · {swapCandidate.aiAction}</span>}).
             Rozważ zamianę na tę spółkę.
           </p>
-        </div>
-      )}
-
-      {/* Entry zone */}
-      {(item.entryZoneMin != null || item.entryZoneMax != null) && (
-        <div className="bg-gpw-dark rounded-lg p-2 text-xs text-gray-300">
-          🎯 Strefa wejścia: <span className="font-bold text-yellow-300">
-            {item.entryZoneMin ?? '?'} – {item.entryZoneMax ?? '?'} {currency}
-          </span>
-          {item.stopLoss && <span className="ml-2 text-gray-500">Stop -{item.stopLoss}%</span>}
-          {item.target   && <span className="ml-1 text-gray-500">Cel +{item.target}%{item.compositeScore != null ? ' 🤖' : ''}</span>}
         </div>
       )}
 

@@ -36,12 +36,25 @@ function calcDynamicStopLoss(atr, price, strategy) {
   return Math.round(Math.min(cfg.max, Math.max(cfg.min, rawPct)) * 10) / 10
 }
 
-export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW', indexTrend = 'neutral', monthlyReturns = null) {
+export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW', indexTrend = 'neutral', monthlyReturns = null, indexReturn20d = null) {
   if (!candles || candles.length < 25) return null
   const closes  = candles.map(c => c.close)
   const volumes = candles.map(c => c.volume)
   const price   = closes[closes.length - 1]
   const volMult = volumeMultiplier(volumes)
+  const stock20dReturn = closes.length >= 21
+    ? (closes[closes.length - 1] - closes[closes.length - 21]) / closes[closes.length - 21]
+    : null
+  const rsRatio = stock20dReturn != null && indexReturn20d != null
+    ? ((1 + stock20dReturn) / (1 + indexReturn20d)) - 1
+    : null
+  const rsScore = rsRatio == null ? 0
+    : rsRatio > 0.20 ? 10
+    : rsRatio > 0.10 ? 7
+    : rsRatio > 0.03 ? 3
+    : rsRatio < -0.10 ? -10
+    : rsRatio < -0.03 ? -7
+    : 0
 
   const defaults    = SIGNAL_DEFAULTS[exchange] ?? SIGNAL_DEFAULTS.GPW
   const divergence  = detectRSIDivergence(closes)
@@ -61,6 +74,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   const scoreInputs = {
     volMult, sma150trend, nearSupport, divergence, indexTrend,
     macdScore: macdSig.score, bollingerScore: bollSig.score, seasonalityScore: seasSig.score,
+    rsScore,
   }
 
   const extra = {
@@ -69,6 +83,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     bollinger: { ...bands, status: bollSig.status, score: bollSig.score },
     seasonality: { avgReturn: seasSig.avgReturn, score: seasSig.score, month: currentMonth },
     divergence,
+    rs: { ratio: rsRatio, score: rsScore, stock20d: stock20dReturn },
   }
 
   if (strategy === 'scalping') {
@@ -229,12 +244,12 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   return null
 }
 
-export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'GPW', indexTrend = 'neutral', monthlyReturns = null) {
+export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'GPW', indexTrend = 'neutral', monthlyReturns = null, indexReturn20d = null) {
   if (!candles || candles.length < 25) return null
   const closes  = candles.map(c => c.close)
   const volumes = candles.map(c => c.volume)
   const price   = closes[closes.length - 1]
-  const sig     = detectSignal(candles, strategy, thresholds, exchange, indexTrend, monthlyReturns)
+  const sig     = detectSignal(candles, strategy, thresholds, exchange, indexTrend, monthlyReturns, indexReturn20d)
   const sma150  = calcSMA(closes, 150)
   const atr     = calcATR(candles)
   const bands   = calculateBollinger(closes)
@@ -267,10 +282,12 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
       macdScore:        macdSig.score ?? 0,
       bollingerScore:   bands ? (getBollingerSignal(price, bands, strategy).score ?? 0) : 0,
       seasonalityScore: getSeasonalityScore(monthlyReturns, new Date().getMonth()).score ?? 0,
+      rsScore:          sig?.rs?.score ?? 0,
     }),
     dynamicStopLoss: sig?.dynamicStopLoss ?? null,
     sma150Warning:   sig?.sma150Warning ?? false,
     divergence:      detectRSIDivergence(closes),
     indexTrend,
+    rs:              sig?.rs ?? null,
   }
 }

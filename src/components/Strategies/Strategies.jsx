@@ -188,7 +188,7 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
 
   // When switching to scan tab, ensure scan data is loaded
   useEffect(() => {
-    if (viewMode === 'scan' || viewMode === 'radar') startScanFetch()
+    if (viewMode === 'radar') startScanFetch()
   }, [viewMode])
 
   const topRsi = [...scanData]
@@ -541,12 +541,6 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
           className={`flex-1 py-2 transition-colors ${viewMode === 'radar' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
         >
           🎯 Radar
-        </button>
-        <button
-          onClick={() => setViewMode('scan')}
-          className={`flex-1 py-2 transition-colors ${viewMode === 'scan' ? 'bg-gpw-blue text-white' : 'bg-gpw-dark text-gray-400 hover:text-white'}`}
-        >
-          Wszystkie
         </button>
       </div>
 
@@ -939,60 +933,6 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
         </div>
       )}
 
-      {/* Scan view — all stocks with indicators */}
-      {viewMode === 'scan' && (
-        scanLoading ? (
-          <div className="text-gray-400 text-sm py-4 text-center">Skanem spółki… (może potrwać 30s)</div>
-        ) : scanData.length === 0 ? (
-          <div className="bg-gpw-dark rounded-lg p-4 text-sm text-gray-400 text-center">
-            Brak danych. Sprawdź ponownie za chwilę.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {scanData.map(row => {
-              const rsiColor = row.rsi === null ? 'text-gray-400'
-                : row.rsi < 30 ? 'text-gpw-green font-bold'
-                : row.rsi > 70 ? 'text-gpw-red font-bold'
-                : 'text-white'
-              const volColor = row.volMult && row.volMult >= 2 ? 'text-yellow-400 font-bold' : 'text-white'
-              return (
-                <div
-                  key={row.ticker}
-                  className={`bg-gpw-dark border rounded-lg p-3 ${row.hasSignal ? 'border-gpw-green' : 'border-gpw-border'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold">{row.tickerDisplay}</span>
-                      {row.companyName && <span className="text-xs text-gray-500">({row.companyName})</span>}
-                      {row.hasSignal
-                        ? <span className="text-xs bg-gpw-green text-white px-1.5 py-0.5 rounded">⚡ {row.signal}</span>
-                        : <span className="text-xs text-gray-500">brak sygnału</span>
-                      }
-                    </div>
-                    <span className="font-semibold text-sm">{row.price} {row.exchange === 'NYSE' ? 'USD' : 'PLN'}</span>
-                  </div>
-                  <div className="flex gap-3 mt-2 text-xs flex-wrap">
-                    <span className="text-gray-400">RSI({rsiPeriod}): <span className={rsiColor}>{row.rsi != null ? row.rsi.toFixed(1) : '—'}</span></span>
-                    <span className="text-gray-400">Vol: <span className={volColor}>{row.volMult ? `${row.volMult}x` : '—'}</span></span>
-                    {row.sma50 && <span className="text-gray-400">SMA50: <span className="text-white">{row.sma50.toFixed(2)}</span></span>}
-                    {row.sma150trend && <span className="text-gray-400">SMA150: <span className={row.sma150trend === 'above' ? 'text-gpw-green' : 'text-gpw-red'}>{row.sma150trend === 'above' ? '✅ powyżej' : '⚠️ poniżej'}</span></span>}
-                    {row.atrPct != null && <span className="text-gray-400">ATR: <span className="text-white">{row.atrPct}%</span></span>}
-                    {row.nearSupport != null && <span className="text-gpw-green">🔵 Wsp. {row.nearSupport}</span>}
-                    {row.score != null && row.hasSignal && <span className={`font-bold ${row.score >= 80 ? 'text-gpw-green' : row.score >= 60 ? 'text-yellow-400' : 'text-gray-400'}`}>⭐ {row.score}/100</span>}
-                    {row.divergence === 'bullish'  && <span className="text-gpw-green font-bold">🔀 Dyw. bycza</span>}
-                    {row.divergence === 'bearish'  && <span className="text-gpw-red font-bold">🔀 Dyw. niedźwiedzia</span>}
-                    {row.macd?.trend === 'bullish' && <span className="text-gpw-green font-bold">📊 MACD ↑</span>}
-                    {row.macd?.trend === 'bearish' && <span className="text-gpw-red font-bold">📊 MACD ↓</span>}
-                  </div>
-                </div>
-              )
-            })}
-            <p className="text-xs text-gray-500 text-center pt-1">
-              ⚠️ Dane edukacyjne z ~15 min opóźnieniem.
-            </p>
-          </div>
-        )
-      )}
     </div>
   )
 }

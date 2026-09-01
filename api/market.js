@@ -6,7 +6,7 @@ import { volumeMultiplier } from '../src/indicators/volume.js'
 import { calcSMA } from '../src/indicators/sma.js'
 import { calcScore } from '../src/indicators/scoring.js'
 import { UNIVERSES } from '../src/lib/universes.js'
-import { fetchIndexTrend } from '../src/lib/indextrend.js'
+import { fetchIndexTrend, fetchIndexReturn } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
 import { getMacroEnvironment } from '../src/indicators/macroFilter.js'
 import { runSimulation, calcMetrics } from '../src/lib/backtester.js'
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
-    const [positions, news, fundamentals, candleData, indexTrend] = await Promise.all([
+    const [positions, news, fundamentals, candleData, indexTrend, indexReturn20d] = await Promise.all([
       kv.keys(`${ENV}:position:*`)
         .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
         .then(all => all.filter(Boolean))
@@ -125,6 +125,7 @@ export default async function handler(req, res) {
       fetchQuoteSummary(ticker, exchange).catch(() => null),
       getCachedData(ticker, exchange, true).catch(() => null), // cache-only, no extra fetch
       fetchIndexTrend(exchange).catch(() => 'neutral'),
+      fetchIndexReturn(exchange, 20).catch(() => null),
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
     const spNum = signalPrice ? Number(signalPrice) : null
@@ -133,7 +134,7 @@ export default async function handler(req, res) {
     // Compute full technical indicators from candle history
     const candles = candleData?.candles
     const indicators = candles?.length >= 25
-      ? calcIndicators(candles, strategy ?? 'swing', {}, exchange, indexTrend ?? 'neutral')
+      ? calcIndicators(candles, strategy ?? 'swing', {}, exchange, indexTrend ?? 'neutral', null, indexReturn20d ?? null)
       : null
 
     // Recent price action indicators from candle history
@@ -170,22 +171,36 @@ export default async function handler(req, res) {
       nearSupport:      indicators?.nearSupport ?? null,
       divergence:       indicators?.divergence ?? null,
       dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
+      rs:               indicators?.rs ?? null,
       ...sectorCtx,
       news,
       fundamentals,
     })
     // AI Swap — find weak open position on same exchange for swap suggestion
+    const todayIso = new Date().toISOString().slice(0, 10)
     const openPos = positions.filter(p => p.status === 'open')
-    const swapCand = openPos.find(p =>
-      (p.exchange ?? 'GPW') === exchange &&
-      p.aiEvalHistory?.length > 0 &&
-      p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
-    )
-    const swapSuggestion = swapCand ? {
-      ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
-      holdTotal: swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].holdTotal,
-      aiAction:  swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].aiAction ?? null,
-    } : null
+    const swapCand = openPos.find(p => {
+      if ((p.exchange ?? 'GPW') !== exchange) return false
+      const last = p.aiEvalHistory?.[p.aiEvalHistory.length - 1]
+      if (!last || last.holdTotal >= 35) return false
+      // Only suggest swap if AI eval is recent (≤ 14 days)
+      const evalDays = last.date
+        ? Math.round((new Date(todayIso) - new Date(last.date)) / 86400000)
+        : 999
+      return evalDays <= 14
+    })
+    const swapSuggestion = swapCand ? (() => {
+      const last = swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1]
+      const evalDays = last.date
+        ? Math.round((new Date(todayIso) - new Date(last.date)) / 86400000)
+        : null
+      return {
+        ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
+        holdTotal: last.holdTotal,
+        aiAction:  last.aiAction ?? null,
+        evalDays,
+      }
+    })() : null
 
     return res.json({
       ...result,

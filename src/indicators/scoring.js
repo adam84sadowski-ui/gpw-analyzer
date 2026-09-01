@@ -6,7 +6,7 @@ const MAX_RAW = 130
 export function calcScore(strategy, inputs) {
   const {
     rsi, volMult, sma150trend, nearSupport, divergence, indexTrend,
-    macdScore = 0, bollingerScore = 0, seasonalityScore = 0,
+    macdScore = 0, bollingerScore = 0, seasonalityScore = 0, rsScore = 0,
   } = inputs
   let raw = 0
 
@@ -70,5 +70,9 @@ export function calcScore(strategy, inputs) {
   // Historical effectiveness — 5 pts, always 0 until KV data populated
   // raw += histEffScore ?? 0
 
-  return Math.min(100, Math.max(0, Math.round(raw / MAX_RAW * 100)))
+  const normalized = Math.min(100, Math.max(0, Math.round(raw / MAX_RAW * 100)))
+  if (strategy === 'aggressive' && rsScore !== 0) {
+    return Math.min(100, Math.max(0, normalized + rsScore))
+  }
+  return normalized
 }
