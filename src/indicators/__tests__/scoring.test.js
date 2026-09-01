@@ -60,4 +60,43 @@ describe('calcScore', () => {
     const highRsi = calcScore('swing', { ...base, rsi: 70 })
     expect(lowRsi).toBe(highRsi)
   })
+
+  describe('rsScore — aggressive post-normalization', () => {
+    const aggrBase = {
+      rsi: 62, volMult: 2.5, sma150trend: 'above', nearSupport: null,
+      divergence: null, indexTrend: 'up',
+      macdScore: 10, bollingerScore: 5, seasonalityScore: 0,
+    }
+
+    it('leader (+rsScore=10) scores higher than neutral for aggressive', () => {
+      const neutral = calcScore('aggressive', { ...aggrBase, rsScore: 0 })
+      const leader  = calcScore('aggressive', { ...aggrBase, rsScore: 10 })
+      expect(leader).toBeGreaterThan(neutral)
+    })
+
+    it('laggard (rsScore=-10) scores lower than neutral for aggressive', () => {
+      const neutral = calcScore('aggressive', { ...aggrBase, rsScore: 0 })
+      const laggard = calcScore('aggressive', { ...aggrBase, rsScore: -10 })
+      expect(laggard).toBeLessThan(neutral)
+    })
+
+    it('rsScore has no effect on scalping', () => {
+      const noRs   = calcScore('scalping', { ...base, rsScore: 0 })
+      const leader = calcScore('scalping', { ...base, rsScore: 10 })
+      expect(leader).toBe(noRs)
+    })
+
+    it('rsScore has no effect on swing', () => {
+      const noRs   = calcScore('swing', { ...base, rsScore: 0 })
+      const leader = calcScore('swing', { ...base, rsScore: 10 })
+      expect(leader).toBe(noRs)
+    })
+
+    it('aggressive score stays within 0-100 with extreme rsScore', () => {
+      const high = calcScore('aggressive', { ...aggrBase, rsScore: 10, macdScore: 15, bollingerScore: 20, seasonalityScore: 10 })
+      const low  = calcScore('aggressive', { ...aggrBase, rsScore: -10, macdScore: -15, bollingerScore: -20, seasonalityScore: -10 })
+      expect(high).toBeLessThanOrEqual(100)
+      expect(low).toBeGreaterThanOrEqual(0)
+    })
+  })
 })

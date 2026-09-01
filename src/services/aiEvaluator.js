@@ -260,7 +260,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -326,7 +326,10 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
   const stopBlock = dynamicStopLoss != null
     ? `Stop ATR (dynamiczny): -${dynamicStopLoss}% | Stop strategii (fixed): ${strategy === 'scalping' ? '-3%' : strategy === 'aggressive' ? '-8%' : strategy === 'long_term' ? '-10%' : '-5%'}${dynamicStopLoss > (strategy === 'scalping' ? 3 : strategy === 'aggressive' ? 8 : strategy === 'long_term' ? 10 : 5) ? ' ⚠️ ATR sugeruje szerszy stop niż domyślny — rynek zmienniejszy niż standard' : ''}`
     : ''
-  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock].filter(Boolean).join('\n')
+  const rsBlock = rs != null
+    ? `Relative Strength (20d vs indeks): ${rs.ratio != null ? `${rs.ratio > 0 ? '+' : ''}${(rs.ratio * 100).toFixed(1)}%` : 'brak danych'}${rs.ratio != null ? ` | ${rs.ratio > 0.10 ? '🏆 LEADER — rośnie wyraźnie mocniej od rynku' : rs.ratio > 0.03 ? '↑ POWYŻEJ rynku' : rs.ratio < -0.10 ? '🚩 LAGGARD — wyraźnie słabszy od rynku' : rs.ratio < -0.03 ? '↓ PONIŻEJ rynku' : '≈ INLINE z rynkiem'}` : ''}`
+    : ''
+  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock, rsBlock].filter(Boolean).join('\n')
 
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
@@ -416,7 +419,7 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 2. A — ANNUAL EARNINGS — trend 3-letni: konsekwentny wzrost?
 3. N — NOVELTY — nowy produkt/rynek/management/52W high proximity?
 4. S — SUPPLY/DEMAND — wolumen na wybiciu: ≥ 1.5x = instytucjonalne zainteresowanie
-5. L — LEADER OR LAGGARD — siła relatywna vs sektor: top 15%?
+5. L — LEADER OR LAGGARD — ${rs?.ratio != null ? `RS (20d vs indeks): ${rs.ratio > 0 ? '+' : ''}${(rs.ratio * 100).toFixed(1)}% → ${rs.ratio > 0.10 ? '🏆 LEADER top-tier — preferowane' : rs.ratio > 0.03 ? '↑ powyżej rynku — pozytywne' : rs.ratio < -0.10 ? '🚩 LAGGARD — unikaj lub redukuj wagę' : rs.ratio < -0.03 ? '↓ poniżej rynku — bądź ostrożny' : '≈ inline z rynkiem — neutralne'}` : 'siła relatywna vs sektor: top 15%? (brak danych RS)'}
 6. I — INSTITUTIONAL SPONSORSHIP — rekomendacje Kup vs Sprzedaj
 7. M — MARKET DIRECTION — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary trend up' : 'PONIŻEJ ❌ — primary trend down'}` : 'indeks w uptrend?'} | Nie kupuj podczas korekty rynku
 8. BAZA TECHNICZNA — jak długo konsolidacja przed wybieniem? (min. 3 tygodnie = lepsza baza)

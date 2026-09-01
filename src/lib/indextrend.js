@@ -50,3 +50,18 @@ export async function fetchIndexTrend(exchange) {
     return 'neutral'
   }
 }
+
+export async function fetchIndexReturn(exchange, days = 20) {
+  try {
+    const candles = exchange === 'GPW'
+      ? await fetchIndexCandlesStooq('wig20')
+      : await fetchIndexCandlesYahoo('SPY')
+    if (!candles || candles.length < days + 1) return null
+    const closes = candles.map(c => c.close)
+    const current = closes[closes.length - 1]
+    const past    = closes[closes.length - 1 - days]
+    return past > 0 ? (current - past) / past : null
+  } catch {
+    return null
+  }
+}
