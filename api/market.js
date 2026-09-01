@@ -175,17 +175,30 @@ export default async function handler(req, res) {
       fundamentals,
     })
     // AI Swap — find weak open position on same exchange for swap suggestion
+    const todayIso = new Date().toISOString().slice(0, 10)
     const openPos = positions.filter(p => p.status === 'open')
-    const swapCand = openPos.find(p =>
-      (p.exchange ?? 'GPW') === exchange &&
-      p.aiEvalHistory?.length > 0 &&
-      p.aiEvalHistory[p.aiEvalHistory.length - 1].holdTotal < 35
-    )
-    const swapSuggestion = swapCand ? {
-      ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
-      holdTotal: swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].holdTotal,
-      aiAction:  swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1].aiAction ?? null,
-    } : null
+    const swapCand = openPos.find(p => {
+      if ((p.exchange ?? 'GPW') !== exchange) return false
+      const last = p.aiEvalHistory?.[p.aiEvalHistory.length - 1]
+      if (!last || last.holdTotal >= 35) return false
+      // Only suggest swap if AI eval is recent (≤ 14 days)
+      const evalDays = last.date
+        ? Math.round((new Date(todayIso) - new Date(last.date)) / 86400000)
+        : 999
+      return evalDays <= 14
+    })
+    const swapSuggestion = swapCand ? (() => {
+      const last = swapCand.aiEvalHistory[swapCand.aiEvalHistory.length - 1]
+      const evalDays = last.date
+        ? Math.round((new Date(todayIso) - new Date(last.date)) / 86400000)
+        : null
+      return {
+        ticker:    swapCand.tickerDisplay ?? swapCand.ticker.replace('.pl', '').toUpperCase(),
+        holdTotal: last.holdTotal,
+        aiAction:  last.aiAction ?? null,
+        evalDays,
+      }
+    })() : null
 
     return res.json({
       ...result,

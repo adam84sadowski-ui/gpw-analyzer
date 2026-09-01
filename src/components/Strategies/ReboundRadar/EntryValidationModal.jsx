@@ -395,8 +395,11 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     <span className="font-bold text-white">{result.swapSuggestion.ticker}</span>
                     {' '}o słabnącej sile holdingu:{' '}
                     <span className="text-gpw-red font-bold">{result.swapSuggestion.holdTotal}/100</span>
+                    {result.swapSuggestion.evalDays != null && (
+                      <span className="text-gray-500"> · ocenione {result.swapSuggestion.evalDays === 0 ? 'dziś' : `${result.swapSuggestion.evalDays} dni temu`}</span>
+                    )}
                     {result.swapSuggestion.aiAction && (
-                      <span className="text-gray-500"> · AI oceniła: {result.swapSuggestion.aiAction}</span>
+                      <span className="text-gray-500"> · AI: {result.swapSuggestion.aiAction}</span>
                     )}
                     . Rozważ zamknięcie jej i otwarcie tej pozycji zamiast.
                   </p>
