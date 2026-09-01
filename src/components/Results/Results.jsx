@@ -562,7 +562,8 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
         body:    JSON.stringify(body),
       })
       setPositions(prev => prev.map(p => p.id !== pos.id ? p : { ...p, ...body }))
-      setHorizonConfirm(s => ({ ...s, [pos.id]: optType + '_done' }))
+      setHorizonEvals(prev => { const n = { ...prev }; delete n[pos.id]; return n })
+      setHorizonConfirm(s => ({ ...s, [pos.id]: null }))
     } catch {
       setHorizonConfirm(s => ({ ...s, [pos.id]: null }))
     }
@@ -1157,8 +1158,11 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   const entryDay     = new Date(pos.entryDate.slice(0, 10))
                   const today        = new Date(new Date().toISOString().slice(0, 10))
                   const daysHeld     = Math.round((today - entryDay) / 86400000)
-                  const horizon      = HOLD_HORIZON[pos.strategy] ?? 30
                   if (pos.strategy === 'long_term') return null
+                  const baseHorizon  = HOLD_HORIZON[pos.strategy] ?? 30
+                  const horizon      = pos.nextReviewDate
+                    ? Math.max(baseHorizon, Math.round((new Date(pos.nextReviewDate) - entryDay) / 86400000))
+                    : baseHorizon
                   const triggered    = pos.strategy === 'scalping' ? daysHeld >= 3 : daysHeld >= Math.round(horizon * 0.8)
                   if (!triggered) return null
                   const he   = horizonEvals[pos.id]
