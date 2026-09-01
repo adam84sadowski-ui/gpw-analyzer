@@ -909,9 +909,12 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                 )}
 
                 {pos.status === 'open' && pos.strategy !== 'aggressive' && pos.strategy !== 'long_term' && (() => {
-                  const maxDays  = HORIZON[pos.strategy]?.maxDays ?? 5
                   const entryDay = new Date(pos.entryDate.slice(0, 10))
                   const today    = new Date(new Date().toISOString().slice(0, 10))
+                  const baseMax  = HORIZON[pos.strategy]?.maxDays ?? 5
+                  const maxDays  = pos.nextReviewDate
+                    ? Math.max(baseMax, Math.round((new Date(pos.nextReviewDate) - entryDay) / 86400000))
+                    : baseMax
                   const daysHeld = Math.round((today - entryDay) / 86400000)
                   const daysLeft = maxDays - daysHeld
                   const pct      = Math.min(100, Math.round(daysHeld / maxDays * 100))
@@ -968,6 +971,9 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                           </div>
                         ))}
                       </div>
+                      {hs.dimensions.efficiency === 0 && (
+                        <p className="text-[9px] text-gray-600 italic">Efektywność = 0 gdy P&L ujemny — hold strength zmieni się gdy cena wzrośnie lub zmieni się RSI.</p>
+                      )}
                       {pos.aiEvalHistory?.length > 1 && (
                         <div className="text-[9px] text-gray-500 flex items-center gap-1 flex-wrap pt-0.5">
                           <span className="text-gray-600">Trajektoria:</span>
