@@ -333,6 +333,7 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
             : 'W środku pasm (neutralne)')
         return `Bollinger (20,2σ): upper=${bollinger.upper?.toFixed(2) ?? '?'}, middle=${bollinger.middle?.toFixed(2) ?? '?'}, lower=${bollinger.lower?.toFixed(2) ?? '?'} | bandwidth=${bollinger.bandwidth?.toFixed(1) ?? '?'}% | Status: ${bStatus}`
       })()
+    : ''
   const nearSupportBlock = nearSupport != null
     ? `Wsparcie techniczne: ${nearSupport ? '✅ cena blisko wsparcia' : '❌ daleko od wsparcia'}`
     : ''
