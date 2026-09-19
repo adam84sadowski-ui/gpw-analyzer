@@ -317,8 +317,22 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
     : ''
   const sma20Block = sma20 != null ? `SMA20: ${sma20.toFixed(2)}` : ''
   const bollingerBlock = bollinger
-    ? `Bollinger (20,2σ): upper=${bollinger.upper?.toFixed(2) ?? '?'}, middle=${bollinger.middle?.toFixed(2) ?? '?'}, lower=${bollinger.lower?.toFixed(2) ?? '?'} | bandwidth=${bollinger.bandwidth?.toFixed(1) ?? '?'}% | Status: ${bollinger.status ?? 'normal'}`
-    : ''
+    ? (() => {
+        const lp = livePrice ?? signalPrice ?? null
+        const bStatus = lp != null && bollinger.lower != null && bollinger.upper != null
+          ? (lp < bollinger.lower
+              ? 'PONIŻEJ dolnego pasma ✅ (BB oversold — sygnał BB_BOUNCE)'
+              : lp > bollinger.upper
+              ? 'POWYŻEJ górnego pasma ⚠️ (BB overbought — możliwa korekta)'
+              : bollinger.bandwidth < 5
+              ? 'KONSOLIDACJA — ściskanie pasm (breakout w przygotowaniu)'
+              : 'W środku pasm (neutralne)')
+          : (bollinger.status === 'below_lower' ? 'PONIŻEJ dolnego pasma ✅'
+            : bollinger.status === 'above_upper' ? 'POWYŻEJ górnego pasma ⚠️'
+            : bollinger.status === 'consolidation' ? 'KONSOLIDACJA'
+            : 'W środku pasm (neutralne)')
+        return `Bollinger (20,2σ): upper=${bollinger.upper?.toFixed(2) ?? '?'}, middle=${bollinger.middle?.toFixed(2) ?? '?'}, lower=${bollinger.lower?.toFixed(2) ?? '?'} | bandwidth=${bollinger.bandwidth?.toFixed(1) ?? '?'}% | Status: ${bStatus}`
+      })()
   const nearSupportBlock = nearSupport != null
     ? `Wsparcie techniczne: ${nearSupport ? '✅ cena blisko wsparcia' : '❌ daleko od wsparcia'}`
     : ''
