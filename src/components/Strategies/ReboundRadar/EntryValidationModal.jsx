@@ -386,6 +386,45 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 )}
               </div>
 
+              {/* Historical highs context */}
+              {(result.high52w != null || result.highATH != null) && (
+                <div className="bg-gpw-card border border-gpw-border rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">📍 Kontekst historyczny</p>
+                    {result.sector && <span className="text-[10px] text-gray-500 bg-gpw-dark px-2 py-0.5 rounded">{result.sector}</span>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {result.high52w != null && (
+                      <div className="bg-gpw-dark rounded px-2 py-1.5">
+                        <span className="text-gray-500 block text-[10px] uppercase tracking-wide">Max 12 mies.</span>
+                        <span className="font-bold text-white">{result.high52w.toFixed(2)}</span>
+                        {result.pctFrom52w != null && (
+                          <span className={`ml-1.5 text-[11px] font-semibold ${result.pctFrom52w >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+                            {result.pctFrom52w > 0 ? '+' : ''}{result.pctFrom52w}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {result.highATH != null && (
+                      <div className="bg-gpw-dark rounded px-2 py-1.5">
+                        <span className="text-gray-500 block text-[10px] uppercase tracking-wide">ATH (5 lat)</span>
+                        <span className="font-bold text-white">{result.highATH.toFixed(2)}</span>
+                        {result.pctFromATH != null && (
+                          <span className={`ml-1.5 text-[11px] font-semibold ${result.pctFromATH >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>
+                            {result.pctFromATH > 0 ? '+' : ''}{result.pctFromATH}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {result.highsContext && (
+                    <p className="text-xs text-gray-300 leading-relaxed pt-1 border-t border-gpw-border">
+                      {result.highsContext}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* AI Swap suggestion */}
               {result.swapSuggestion && result.decision !== 'UNIKAJ' && (
                 <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-lg p-3 text-xs space-y-1">

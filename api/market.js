@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   if (mode === 'ai-validate') {
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
-    const [positions, news, fundamentals, candleData, indexTrend, indexReturn20d] = await Promise.all([
+    const [positions, news, fundamentals, candleData, indexTrend, indexReturn20d, candles5yData] = await Promise.all([
       kv.keys(`${ENV}:position:*`)
         .then(keys => keys.length ? Promise.all(keys.map(k => kv.get(k))) : [])
         .then(all => all.filter(Boolean))
@@ -126,10 +126,20 @@ export default async function handler(req, res) {
       getCachedData(ticker, exchange, true).catch(() => null), // cache-only, no extra fetch
       fetchIndexTrend(exchange).catch(() => 'neutral'),
       fetchIndexReturn(exchange, 20).catch(() => null),
+      fetchCandlesExtended(ticker, exchange, '5y').catch(() => null),
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
     const spNum = signalPrice ? Number(signalPrice) : null
     const lpNum = livePriceQ  ? Number(livePriceQ)  : null
+
+    // Historical highs for context
+    const candles1y = candleData?.candles ?? []
+    const candles5y = candles5yData?.candles ?? candles1y
+    const refPrice  = lpNum ?? spNum ?? (candles1y.length ? candles1y[candles1y.length - 1].close : null)
+    const high52w   = candles1y.length ? Math.max(...candles1y.map(c => c.high)) : null
+    const highATH   = candles5y.length ? Math.max(...candles5y.map(c => c.high)) : high52w
+    const pctFrom52w = high52w && refPrice ? Math.round((refPrice - high52w) / high52w * 1000) / 10 : null
+    const pctFromATH = highATH && refPrice ? Math.round((refPrice - highATH) / highATH * 1000) / 10 : null
 
     // Compute full technical indicators from candle history
     const candles = candleData?.candles
@@ -172,6 +182,7 @@ export default async function handler(req, res) {
       divergence:       indicators?.divergence ?? null,
       dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
       rs:               indicators?.rs ?? null,
+      high52w, highATH, pctFrom52w, pctFromATH,
       ...sectorCtx,
       news,
       fundamentals,
@@ -211,6 +222,8 @@ export default async function handler(req, res) {
       analystHold:       fundamentals?.analystHold       ?? null,
       analystSell:       fundamentals?.analystSell       ?? null,
       recommendationKey: fundamentals?.recommendationKey ?? null,
+      high52w, highATH, pctFrom52w, pctFromATH,
+      sector: sectorCtx.sector ?? null,
     })
   }
 

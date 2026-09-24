@@ -260,7 +260,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -346,6 +346,10 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
     : ''
   const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock, rsBlock].filter(Boolean).join('\n')
 
+  const historicalHighsBlock = high52w != null
+    ? `\n📍 KONTEKST HISTORYCZNY — POZYCJA VS MAKSIMA:\nMax 12 miesięcy (52w high): ${high52w.toFixed(2)} | odchylenie ceny: ${pctFrom52w != null ? `${pctFrom52w > 0 ? '+' : ''}${pctFrom52w}%` : '?'}\nMax historyczne (5 lat): ${highATH != null ? highATH.toFixed(2) : '?'} | odchylenie od ATH: ${pctFromATH != null ? `${pctFromATH > 0 ? '+' : ''}${pctFromATH}%` : '?'}`
+    : ''
+
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
 RSI: ${rsi} | Wolumen: ${volMult}x | vs SMA50: ${sma50Delta}%${priceBlock ? `\n${priceBlock}` : ''}${priceActionBlock ? `\nZachowanie kursu: ${priceActionBlock}` : ''}${earningsLine ? `\n${earningsLine}` : ''}
@@ -355,7 +359,7 @@ ${analystVerBlock}
 ${sectorEvents}
 
 WSKAŹNIKI TECHNICZNE (obliczone z danych historycznych):
-${techLines}
+${techLines}${historicalHighsBlock}
 
 WSKAŹNIKI FUNDAMENTALNE:
 ${fundBlock}
@@ -376,7 +380,8 @@ ${newsLines}`
   "entryZoneMin": <liczba lub null — minimalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>,
-  "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>
+  "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>,
+  "highsContext": "<1-2 zdania: skąd odchylenie od maksimów — podaj konkretny czynnik (branżowy, makro, fundamentalny) i oceń czy powrót do szczytu jest realistyczny w horyzoncie tej strategii. Pomiń jeśli brak danych historycznych.>"
 }`
 
   let prompt
