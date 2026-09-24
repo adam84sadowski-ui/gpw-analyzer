@@ -389,7 +389,10 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
               {/* Historical highs context */}
               {(result.high52w != null || result.highATH != null) && (
                 <div className="bg-gpw-card border border-gpw-border rounded-lg p-3 space-y-1.5">
-                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">📍 Kontekst historyczny</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">📍 Kontekst historyczny</p>
+                    {result.sector && <span className="text-[10px] text-gray-500 bg-gpw-dark px-2 py-0.5 rounded">{result.sector}</span>}
+                  </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {result.high52w != null && (
                       <div className="bg-gpw-dark rounded px-2 py-1.5">

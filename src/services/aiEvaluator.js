@@ -381,7 +381,7 @@ ${newsLines}`
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>,
   "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>,
-  "highsContext": "<1-2 zdania: skąd odchylenie od maksimów (czynniki fundamentalne/makro/sektorowe) i czy powrót do szczytu jest realistyczny w horyzoncie strategii. Pomiń jeśli brak danych historycznych.>"
+  "highsContext": "<1-2 zdania: skąd odchylenie od maksimów — podaj konkretny czynnik (branżowy, makro, fundamentalny) i oceń czy powrót do szczytu jest realistyczny w horyzoncie tej strategii. Pomiń jeśli brak danych historycznych.>"
 }`
 
   let prompt

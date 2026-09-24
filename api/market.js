@@ -223,6 +223,7 @@ export default async function handler(req, res) {
       analystSell:       fundamentals?.analystSell       ?? null,
       recommendationKey: fundamentals?.recommendationKey ?? null,
       high52w, highATH, pctFrom52w, pctFromATH,
+      sector: sectorCtx.sector ?? null,
     })
   }
 
