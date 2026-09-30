@@ -55,10 +55,21 @@ describe('calcScore', () => {
     expect(withSupport).toBe(withoutSupport)
   })
 
-  it('swing does not use RSI', () => {
-    const lowRsi  = calcScore('swing', { ...base, rsi: 20 })
-    const highRsi = calcScore('swing', { ...base, rsi: 70 })
-    expect(lowRsi).toBe(highRsi)
+  it('swing RSI 40-50 scores highest (ideal pullback zone)', () => {
+    const ideal    = calcScore('swing', { ...base, rsi: 45 })
+    const moderate = calcScore('swing', { ...base, rsi: 54 })
+    const weak     = calcScore('swing', { ...base, rsi: 20 })
+    expect(ideal).toBeGreaterThan(moderate)
+    expect(moderate).toBeGreaterThan(weak)
+  })
+
+  it('swing signal with RSI 45 scores meaningfully above 6', () => {
+    const score = calcScore('swing', {
+      rsi: 45, volMult: 1.2, sma150trend: null, nearSupport: null,
+      divergence: null, indexTrend: 'neutral',
+      macdScore: 0, bollingerScore: 0, seasonalityScore: 0,
+    })
+    expect(score).toBeGreaterThan(15)
   })
 
   describe('rsScore — aggressive post-normalization', () => {
