@@ -10,7 +10,7 @@ export function calcScore(strategy, inputs) {
   } = inputs
   let raw = 0
 
-  // RSI (25 pts)
+  // RSI (25 pts scalping/aggressive, 20 pts swing)
   if (strategy === 'scalping') {
     if (rsi != null) {
       if (rsi < 30)      raw += 25
@@ -23,8 +23,13 @@ export function calcScore(strategy, inputs) {
       else if (rsi >= 65 && rsi < 75) raw += 20
       else if (rsi >= 75)             raw += 5
     }
+  } else if (strategy === 'swing') {
+    if (rsi != null) {
+      if (rsi >= 40 && rsi < 50)      raw += 20
+      else if (rsi >= 50 && rsi <= 58) raw += 10
+      else                             raw += 5
+    }
   }
-  // swing: RSI not primary driver
 
   // Volume (20 pts)
   if (volMult != null) {
