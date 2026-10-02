@@ -273,12 +273,14 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
     ? `Cena sygnału: ${signalPrice}${livePrice ? ` | Cena aktualna: ${livePrice}` : ''}${priceDriftPct != null ? ` | Dryft od sygnału: ${priceDriftPct > 0 ? '+' : ''}${priceDriftPct}%` : ''}${priceDriftPct != null && Math.abs(priceDriftPct) >= 5 ? ' ⚠️ CENA ODESZŁA OD SYGNAŁU — uwzględnij to w ocenie' : ''}`
     : null
 
-  const paWarning = priceAction && Math.abs(priceAction.change1d) >= 7
-    ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
-    : ''
+  const isViolentMove = priceAction && Math.abs(priceAction.change1d) >= 5
+  const paWarning = isViolentMove ? ` ⚠️ GWAŁTOWNY RUCH` : ''
   const priceActionBlock = priceAction
     ? `Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarning} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
     : null
+  const violentMoveBlockEntry = isViolentMove
+    ? `\n⚡ GWAŁTOWNY RUCH KURSU: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}% w 1 sesji. Na podstawie newsów powyżej: (1) podaj KONKRETNĄ przyczynę ruchu (wyniki, restrukturyzacja, korekta sektorowa, regulacje, makro, upgrade/downgrade?), (2) oceń czy to zmiana fundamentalna czy szum rynkowy, (3) wypełnij pole "violentMoveContext" w JSON.`
+    : ''
 
   const earningsDate = fundamentals?.earningsDate ?? null
   let earningsLine = ''
@@ -365,7 +367,7 @@ WSKAŹNIKI FUNDAMENTALNE:
 ${fundBlock}
 
 NEWSY (ostatnie 5):
-${newsLines}`
+${newsLines}${violentMoveBlockEntry}`
 
   const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca). compositeScore = synteza końcowa 0-100: techniczny score (waga 40%) + buffettScore×10 (waga 35%) + potwierdzenie analitykami/makro (waga 25%). signalStrength: SŁABY (<40), UMIARKOWANY (40-54), SILNY (55-74), BARDZO SILNY (≥75).
 {
@@ -381,7 +383,8 @@ ${newsLines}`
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>,
   "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>,
-  "highsContext": "<1-2 zdania: skąd odchylenie od maksimów — podaj konkretny czynnik (branżowy, makro, fundamentalny) i oceń czy powrót do szczytu jest realistyczny w horyzoncie tej strategii. Pomiń jeśli brak danych historycznych.>"
+  "highsContext": "<1-2 zdania: skąd odchylenie od maksimów — podaj konkretny czynnik (branżowy, makro, fundamentalny) i oceń czy powrót do szczytu jest realistyczny w horyzoncie tej strategii. Pomiń jeśli brak danych historycznych.>",
+  "violentMoveContext": ${isViolentMove ? '"<1-2 zdania PL: (1) konkretna przyczyna gwałtownego ruchu kursu na podstawie newsów, (2) czy zmiana jest fundamentalna (nowe ryzyko/szansa) czy tymczasowy szum rynkowy>"' : 'null'}
 }`
 
   let prompt
@@ -535,11 +538,13 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     }
   }
 
-  const paWarningEval = priceAction && Math.abs(priceAction.change1d) >= 7
-    ? ` ⚠️ GWAŁTOWNY RUCH — ryzyko korekty`
-    : ''
+  const isViolentMoveEval = priceAction && Math.abs(priceAction.change1d) >= 5
+  const paWarningEval = isViolentMoveEval ? ` ⚠️ GWAŁTOWNY RUCH` : ''
   const priceActionLine = priceAction
     ? `\n- Zachowanie kursu: Zmiana 1 sesja: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}%${paWarningEval} | Zmiana 5 sesji: ${priceAction.change5d > 0 ? '+' : ''}${priceAction.change5d}% | High vs Close ostatniej sesji: +${priceAction.highVsClose}%${priceAction.highVsClose >= 3 ? ' ⚠️ cena zamknięta daleko od szczytu — słabe zamknięcie' : ''}`
+    : ''
+  const violentMoveBlockEval = isViolentMoveEval
+    ? `\n\n⚡ GWAŁTOWNY RUCH KURSU: ${priceAction.change1d > 0 ? '+' : ''}${priceAction.change1d}% w 1 sesji. Na podstawie newsów powyżej: (1) podaj KONKRETNĄ przyczynę ruchu (wyniki, restrukturyzacja, korekta sektorowa, regulacje, makro, upgrade/downgrade?), (2) oceń czy to zmiana fundamentalna czy szum rynkowy, (3) jak wpływa na tezę inwestycyjną pozycji, (4) wypełnij pole "violentMoveContext" w JSON.`
     : ''
 
   const stopBreached = !trailingActive && pnlNum < -defaultStop
@@ -579,7 +584,7 @@ FUNDAMENTY:
 ${fundBlock}
 
 NEWSY:
-${newsLines}`
+${newsLines}${violentMoveBlockEval}`
 
   const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. compositeScore = siła tezy pozycji 0-100: fundamenty nadal obowiązują (40%) + stan techniczny (35%) + P&L vs cel/makro (25%). signalStrength: SŁABY (<40 — rozważ wyjście), UMIARKOWANY (40-54 — trzymaj ostrożnie), SILNY (55-74 — teza działa), BARDZO SILNY (≥75 — mocna pozycja).
 {
@@ -598,7 +603,8 @@ ${newsLines}`
   "suggestedPartialExitPct": <25 | 50 | 75 | null — % pozycji do częściowej realizacji. Tylko informacyjnie. Zaproponuj TYLKO gdy WSZYSTKIE 4 warunki: (1) P&L ≥ ${defaultStop}% — TWARDY PRÓG MINIMALNY, poniżej tego prowizja + spread zjada zysk, (2) P&L ≥ 60% celu LUB ryzyko gwałtownie wzrosło (wyniki za ≤ 3 dni i P&L ≥ ${defaultStop}%), (3) strategia NIE jest scalping, (4) suggestedAddSizePct = null — ZAKAZ łączenia: jeśli sugerujesz zwiększenie pozycji, NIE możesz jednocześnie sugerować częściowego wyjścia — to sprzeczność logiczna; to samo dotyczy sytuacji gdy pozycja była zwiększana w ciągu ostatnich 5 dni (widoczne w historii zwiększeń). Wybierz: 25 gdy minimalna ostrożność, 50 gdy umiarkowane ryzyko, 75 gdy wysoki zysk lub wysokie ryzyko. Null gdy: P&L < ${defaultStop}%, action=ZAMKNIJ, scalping, suggestedAddSizePct != null, pozycja zwiększana w ostatnich 5 dniach>,
   "nextReviewDate": <string ISO "YYYY-MM-DD" — kiedy następny przegląd, licząc od DZISIAJ (${new Date().toISOString().slice(0, 10)}). Dla scalping: za 1-2 dni. Dla swing: za 5-10 dni. Dla aggressive: za 3-7 dni. Dla long_term: za 28-35 dni (miesięczny cykl). Dostosuj gdy: blisko wyniki spółki → dzień przed, blisko cel/stop → jutro>,
   "bullCase": <string po polsku, 1 zdanie — NAJWIĘKSZY argument ZA trzymaniem/dokładaniem. Konkretny (np. "EPS rośnie 25% r/r przy P/E 18x, spółka ma pricing power"). Zawsze wypełnij>,
-  "bearCase": <string po polsku, 1 zdanie — NAJWIĘKSZE ryzyko dla pozycji. Konkretny (np. "Wyniki za 6 dni — luka cenowa może znieść cały zysk"). Zawsze wypełnij>
+  "bearCase": <string po polsku, 1 zdanie — NAJWIĘKSZE ryzyko dla pozycji. Konkretny (np. "Wyniki za 6 dni — luka cenowa może znieść cały zysk"). Zawsze wypełnij>,
+  "violentMoveContext": ${isViolentMoveEval ? '"<1-2 zdania PL: (1) konkretna przyczyna gwałtownego ruchu kursu na podstawie newsów, (2) czy zmiana jest fundamentalna czy szum rynkowy, (3) co oznacza dla aktualnej tezy pozycji>"' : 'null'}
 }`
 
   let persona

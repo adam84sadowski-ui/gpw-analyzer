@@ -1533,6 +1533,12 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                               </div>
                             )}
                             <p className="text-xs text-gray-300 leading-relaxed">{r.reason}</p>
+                            {r.violentMoveContext && (
+                              <div className="border-t border-gpw-border pt-2">
+                                <p className="text-xs text-orange-400 font-semibold uppercase tracking-wide mb-1">⚡ Gwałtowny ruch — analiza przyczyny</p>
+                                <p className="text-xs text-gray-300 leading-relaxed">{r.violentMoveContext}</p>
+                              </div>
+                            )}
                             {r.modification && (
                               <div className="border-t border-gpw-border pt-2">
                                 <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">📋 Plan działania</p>
