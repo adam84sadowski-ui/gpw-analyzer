@@ -384,6 +384,12 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     💡 {result.summary}
                   </p>
                 )}
+                {result.violentMoveContext && (
+                  <div className="border-t border-gpw-border pt-2">
+                    <p className="text-xs text-orange-400 font-semibold uppercase tracking-wide mb-1">⚡ Gwałtowny ruch — analiza przyczyny</p>
+                    <p className="text-xs text-gray-300 leading-relaxed">{result.violentMoveContext}</p>
+                  </div>
+                )}
               </div>
 
               {/* Historical highs context */}
