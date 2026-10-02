@@ -147,12 +147,15 @@ export default async function handler(req, res) {
       ? calcIndicators(candles, strategy ?? 'swing', {}, exchange, indexTrend ?? 'neutral', null, indexReturn20d ?? null)
       : null
 
-    // Recent price action indicators from candle history
+    // Recent price action indicators — change1d uses live price vs last cached close to capture today's intraday move
     let priceAction = null
     if (candles && candles.length >= 6) {
       const c = candles
       const last = c.length - 1
-      const change1d = ((c[last].close - c[last - 1].close) / c[last - 1].close * 100)
+      const liveRef = lpNum ?? spNum
+      const change1d = liveRef != null && c[last].close > 0
+        ? (liveRef - c[last].close) / c[last].close * 100
+        : (c[last].close - c[last - 1].close) / c[last - 1].close * 100
       const change5d = ((c[last].close - c[last - 5].close) / c[last - 5].close * 100)
       const highVsClose = ((c[last].high - c[last].close) / c[last].close * 100)
       priceAction = {
@@ -267,8 +270,12 @@ export default async function handler(req, res) {
     if (candlesEval && candlesEval.length >= 6) {
       const c = candlesEval
       const last = c.length - 1
+      const livePriceNum = Number(currentPrice ?? 0)
+      const change1dEval = livePriceNum > 0 && c[last].close > 0
+        ? (livePriceNum - c[last].close) / c[last].close * 100
+        : (c[last].close - c[last - 1].close) / c[last - 1].close * 100
       priceActionEval = {
-        change1d:    Math.round((c[last].close - c[last - 1].close) / c[last - 1].close * 1000) / 10,
+        change1d:    Math.round(change1dEval * 10) / 10,
         change5d:    Math.round((c[last].close - c[last - 5].close) / c[last - 5].close * 1000) / 10,
         highVsClose: Math.round((c[last].high  - c[last].close)     / c[last].close     * 1000) / 10,
       }
