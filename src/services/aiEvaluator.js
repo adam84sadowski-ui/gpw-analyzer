@@ -182,9 +182,12 @@ export async function callClaudeAPI(prompt, maxTokens = 300) {
         messages:   [{ role: 'user', content: prompt }],
       })
       logAICost(msg.usage).catch(() => {})
-      return msg.content[0]?.text ?? null
+      const text = msg.content[0]?.text ?? null
+      if (!text) console.error('[callClaudeAPI] empty response — stop_reason:', msg.stop_reason, 'content_len:', msg.content?.length, 'content[0].type:', msg.content?.[0]?.type)
+      return text
     } catch (err) {
       lastErr = err
+      console.error(`[callClaudeAPI] attempt ${attempt} failed:`, err?.status, err?.message?.slice(0, 120))
       if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
     }
   }
