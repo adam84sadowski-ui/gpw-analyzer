@@ -625,7 +625,7 @@ ${posBlock}
 
 ${jsonSchema}`
 
-  const text = await callClaudeAPI(prompt, 1200)
+  const text = await callClaudeAPI(prompt, 2500)
   const parsed = parseJSON(text, { action: 'TRZYMAJ', compositeScore: null, signalStrength: null, confidence: 50, reason: 'Błąd AI.', urgency: 'NISKA', modification: 'Brak rekomendacji — spróbuj ponownie.', suggestedTargetPct: null, suggestedStopLossPct: null, suggestedAddSizePct: null, addSizeExplanation: null, longTermPerspective: null, suggestedPartialExitPct: null, nextReviewDate: null, bullCase: null, bearCase: null })
   parsed.suggestedTargetPct   = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   parsed.suggestedStopLossPct = clampSuggestedStopLoss(parsed.suggestedStopLossPct, strategy)
@@ -702,7 +702,7 @@ Zaproponuj TRZY niezależne opcje. Oceniaj realistycznie — nie wszystkie musz�
   }
 }`
 
-  const text = await callClaudeAPI(prompt, 800)
+  const text = await callClaudeAPI(prompt, 1500)
   return parseJSON(text, {
     tacticalOption: { weeks: 2, newTarget: target, checkpoint: addDays(14), rationale: 'Brak danych — spróbuj ponownie.' },
     longTermOption: { applicable: false, months: null, newTarget: null, nextCheckpoint: null, rationale: 'Analiza niedostępna.' },
