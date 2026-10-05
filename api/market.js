@@ -126,7 +126,7 @@ export default async function handler(req, res) {
       getCachedData(ticker, exchange, true).catch(() => null), // cache-only, no extra fetch
       fetchIndexTrend(exchange).catch(() => 'neutral'),
       fetchIndexReturn(exchange, 20).catch(() => null),
-      fetchCandlesExtended(ticker, exchange, '5y').catch(() => null),
+      fetchWithTimeout(() => fetchCandlesExtended(ticker, exchange, '5y'), 5000).catch(() => null),
     ])
     const sectorCtx = buildSectorContext(ticker, exchange, positions)
     const spNum = signalPrice ? Number(signalPrice) : null
@@ -165,31 +165,37 @@ export default async function handler(req, res) {
       }
     }
 
-    const result = await validateEntry({
-      ticker,
-      exchange,
-      signal,
-      score:       Number(score ?? 0),
-      rsi:         Number(rsi ?? 50),
-      volMult:     Number(volMult ?? 1),
-      sma50Delta:  Number(sma50Delta ?? 0),
-      signalPrice: spNum,
-      livePrice:   lpNum,
-      strategy:    strategy ?? 'swing',
-      priceAction,
-      macd:        indicators?.macd ?? null,
-      sma150trend: indicators?.sma150trend ?? null,
-      sma20:       indicators?.sma20 ?? null,
-      bollinger:   indicators?.bollinger ?? null,
-      nearSupport:      indicators?.nearSupport ?? null,
-      divergence:       indicators?.divergence ?? null,
-      dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
-      rs:               indicators?.rs ?? null,
-      high52w, highATH, pctFrom52w, pctFromATH,
-      ...sectorCtx,
-      news,
-      fundamentals,
-    })
+    let result
+    try {
+      result = await validateEntry({
+        ticker,
+        exchange,
+        signal,
+        score:       Number(score ?? 0),
+        rsi:         Number(rsi ?? 50),
+        volMult:     Number(volMult ?? 1),
+        sma50Delta:  Number(sma50Delta ?? 0),
+        signalPrice: spNum,
+        livePrice:   lpNum,
+        strategy:    strategy ?? 'swing',
+        priceAction,
+        macd:        indicators?.macd ?? null,
+        sma150trend: indicators?.sma150trend ?? null,
+        sma20:       indicators?.sma20 ?? null,
+        bollinger:   indicators?.bollinger ?? null,
+        nearSupport:      indicators?.nearSupport ?? null,
+        divergence:       indicators?.divergence ?? null,
+        dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
+        rs:               indicators?.rs ?? null,
+        high52w, highATH, pctFrom52w, pctFromATH,
+        ...sectorCtx,
+        news,
+        fundamentals,
+      })
+    } catch (err) {
+      console.error('[ai-validate] validateEntry failed:', ticker, exchange, err?.message ?? err)
+      return res.status(500).json({ error: `AI validation failed: ${err?.message ?? 'unknown error'}` })
+    }
     // AI Swap — find weak open position on same exchange for swap suggestion
     const todayIso = new Date().toISOString().slice(0, 10)
     const openPos = positions.filter(p => p.status === 'open')
