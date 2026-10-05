@@ -37,6 +37,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [saved,       setSaved]       = useState(false)
+  const [entryPriceInput, setEntryPriceInput] = useState('')
   const [copied,      setCopied]      = useState(false)
   const currency = exchange === 'NYSE' ? 'USD' : 'PLN'
 
@@ -98,6 +99,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
       if (data.error) throw new Error(data.error)
       setResult(data)
       setState('result')
+      setEntryPriceInput(String(effectiveLive ?? rec.price ?? ''))
     } catch {
       setError('Błąd AI — spróbuj ponownie.')
       setState('idle')
@@ -514,12 +516,30 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
               </div>
 
               {result.decision === 'WEJDŹ' ? (
-                <button
-                  onClick={() => { onClose(); onOpenPosition(rec, result) }}
-                  className="w-full bg-gpw-green hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
-                >
-                  ✅ Realizuję wejście
-                </button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-400 shrink-0">Cena wejścia ({exchange === 'NYSE' ? 'USD' : 'PLN'})</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={entryPriceInput}
+                      onChange={e => setEntryPriceInput(e.target.value)}
+                      className="flex-1 bg-gpw-dark border border-gpw-border rounded px-2 py-1 text-sm text-right font-bold focus:border-gpw-blue outline-none"
+                    />
+                  </div>
+                  <button
+                    disabled={!entryPriceInput || parseFloat(entryPriceInput) <= 0}
+                    onClick={() => {
+                      const p = parseFloat(entryPriceInput)
+                      if (!p || p <= 0) return
+                      onClose()
+                      onOpenPosition({ ...rec, livePrice: p }, result)
+                    }}
+                    className="w-full bg-gpw-green hover:bg-green-600 disabled:opacity-40 text-white py-3 rounded-lg font-semibold transition-colors"
+                  >
+                    ✅ Realizuję wejście
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={validate}

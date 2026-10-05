@@ -167,10 +167,20 @@ export default async function handler(req, res) {
 
   if (method === 'PATCH') {
     const { id, exitPrice, target, stopLoss, suggestedAddSizePct, nextReviewDate,
-            strategy: newStrategy, aiTargetRejected, aiStopRejected } = req.body
+            strategy: newStrategy, aiTargetRejected, aiStopRejected,
+            entryPrice: newEntryPrice, action: patchActionBody } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
     const position = await kv.get(id)
     if (!position) return res.status(404).json({ error: 'Position not found' })
+
+    // Edit entry price
+    if (patchActionBody === 'editEntryPrice' && newEntryPrice != null) {
+      const ep = Number(newEntryPrice)
+      if (!ep || ep <= 0) return res.status(400).json({ error: 'Invalid entry price' })
+      const updated = { ...position, entryPrice: ep }
+      await kv.set(id, updated, { ex: 365 * 24 * 60 * 60 })
+      return res.json(updated)
+    }
 
     // Store AI suggestion rejection metadata
     if (!exitPrice && (aiTargetRejected != null || aiStopRejected != null)) {
