@@ -91,8 +91,9 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
         sma50Delta,
         signalPrice: rec.price   ?? '',
         ...(effectiveLive != null ? { livePrice: effectiveLive } : {}),
+        _t:          Date.now(),
       })
-      const res  = await fetch(`/api/market?${params}`)
+      const res  = await fetch(`/api/market?${params}`, { cache: 'no-store' })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setResult(data)
