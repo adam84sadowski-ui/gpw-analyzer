@@ -114,6 +114,7 @@ export default async function handler(req, res) {
   }
 
   if (mode === 'ai-validate') {
+    res.setHeader('Cache-Control', 'no-store')
     if (!ticker) return res.status(400).json({ error: 'ticker required' })
     const { signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice: livePriceQ } = req.query
     const [positions, news, fundamentals, candleData, indexTrend, indexReturn20d, candles5yData] = await Promise.all([
