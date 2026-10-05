@@ -185,7 +185,7 @@ export async function callClaudeAPI(prompt, maxTokens = 300) {
       logAICost(msg.usage).catch(() => {})
       const textBlock = msg.content?.find(b => b.type === 'text')
       const text = textBlock?.text ?? null
-      if (!text) console.error('[callClaudeAPI] no text block — stop_reason:', msg.stop_reason, 'content_types:', msg.content?.map(b => b.type).join(','))
+      if (!text) console.error('[callClaudeAPI] empty response — stop_reason:', msg.stop_reason, 'content_types:', msg.content?.map(b => b.type).join(','))
       return text
     } catch (err) {
       lastErr = err
