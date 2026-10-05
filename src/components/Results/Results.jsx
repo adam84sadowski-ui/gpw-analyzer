@@ -219,6 +219,7 @@ export default function Results() {
   const [paramAction,   setParamAction]   = useState({}) // posId → { target: 'confirmed'|'rejected'|null, stop: 'confirmed'|'rejected'|null }
   const [horizonEvals,  setHorizonEvals]  = useState({}) // posId → { loading, result }
   const [horizonConfirm, setHorizonConfirm] = useState({}) // posId → null|'tactical_loading'|'tactical_done'|'longterm_loading'|'longterm_done'|'upgrade_confirm'|'upgrade_loading'|'upgrade_done'
+  const [editEntryPrice, setEditEntryPrice] = useState({}) // posId → { val: string, saving: bool }
 
   useEffect(() => {
     fetch('/api/kv?key=settings')
@@ -790,7 +791,43 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                 <div className="grid grid-cols-2 gap-2 text-xs text-center">
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">Wejście</div>
-                    <div className="font-bold">{pos.entryPrice} {cur}</div>
+                    {editEntryPrice[pos.id]?.editing ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        autoFocus
+                        value={editEntryPrice[pos.id].val}
+                        onChange={e => setEditEntryPrice(s => ({ ...s, [pos.id]: { ...s[pos.id], val: e.target.value } }))}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter') {
+                            const ep = parseFloat(editEntryPrice[pos.id].val)
+                            if (!ep || ep <= 0) { setEditEntryPrice(s => ({ ...s, [pos.id]: undefined })); return }
+                            setEditEntryPrice(s => ({ ...s, [pos.id]: { ...s[pos.id], saving: true } }))
+                            const r = await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, action: 'editEntryPrice', entryPrice: ep }) })
+                            if (r.ok) { const updated = await r.json(); setPositions(prev => prev.map(p => p.id === pos.id ? updated : p)) }
+                            setEditEntryPrice(s => ({ ...s, [pos.id]: undefined }))
+                          }
+                          if (e.key === 'Escape') setEditEntryPrice(s => ({ ...s, [pos.id]: undefined }))
+                        }}
+                        onBlur={async () => {
+                          const ep = parseFloat(editEntryPrice[pos.id]?.val)
+                          if (!ep || ep <= 0) { setEditEntryPrice(s => ({ ...s, [pos.id]: undefined })); return }
+                          const r = await fetch('/api/positions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pos.id, action: 'editEntryPrice', entryPrice: ep }) })
+                          if (r.ok) { const updated = await r.json(); setPositions(prev => prev.map(p => p.id === pos.id ? updated : p)) }
+                          setEditEntryPrice(s => ({ ...s, [pos.id]: undefined }))
+                        }}
+                        className="w-full bg-gpw-card border border-gpw-blue rounded px-1 py-0.5 text-center font-bold text-xs outline-none"
+                      />
+                    ) : (
+                      <div
+                        className="font-bold flex items-center justify-center gap-1 cursor-pointer group"
+                        onClick={() => pos.status === 'open' && setEditEntryPrice(s => ({ ...s, [pos.id]: { editing: true, val: String(pos.entryPrice) } }))}
+                        title={pos.status === 'open' ? 'Kliknij aby edytować cenę wejścia' : undefined}
+                      >
+                        {pos.entryPrice} {cur}
+                        {pos.status === 'open' && <span className="text-gray-600 group-hover:text-gray-400 text-[10px]">✏️</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="bg-gpw-dark rounded p-1.5">
                     <div className="text-gray-400">{pos.status === 'open' ? 'Teraz' : 'Wyjście'}</div>
