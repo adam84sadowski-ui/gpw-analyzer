@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/market.js": { "maxDuration": 60 }
+  },
   "crons": [
     { "path": "/api/cron/positions-monitor", "schedule": "50 15 * * 1-5" },
     { "path": "/api/cron/learning-weekly",   "schedule": "0 18 * * 0"    }
