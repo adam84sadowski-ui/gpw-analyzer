@@ -179,6 +179,7 @@ export async function callClaudeAPI(prompt, maxTokens = 300) {
       const msg = await anthropic.messages.create({
         model:      'claude-sonnet-5',
         max_tokens: maxTokens,
+        thinking:   { type: 'disabled' },
         messages:   [{ role: 'user', content: prompt }],
       })
       logAICost(msg.usage).catch(() => {})
@@ -507,7 +508,7 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
 
   prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
 
-  const text = await callClaudeAPI(prompt, 8000)
+  const text = await callClaudeAPI(prompt, 4000)
   if (!text) throw new Error('Claude returned empty response')
   const parsed = parseJSON(text, null)
   if (!parsed?.decision) throw new Error('Claude returned invalid or truncated JSON')
