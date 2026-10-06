@@ -5,7 +5,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   default: vi.fn().mockImplementation(() => ({
     messages: {
       create: vi.fn().mockResolvedValue({
-        content: [{ text: '{"decision":"WEJDŹ","action":"TRZYMAJ","confidence":80,"reason":"Sygnał silny.","risk":"NISKIE","urgency":"NISKA"}' }],
+        content: [{ type: 'text', text: '{"decision":"WEJDŹ","action":"TRZYMAJ","confidence":80,"reason":"Sygnał silny.","risk":"NISKIE","urgency":"NISKA"}' }],
         usage:   { input_tokens: 100, output_tokens: 50 },
       }),
     },
