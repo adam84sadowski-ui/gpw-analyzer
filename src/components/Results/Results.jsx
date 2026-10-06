@@ -844,16 +844,31 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                     { label: 'vs SMA50',   val: ind ? (ind.sma50Delta != null ? `${ind.sma50Delta > 0 ? '+' : ''}${ind.sma50Delta}%` : '—') : null },
                     { label: 'MACD',       val: ind ? macdLabel(ind.macd?.trend)                                                            : null },
                   ]
+                  const c3 = ind?.change3m, c6 = ind?.change6m, cy = ind?.changeYTD
+                  const pctCls = v => v == null ? 'text-gray-600' : v >= 0 ? 'text-gpw-green' : 'text-gpw-red'
+                  const fmt    = v => v == null ? '—' : `${v > 0 ? '+' : ''}${v}%`
                   return (
-                    <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
-                      {tiles.map(({ label, val }) => (
-                        <div key={label} className="bg-gpw-dark rounded p-1.5">
-                          <div className="text-gray-500 text-[10px]">{label}</div>
-                          <div className={`font-bold ${val == null ? 'text-gray-600 animate-pulse' : 'text-gray-200'}`}>
-                            {val ?? '…'}
+                    <div className="space-y-1.5">
+                      <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
+                        {tiles.map(({ label, val }) => (
+                          <div key={label} className="bg-gpw-dark rounded p-1.5">
+                            <div className="text-gray-500 text-[10px]">{label}</div>
+                            <div className={`font-bold ${val == null ? 'text-gray-600 animate-pulse' : 'text-gray-200'}`}>
+                              {val ?? '…'}
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                      {(c3 != null || c6 != null || cy != null) && (
+                        <div className="flex gap-1.5 text-xs text-center">
+                          {[['3M', c3], ['6M', c6], ['YTD', cy]].map(([label, val]) => (
+                            <div key={label} className="flex-1 bg-gpw-dark rounded p-1.5">
+                              <div className="text-gray-500 text-[10px]">{label}</div>
+                              <div className={`font-bold ${pctCls(val)}`}>{fmt(val)}</div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )
                 })()}

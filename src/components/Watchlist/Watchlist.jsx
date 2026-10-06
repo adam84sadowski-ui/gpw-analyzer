@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import EntryValidationModal from '../Strategies/ReboundRadar/EntryValidationModal.jsx'
 import TechnicalPanel from '../TechnicalPanel.jsx'
 
-function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate }) {
+function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onValidate }) {
   const [confirming,    setConfirming]    = useState(false)
   const [opening,       setOpening]       = useState(false)
   const [indicsOpen,    setIndicsOpen]    = useState(false)
@@ -116,6 +116,21 @@ function WatchCard({ item, swapCandidate, onDelete, onPositionOpened, onValidate
           ))}
         </div>
       </div>
+
+      {perf && (perf.change3m != null || perf.change6m != null || perf.changeYTD != null) && (() => {
+        const pctCls = v => v >= 0 ? 'text-gpw-green' : 'text-gpw-red'
+        const fmt    = v => `${v > 0 ? '+' : ''}${v}%`
+        return (
+          <div className="flex gap-1.5 text-xs text-center">
+            {[['3M', perf.change3m], ['6M', perf.change6m], ['YTD', perf.changeYTD]].map(([label, val]) => val != null && (
+              <div key={label} className="flex-1 bg-gpw-dark rounded p-1.5">
+                <div className="text-gray-500 text-[10px]">{label}</div>
+                <div className={`font-bold ${pctCls(val)}`}>{fmt(val)}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Composite score bar */}
       {item.compositeScore != null && (
@@ -259,6 +274,7 @@ export default function Watchlist() {
   const [batchProgress, setBatchProgress] = useState(null)
   const batchStoppedRef = useRef(false)
   const [openPositions, setOpenPositions] = useState([])
+  const [perf, setPerf] = useState({})
 
   async function load() {
     setLoading(true)
@@ -266,6 +282,14 @@ export default function Watchlist() {
       const res  = await fetch('/api/positions?mode=watchlist')
       const data = await res.json()
       setItems(Array.isArray(data) ? data : [])
+      if (Array.isArray(data) && data.length > 0) {
+        Promise.allSettled(data.map(async item => {
+          const params = new URLSearchParams({ mode: 'indicators', ticker: item.ticker, exchange: item.exchange ?? 'GPW', strategy: item.strategy ?? 'swing' })
+          const r = await fetch(`/api/market?${params}`)
+          const d = await r.json()
+          if (d && !d.error) setPerf(prev => ({ ...prev, [item.id]: { change3m: d.change3m ?? null, change6m: d.change6m ?? null, changeYTD: d.changeYTD ?? null } }))
+        }))
+      }
     } catch { setItems([]) }
     finally { setLoading(false) }
   }
@@ -438,6 +462,7 @@ export default function Watchlist() {
                   key={w.id}
                   item={w}
                   swapCandidate={swapCandidate}
+                  perf={perf[w.id] ?? null}
                   onDelete={remove}
                   onPositionOpened={id => setItems(prev => prev.filter(x => x.id !== id))}
                   onValidate={handleValidate}

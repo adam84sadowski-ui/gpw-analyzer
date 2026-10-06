@@ -519,6 +519,7 @@ export default async function handler(req, res) {
       rsiPeriod,
       sma50Delta,
       score: currentScore,
+      ...calcPriceChanges(candles, result.price ?? null),
     })
   }
 
