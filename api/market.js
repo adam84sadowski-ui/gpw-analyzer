@@ -42,6 +42,22 @@ function tickerDisplay(ticker, exchange) {
   return ticker.replace('.pl', '').toUpperCase()
 }
 
+function calcPriceChanges(candles, refPrice) {
+  if (!candles || candles.length < 10) return { change3m: null, change6m: null, changeYTD: null }
+  const last = refPrice ?? candles[candles.length - 1].close
+  if (!last) return { change3m: null, change6m: null, changeYTD: null }
+  const pct = base => base ? Math.round((last - base) / base * 1000) / 10 : null
+  const currentYear = new Date().getFullYear().toString()
+  const idx3m  = Math.max(0, candles.length - 63)
+  const idx6m  = Math.max(0, candles.length - 126)
+  const ytdIdx = candles.findIndex(c => c.date?.startsWith(currentYear))
+  return {
+    change3m:  pct(candles[idx3m]?.close),
+    change6m:  pct(candles[idx6m]?.close),
+    changeYTD: ytdIdx >= 0 ? pct(candles[ytdIdx]?.close) : null,
+  }
+}
+
 async function fetchWithTimeout(fn, ms = 5000) {
   return Promise.race([
     fn(),
@@ -166,6 +182,8 @@ export default async function handler(req, res) {
       }
     }
 
+    const { change3m, change6m, changeYTD } = calcPriceChanges(candles1y, lpNum ?? spNum)
+
     let result
     try {
       result = await validateEntry({
@@ -189,6 +207,7 @@ export default async function handler(req, res) {
         dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
         rs:               indicators?.rs ?? null,
         high52w, highATH, pctFrom52w, pctFromATH,
+        change3m, change6m, changeYTD,
         ...sectorCtx,
         news,
         fundamentals,
@@ -233,6 +252,7 @@ export default async function handler(req, res) {
       analystSell:       fundamentals?.analystSell       ?? null,
       recommendationKey: fundamentals?.recommendationKey ?? null,
       high52w, highATH, pctFrom52w, pctFromATH,
+      change3m, change6m, changeYTD,
       sector: sectorCtx.sector ?? null,
     })
   }
@@ -555,12 +575,13 @@ export default async function handler(req, res) {
     const display = tickerDisplay(t, exchange)
     const companyName = data?.shortName ?? null
     const livePrice = data?.livePrice ?? null
+    const priceChanges = calcPriceChanges(candles, livePrice)
     if (mode === 'scan') {
       const ind = calcIndicators(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
       if (!ind) return null
       return { ticker: t, tickerDisplay: display, companyName, exchange, strategy,
         target: config.target, stopLoss: config.stopLoss,
-        timestamp: new Date().toISOString(), livePrice, ...ind }
+        timestamp: new Date().toISOString(), livePrice, ...ind, ...priceChanges }
     } else {
       const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[t])
       if (!sig) return null
@@ -576,7 +597,7 @@ export default async function handler(req, res) {
         stopLoss,
         timestamp: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        livePrice, ...sig }
+        livePrice, ...sig, ...priceChanges }
     }
   }
 

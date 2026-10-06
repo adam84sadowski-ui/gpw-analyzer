@@ -674,6 +674,29 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   </div>
                 )}
 
+                {(rec.change3m != null || rec.change6m != null || rec.changeYTD != null) && (
+                  <div className="flex gap-2 text-xs text-center">
+                    {rec.change3m != null && (
+                      <div className="flex-1 bg-gpw-card rounded p-1.5">
+                        <div className="text-gray-400">3M</div>
+                        <div className={`font-bold ${rec.change3m >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>{rec.change3m > 0 ? '+' : ''}{rec.change3m}%</div>
+                      </div>
+                    )}
+                    {rec.change6m != null && (
+                      <div className="flex-1 bg-gpw-card rounded p-1.5">
+                        <div className="text-gray-400">6M</div>
+                        <div className={`font-bold ${rec.change6m >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>{rec.change6m > 0 ? '+' : ''}{rec.change6m}%</div>
+                      </div>
+                    )}
+                    {rec.changeYTD != null && (
+                      <div className="flex-1 bg-gpw-card rounded p-1.5">
+                        <div className="text-gray-400">YTD</div>
+                        <div className={`font-bold ${rec.changeYTD >= 0 ? 'text-gpw-green' : 'text-gpw-red'}`}>{rec.changeYTD > 0 ? '+' : ''}{rec.changeYTD}%</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 text-xs text-center">
                   {rec.rsi && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">RSI</div><div className="font-bold">{rec.rsi}</div></div>}
                   {rec.volMult && <div className="bg-gpw-card rounded p-1.5"><div className="text-gray-400">Wolumen</div><div className="font-bold">{rec.volMult}x</div></div>}
@@ -903,6 +926,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                         <span>Score: <span className="text-white">{r.score ?? '—'}/100</span></span>
                         {r.sma50 && <span>SMA50: <span className="text-white">{r.sma50.toFixed(2)}</span></span>}
                       </div>
+                      {(r.change3m != null || r.change6m != null || r.changeYTD != null) && (
+                        <div className="flex gap-3 text-xs text-gray-400 flex-wrap">
+                          {r.change3m  != null && <span>3M: <span className={r.change3m  >= 0 ? 'text-gpw-green' : 'text-gpw-red'}>{r.change3m  > 0 ? '+' : ''}{r.change3m}%</span></span>}
+                          {r.change6m  != null && <span>6M: <span className={r.change6m  >= 0 ? 'text-gpw-green' : 'text-gpw-red'}>{r.change6m  > 0 ? '+' : ''}{r.change6m}%</span></span>}
+                          {r.changeYTD != null && <span>YTD: <span className={r.changeYTD >= 0 ? 'text-gpw-green' : 'text-gpw-red'}>{r.changeYTD > 0 ? '+' : ''}{r.changeYTD}%</span></span>}
+                        </div>
+                      )}
                       <button
                         disabled={topRsiValidating === r.ticker}
                         onClick={() => handleTopRsiValidate(r)}

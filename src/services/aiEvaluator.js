@@ -265,7 +265,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null, change3m = null, change6m = null, changeYTD = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -353,9 +353,15 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
     : ''
   const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock, rsBlock].filter(Boolean).join('\n')
 
+  const perfLine = [
+    change3m  != null ? `3M: ${change3m > 0 ? '+' : ''}${change3m}%`   : null,
+    change6m  != null ? `6M: ${change6m > 0 ? '+' : ''}${change6m}%`   : null,
+    changeYTD != null ? `YTD: ${changeYTD > 0 ? '+' : ''}${changeYTD}%` : null,
+  ].filter(Boolean).join(' | ')
+
   const historicalHighsBlock = high52w != null
-    ? `\n📍 KONTEKST HISTORYCZNY — POZYCJA VS MAKSIMA:\nMax 12 miesięcy (52w high): ${high52w.toFixed(2)} | odchylenie ceny: ${pctFrom52w != null ? `${pctFrom52w > 0 ? '+' : ''}${pctFrom52w}%` : '?'}\nMax historyczne (5 lat): ${highATH != null ? highATH.toFixed(2) : '?'} | odchylenie od ATH: ${pctFromATH != null ? `${pctFromATH > 0 ? '+' : ''}${pctFromATH}%` : '?'}`
-    : ''
+    ? `\n📍 KONTEKST HISTORYCZNY — POZYCJA VS MAKSIMA:\nMax 12 miesięcy (52w high): ${high52w.toFixed(2)} | odchylenie ceny: ${pctFrom52w != null ? `${pctFrom52w > 0 ? '+' : ''}${pctFrom52w}%` : '?'}\nMax historyczne (5 lat): ${highATH != null ? highATH.toFixed(2) : '?'} | odchylenie od ATH: ${pctFromATH != null ? `${pctFromATH > 0 ? '+' : ''}${pctFromATH}%` : '?'}${perfLine ? `\nZmiana kursu: ${perfLine}` : ''}`
+    : perfLine ? `\n📍 Zmiana kursu: ${perfLine}` : ''
 
   const dataBlock = `Spółka: ${ticker} | ${exchange} | Sektor: ${sector}
 Sygnał: ${signal ?? 'brak'} | Score: ${score}/100
