@@ -143,21 +143,36 @@ export async function fetchQuoteSummary(ticker, exchange = 'GPW') {
 
 function buildSectorEventContext(sector) {
   const map = {
-    'Energy':         'EIA oil inventory (środa 10:30 ET), decyzje OPEC, Henry Hub gas prices, sezonowość: Q4 popyt ogrzewania',
-    'Technology':     'Wyniki kwartalne FAANG/MAANG, konferencje: CES (styczeń), COMPUTEX (maj), AI capex surveys, ogłoszenia produktowe',
-    'Semiconductors': 'TSMC miesięczne wyniki sprzedaży, SEMI book-to-bill, fab utilization reports, konferencje: SEMICON, Hot Chips',
-    'Financials':     'Decyzje FOMC (8x rocznie), CPI/PPI (ok. 10-15 każdego miesiąca), stress-testy Fed (Q2), wyniki banków (pocz. kwartału)',
-    'Defense':        'Budżet DoD/Kongres (NDAA), przetargi rządowe, eskalacje/deeskalacje geopolityczne, posiedzenia NATO',
-    'Aerospace':      'Okna startowe, kontrakty NASA/DoD, FCC spectrum auctions, FAA regulatory milestones',
-    'Space':          'Okna startowe, kontrakty NASA/DoD, FCC spectrum auctions, FAA regulatory milestones',
-    'Materials':      'Ceny LME (Cu, Al, Li), chińskie PMI przemysłowe (1. dzień miesiąca), OPEC production cuts, mining output',
-    'Healthcare':     'FDA approvals / PDUFA dates, wyniki kliniczne Phase 2/3, CMS pricing decisions, FDA AdCom meetings',
-    'Consumer':       'Retail sales (co miesiąc), consumer confidence (Conference Board), sezonowość: Q4 holiday, Q1 post-holiday',
-    'Utilities':      'Decyzje FERC, temperatura (heating/cooling degree days), natural gas storage reports',
-    'Real Estate':    'Decyzje Fed (stopy), housing starts/permits (miesięcznie), Case-Shiller index',
-    'Industrials':    'ISM Manufacturing PMI (1. dzień roboczy miesiąca), durable goods orders, infrastructure spending bills',
+    // Granular NYSE sectors (exact match by name)
+    'SEMI_EQUIPMENT':    'Ogłoszenia nowych fabryk przez klientów (TSMC, Intel, Samsung) — każda zmiana planu CAPEX wpływa na backlog AMAT/ASML/LRCX/KLAC. SEMI book-to-bill index (miesięcznie). Sankcje eksportowe USA→Chiny (ASML EUV) — kluczowe ryzyko regulacyjne. Konferencje: SEMICON West (lipiec), SPIE Advanced Litho (luty).',
+    'SEMICONDUCTORS':    'TSMC miesięczne wyniki sprzedaży (ok. 10. każdego miesiąca), SEMI book-to-bill, PC/smartfon/datacenter shipment forecasts (IDC, Gartner kwartał). Konferencje: Hot Chips (sierpień), ISSCC (luty). AMD/INTC earnings jako proxy sektora. AI chip demand (NVDA) napędza cały sektor — monitoruj capex AWS/Azure/GCP.',
+    'STORAGE':           'HDD/NAND pricing (TrendForce co kwartał), ogłoszenia nowych mocy produkcyjnych przez Toshiba/Samsung/Kioxia/SK Hynix — wzrost podaży konkurencji bezpośrednio obniża ceny i marże WDC/STX. Enterprise SSD demand: hyperscaler capex cycles. Cykl: oversupply → price war → underinvestment → shortage (co ~3 lata).',
+    'INDUSTRIAL_ENERGY': 'IRA (Inflation Reduction Act) funding — zmiany polityczne mogą wstrzymać projekty. AI data center power demand (+15% r/r) = główny driver dla GEV/VST/NRG. FERC rulings on grid interconnection (backlog 2-3 lata). Wyniki kwartalne często poprzedzone redukcją instytucjonalną 2-3 tygodnie przed datą — uwzględnij w horyzoncie.',
+    'NUCLEAR':           'Uranium spot price (Cameco, Kazatomprom tygodniowo), decyzje NRC (licencje na extensions), kontrakty data centers na Power Purchase Agreements (CEG), polityka SMR (small modular reactors) — Kongres + DOE funding.',
+    'DEFENSE':           'Budżet DoD/Kongres (NDAA — grudzień), przetargi rządowe (sole-source vs competitive bid), continuing resolutions (CR) blokujące nowe kontrakty. Eskalacje geopolityczne = pozytywny catalyst. Wyniki backlog-driven — rzadziej zaskakują w dół.',
+    'SPACE':             'Okna startowe (RKLB/SpaceX), kontrakty NASA/DoD/commercial, FCC spectrum auctions, FAA regulatory milestones. ASTS/LUNR/IRDM mocno spekulacyjne — każdy milestone techniczny lub kontrakt porusza kurs o 20-50%. Sovereign space budgets (NASA appropriations).',
+    'AUTO':              'Miesięczne dane sprzedażowe (US SAAR, China NEV registrations ~1. każdego miesiąca), zmiany dotacji EV (IRA credits), ceny baterii/litu (korelacja z ALB/SQM), recall risk (NHTSA). TM — niższa zmienność, eksponowany na jen/USD. Cykl: inventory buildup → incentives surge → margin pressure.',
+    'INSURANCE':         'Hurricane season (czerwiec–listopad) — katastrofy naturalne = natychmiastowy catalyst dla PGR/CB. Reinsurance pricing (styczeń renewals). Stopy procentowe: wyższe stopy = lepszy float investment income. Combined ratio kwartalny — key metric. Wildfires (Q1) i tornadoes (Q2/Q3) jako eventy krótkoterminowe.',
+    'MINING':            'LME prices (Cu, Al, Li, Au — codziennie), chińskie PMI przemysłowe (1. dzień miesiąca), OPEC production cuts (surowce energetyczne powiązane). Mining output reports (kwartał). Regulatory/ESG risk na projektach greenfield. ALB/SQM: lithium spot price kluczowy (EV demand proxy).',
+    'MIDSTREAM':         'Decyzje FERC (taryfy pipeline), Henry Hub natural gas prices (codziennie), LNG export bookings (JKM Asia premium). Sektor defensywny — stabilne cash flow z kontraktów take-or-pay. Ryzyko: regulatory rejection nowych projektów, hurricane disruption Gulf Coast.',
+    'AI_INFRA':          'Hyperscaler capex announcements (AWS/Azure/GCP co kwartał), colocation demand vs power availability — grid capacity = główny constraint. Konferencje: OFC (marzec), SC (listopad). ANET: Ethernet switching cycles. AMT/EQIX: leasing spreads, churn rates.',
+    // Standard sectors (matching by substring — TECH, FINANCE, HEALTH, INDUSTRIAL, ENERGY etc.)
+    'TECH':              'Wyniki kwartalne FAANG/MAANG (pocz. kwartału), konferencje: CES (styczeń), COMPUTEX (maj), Google I/O, WWDC, Ignite. AI capex surveys — AWS/Azure/GCP guidance wpływa na cały sektor. Fed rate decisions (growth stocks wrażliwe na stopę dyskontową).',
+    'FINANCE':           'Decyzje FOMC (8x rocznie), CPI/PPI (ok. 10-15 każdego miesiąca), stress-testy Fed (Q2), wyniki banków (pocz. kwartału — JPM otwiera sezon). Krzywa dochodowości (net interest margin). Credit card delinquency rates (miesięcznie).',
+    'HEALTH':            'FDA approvals / PDUFA dates (kalendarze: FiercePharma, Evaluate Pharma), wyniki kliniczne Phase 2/3, CMS pricing decisions, FDA AdCom meetings. Earnings health care często bimodalne (miss/beat zależy od 1 produktu).',
+    'CONSUMER':          'Retail sales (co miesiąc ok. 15.), consumer confidence (Conference Board — ostatni wtorek miesiąca), sezonowość: Q4 holiday (Black Friday → Christmas), Q1 post-holiday clearance. Back-to-school (sierpień–wrzesień).',
+    'ENERGY':            'EIA oil inventory (środa 10:30 ET), decyzje OPEC+ (ok. 6x rocznie), Henry Hub gas prices, Baker Hughes rig count (piątek). Cena ropy Brent/WTI kluczowa — korelacja ~0.85 z sektorem.',
+    'INDUSTRIAL':        'ISM Manufacturing PMI (1. dzień roboczy miesiąca), durable goods orders (ok. 25. miesiąca), infrastructure spending bills. Cykl capex przemysłowy (~3-4 lata). Chińskie PMI proxy globalnego popytu.',
+    'MATERIALS':         'Ceny LME (Cu, Al, Li), chińskie PMI przemysłowe (1. dzień miesiąca), OPEC production cuts, mining output reports. Seasonality: budownictwo Q2/Q3 = popyt na miedź.',
+    'UTILITIES':         'Decyzje FERC, temperatura (heating/cooling degree days), natural gas storage reports (EIA czwartek). Defensywny sektor — wrażliwy na stopy (discount rate). Rate cases (regulacje cen energii).',
   }
-  const key = Object.keys(map).find(k => sector?.toLowerCase().includes(k.toLowerCase()))
+  const sLower = sector?.toLowerCase() ?? ''
+  // Exact match first (case-insensitive), then bidirectional substring
+  const key = Object.keys(map).find(k => k.toLowerCase() === sLower)
+    ?? Object.keys(map).find(k => {
+      const kLower = k.toLowerCase()
+      return sLower.includes(kLower) || kLower.includes(sLower)
+    })
   return key ? map[key] : 'Monitoruj: CPI, decyzje Fed, PMI przemysłowy oraz eventy specyficzne dla tej branży'
 }
 
@@ -299,7 +314,11 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
       earningsLine = strategy === 'aggressive'
         ? `📈 EARNINGS PROXIMITY: Wyniki za ${daysUntil} dni (${earningsDate}) — potencjał run-up przed publikacją. Zaplanuj wyjście przed wynikami lub trzymaj z tight stopem.`
         : `⚠️ Wyniki za ${daysUntil} dni (${earningsDate}) — uwzględnij jako granicę horyzontu.`
-    } else if (daysUntil > 7) {
+    } else if (daysUntil > 7 && daysUntil <= 21) {
+      earningsLine = strategy === 'scalping'
+        ? `Wyniki za ${daysUntil} dni (${earningsDate}).`
+        : `⚠️ RYZYKO INSTYTUCJONALNE: Wyniki za ${daysUntil} dni (${earningsDate}) — instytucje często redukują ekspozycję 2-3 tygodnie przed publikacją (rebalancing, risk-off). Uwzględnij w horyzoncie — rozważ exit przed datą lub tight stop.`
+    } else if (daysUntil > 21) {
       earningsLine = `Najbliższe wyniki: ${earningsDate} (za ${daysUntil} dni).`
     }
   }
