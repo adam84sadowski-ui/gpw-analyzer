@@ -543,7 +543,7 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
 
 // AI position evaluation — returns { action, confidence, reason, urgency, modification }
 // strategy: 'scalping' → PTJ lens, 'aggressive' → O'Neil lens, 'swing' → Buffett/Lynch lens
-export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null, aiTargetRejected = null, aiStopRejected = null, holdStrength = null }) {
+export async function evaluatePosition({ ticker, exchange, signal, entryPrice, currentPrice, pnlPct, daysHeld, rsi, volMult, sma50Delta, stopLoss, target, trailingActive, news, fundamentals, priceAction = null, earningsDate = null, sector = null, strategy = 'swing', avgEntryPrice = null, addedPositions = null, aiTargetRejected = null, aiStopRejected = null, holdStrength = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -559,10 +559,16 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
     const daysUntil = Math.ceil((new Date(earningsDate) - Date.now()) / (1000 * 60 * 60 * 24))
     if (daysUntil >= 0 && daysUntil <= 7) {
       earningsLine = `\n- ⚠️ WYNIKI ZA ${daysUntil} DNI (${earningsDate}) — ryzyko luki cenowej przez noc`
-    } else if (daysUntil > 7) {
+    } else if (daysUntil > 7 && daysUntil <= 21) {
+      earningsLine = strategy === 'scalping'
+        ? `\n- Wyniki za ${daysUntil} dni (${earningsDate})`
+        : `\n- ⚠️ RYZYKO INSTYTUCJONALNE: Wyniki za ${daysUntil} dni (${earningsDate}) — instytucje często redukują ekspozycję 2-3 tygodnie przed publikacją. Uwzględnij jako ryzyko dla tezy — rozważ częściową realizację lub tight stop.`
+    } else if (daysUntil > 21) {
       earningsLine = `\n- Najbliższe wyniki: ${earningsDate} (za ${daysUntil} dni)`
     }
   }
+
+  const sectorEvents = sector ? buildSectorEventContext(sector) : null
 
   const isViolentMoveEval = priceAction && Math.abs(priceAction.change1d) >= 5
   const paWarningEval = isViolentMoveEval ? ` ⚠️ GWAŁTOWNY RUCH` : ''
@@ -599,7 +605,7 @@ Interpretacja: ${holdStrength.total >= 70 ? 'MOCNA pozycja — teza działa' : h
     : ''
 
   const posBlock = `DANE POZYCJI:
-- Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}
+- Ticker: ${ticker} (${exchange}) | Strategia: ${strategy} | Sygnał otwarcia: ${signal ?? 'brak'}${sector ? ` | Sektor: ${sector}` : ''}
 - Cena wejścia: ${entryPrice}${avgEntryLine} | Cena bieżąca: ${currentPrice} | P&L vs śr. cena: ${effectiveEntry > 0 ? `${((currentPrice - effectiveEntry) / effectiveEntry * 100).toFixed(1)}%` : `${pnlNum > 0 ? '+' : ''}${pnlNum}%`}
 - Dni trzymania: ${daysHeld} | Stop: ${trailingActive ? 'trailing aktywny' : `${stopLoss}% (${staticStop})`} [domyślny strategii: ${defaultStop}%${stopBreached ? ' ⚠️ NARUSZONY' : ''}] | Cel: +${target}% (${targetPrice})${nearTarget ? ` ⚠️ BLISKO CELU` : ''}${addedPositionsLine}${rejectionLines}${earningsLine}${priceActionLine}
 
@@ -610,7 +616,7 @@ FUNDAMENTY:
 ${fundBlock}
 
 NEWSY:
-${newsLines}${violentMoveBlockEval}`
+${newsLines}${sectorEvents ? `\n\n📅 EVENTY SEKTOROWE — uwzględnij w ocenie tezy:\n${sectorEvents}` : ''}${violentMoveBlockEval}`
 
   const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. compositeScore = siła tezy pozycji 0-100: fundamenty nadal obowiązują (40%) + stan techniczny (35%) + P&L vs cel/makro (25%). signalStrength: SŁABY (<40 — rozważ wyjście), UMIARKOWANY (40-54 — trzymaj ostrożnie), SILNY (55-74 — teza działa), BARDZO SILNY (≥75 — mocna pozycja).
 {
