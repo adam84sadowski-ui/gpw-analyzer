@@ -291,6 +291,7 @@ export default async function handler(req, res) {
       fetchQuoteSummary(ticker, exchange).catch(() => null),
       getCachedData(ticker, exchange, true).catch(() => null),
     ])
+    const sectorCtxEval = buildSectorContext(ticker, exchange, [])
 
     let priceActionEval = null
     const candlesEval = candleDataEval?.candles
@@ -329,6 +330,7 @@ export default async function handler(req, res) {
       aiStopRejected:    pos?.aiStopRejected    ?? null,
       priceAction:    priceActionEval,
       earningsDate:   fundamentals?.earningsDate ?? null,
+      sector:         sectorCtxEval.sector ?? null,
       news,
       fundamentals,
       holdStrength: hsTotal != null ? {
