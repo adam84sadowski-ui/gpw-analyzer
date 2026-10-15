@@ -5,54 +5,52 @@ name: Market Cron
 #
 # GPW: CET = UTC+1 (winter, Oct–Mar) | CEST = UTC+2 (summer, Mar–Oct)
 # NYSE: EST = UTC-5 (winter, Nov–Mar) | EDT  = UTC-4 (summer, Mar–Nov)
+#
+# GitHub Actions limit: max 20 unique cron expressions per workflow file.
+# Current count: 20 (exactly at limit — do not add more without removing one).
 
 on:
   schedule:
-    # ── GPW opening  9:10 local ──────────────────────────────
+    # ── GPW opening  9:10 local ──────────────────────────────  [1,2]
     - cron: '10 7 * * 1-5'   # 9:10 CEST (summer)
     - cron: '10 8 * * 1-5'   # 9:10 CET  (winter)
 
-    # ── GPW +30 min scalping  9:40 local ─────────────────────
+    # ── GPW +30 min scalping  9:40 local ─────────────────────  [3,4]
     - cron: '40 7 * * 1-5'   # 9:40 CEST (summer)
     - cron: '40 8 * * 1-5'   # 9:40 CET  (winter)
 
-    # ── GPW mid-day scalping  12:30 local ────────────────────
+    # ── GPW mid-day scalping  12:30 local ────────────────────  [5,6]
     - cron: '30 10 * * 1-5'  # 12:30 CEST (summer)
-    - cron: '0 12 * * 1-5'   # 12:00 CET  (winter) — kept from original
+    - cron: '0 12 * * 1-5'   # 12:00 CET  (winter)
 
-    # ── GPW pre-close scalping  16:45 local ──────────────────
+    # ── GPW pre-close scalping  16:45 local ──────────────────  [7,8]
     - cron: '45 14 * * 1-5'  # 16:45 CEST (summer)
     - cron: '45 15 * * 1-5'  # 16:45 CET  (winter)
 
-    # ── GPW power hour swing+aggressive  16:05 local ─────────
-    - cron: '5 14 * * 1-5'   # 16:05 CEST (summer)  ← also NYSE +30min EDT
-    - cron: '5 15 * * 1-5'   # 16:05 CET  (winter)  ← also NYSE +30min EST
+    # ── GPW power hour swing+aggressive  16:05 local ─────────  [9,10]
+    # Same UTC slots as NYSE +30min (10:05 EDT / 10:05 EST)
+    - cron: '5 14 * * 1-5'   # 16:05 CEST (summer) / 10:05 EDT
+    - cron: '5 15 * * 1-5'   # 16:05 CET  (winter) / 10:05 EST
 
-    # ── GPW EOD swing+aggressive (full day candle) ────────────
-    - cron: '35 15 * * 1-5'  # 17:35 CEST (summer, po zamknięciu) / 16:35 CET (winter)
-    - cron: '40 15 * * 1-5'  # 17:40 CEST (summer) / 16:40 CET (winter)
+    # ── GPW EOD swing+aggressive (full day candle) ────────────  [11,12]
+    - cron: '35 15 * * 1-5'  # 17:35 CEST / 16:35 CET — swing + dividend
+    - cron: '40 15 * * 1-5'  # 17:40 CEST / 16:40 CET — aggressive
 
-    # ── NYSE opening  9:35 ET ────────────────────────────────
+    # ── NYSE opening  9:35 ET ────────────────────────────────  [13,14]
     - cron: '35 13 * * 1-5'  # 9:35 EDT (summer)
     - cron: '35 14 * * 1-5'  # 9:35 EST (winter)
 
-    # ── NYSE +30 min scalping  10:05 ET ─────────────────────
-    # reuses '5 14' (EDT) and '5 15' (EST) — same UTC slots as GPW power hour
+    # ── NYSE mid-day scalping  12:30 ET ──────────────────────  [15]
+    - cron: '30 16 * * 1-5'  # 12:30 EDT (summer) — winter off by 1h, acceptable
 
-    # ── NYSE mid-day scalping  12:30 ET ─────────────────────
-    - cron: '30 16 * * 1-5'  # 12:30 EDT (summer)
-    - cron: '35 17 * * 1-5'  # 12:35 EST (winter)
-
-    # ── NYSE power hour  15:00 ET ───────────────────────────
+    # ── NYSE power hour  15:00 ET ────────────────────────────  [16,17]
     - cron: '0 19 * * 1-5'   # 15:00 EDT (summer)
     - cron: '0 20 * * 1-5'   # 15:00 EST (winter)
 
-    # ── NYSE EOD  (kept from original) ───────────────────────
-    - cron: '0 14 * * 1-5'   # NYSE scalping early (9:00 EST / 10:00 EDT)
-    - cron: '35 19 * * 1-5'  # NYSE scalping
-    - cron: '30 19 * * 1-5'  # NYSE aggressive pre-close
-    - cron: '10 20 * * 1-5'  # NYSE swing + dividend
-    - cron: '15 20 * * 1-5'  # NYSE aggressive
+    # ── NYSE EOD (legacy slots) ───────────────────────────────  [18,19,20]
+    - cron: '35 19 * * 1-5'  # NYSE scalping EOD
+    - cron: '10 20 * * 1-5'  # NYSE swing + dividend EOD
+    - cron: '15 20 * * 1-5'  # NYSE aggressive EOD
 
   workflow_dispatch:
     inputs:
@@ -65,20 +63,13 @@ on:
         required: true
         default: 'GPW'
       slot:
-        description: 'Slot (mid|pre — scalping only)'
+        description: 'Slot (mid|pre - scalping only)'
         required: false
         default: ''
 
 jobs:
-  ping:
-    name: Workflow triggered
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "event=${{ github.event_name }} schedule=${{ github.event.schedule }} ref=${{ github.ref }}"
-
   fetch:
     name: Fetch market data
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       BASE: https://gpw-analyzer.vercel.app/api/cron/fetch
@@ -90,7 +81,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           SLOT="${{ github.event.inputs.slot }}"
-          URL="${BASE}?strategy=${{ github.event.inputs.strategy }}&exchange=${{ github.event.inputs.exchange }}${SLOT:+&slot=$SLOT}"
+          URL="${BASE}?strategy=${{ github.event.inputs.strategy }}&exchange=${{ github.event.inputs.exchange }}"
+          if [ -n "$SLOT" ]; then URL="${URL}&slot=${SLOT}"; fi
           curl -sf --max-time 70 --retry 1 --retry-delay 10 "$URL" -H "Authorization: Bearer $AUTH"
 
       # ── GPW opening — all strategies ─────────────────────────
@@ -156,14 +148,14 @@ jobs:
         if: github.event.schedule == '35 13 * * 1-5' || github.event.schedule == '35 14 * * 1-5'
         run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
-      # ── NYSE +30 min — scalping (reuses GPW power-hour slots) ─
+      # ── NYSE +30 min — scalping (reuses GPW power-hour UTC slots) ─
       - name: NYSE +30min — scalping
         if: github.event.schedule == '5 14 * * 1-5' || github.event.schedule == '5 15 * * 1-5'
         run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       # ── NYSE mid-day — scalping ──────────────────────────────
       - name: NYSE mid-day — scalping
-        if: github.event.schedule == '30 16 * * 1-5' || github.event.schedule == '35 17 * * 1-5'
+        if: github.event.schedule == '30 16 * * 1-5'
         run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=scalping&slot=mid&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       # ── NYSE power hour — swing + aggressive ─────────────────
@@ -175,18 +167,10 @@ jobs:
         if: github.event.schedule == '0 19 * * 1-5' || github.event.schedule == '0 20 * * 1-5'
         run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
-      # ── NYSE legacy slots (kept for backward compat) ─────────
-      - name: NYSE early — scalping
-        if: github.event.schedule == '0 14 * * 1-5'
-        run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
-
-      - name: NYSE scalping
+      # ── NYSE EOD ─────────────────────────────────────────────
+      - name: NYSE scalping — EOD
         if: github.event.schedule == '35 19 * * 1-5'
         run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=scalping&exchange=NYSE" -H "Authorization: Bearer $AUTH"
-
-      - name: NYSE aggressive — pre-close
-        if: github.event.schedule == '30 19 * * 1-5'
-        run: curl -sf --max-time 70 --retry 1 --retry-delay 10 "$BASE?strategy=aggressive&exchange=NYSE" -H "Authorization: Bearer $AUTH"
 
       - name: NYSE swing + dividend — EOD
         if: github.event.schedule == '10 20 * * 1-5'
