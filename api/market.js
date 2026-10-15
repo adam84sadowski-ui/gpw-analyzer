@@ -206,6 +206,7 @@ export default async function handler(req, res) {
         divergence:       indicators?.divergence ?? null,
         dynamicStopLoss:  indicators?.dynamicStopLoss ?? null,
         rs:               indicators?.rs ?? null,
+        sma50Slope:       indicators?.sma50Slope ?? null,
         high52w, highATH, pctFrom52w, pctFromATH,
         change3m, change6m, changeYTD,
         ...sectorCtx,

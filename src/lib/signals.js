@@ -71,6 +71,11 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   const currentMonth = new Date().getMonth()
   const seasSig     = getSeasonalityScore(monthlyReturns, currentMonth)
 
+  const sma50Series = calcSMASeries(closes, 50)
+  const sma50Slope  = sma50Series.length >= 11
+    ? Math.round((sma50Series[sma50Series.length - 1] - sma50Series[sma50Series.length - 11]) * 100) / 100
+    : null
+
   const scoreInputs = {
     volMult, sma150trend, nearSupport, divergence, indexTrend,
     macdScore: macdSig.score, bollingerScore: bollSig.score, seasonalityScore: seasSig.score,
@@ -78,7 +83,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
   }
 
   const extra = {
-    atr, atrPct, nearSupport, sma150trend, sma150, indexTrend,
+    atr, atrPct, nearSupport, sma150trend, sma150, indexTrend, sma50Slope,
     macd: { line: macdSig.macdLine, signal: macdSig.signalLine, histogram: macdSig.histogram, trend: macdSig.trend, score: macdSig.score },
     bollinger: { ...bands, status: bollSig.status, score: bollSig.score },
     seasonality: { avgReturn: seasSig.avgReturn, score: seasSig.score, month: currentMonth },
@@ -183,7 +188,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const dMax      = defaults.swing.sma50DeltaMax
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
     const rsi    = calcRSI(closes, rsiPeriod)
-    const sma50s = calcSMASeries(closes, 50)
+    const sma50s = sma50Series
     const sma50  = sma50s[sma50s.length - 1]
     const sma50Delta = sma50 != null ? Math.round((price - sma50) / sma50 * 1000) / 10 : null
 
@@ -195,7 +200,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     // Pullback-to-SMA50: price within proximity band, RSI in reset zone, mild volume
     const inPullbackZone = sma50Delta != null && sma50Delta >= dMin && sma50Delta <= dMax
     const rsiReset       = rsi != null && rsi >= rsiFloor && rsi <= rsiCeil
-    if (inPullbackZone && rsiReset && volMult && volMult >= volThr) {
+    if (inPullbackZone && rsiReset && volMult && volMult >= volThr && (sma50Slope == null || sma50Slope > 0)) {
       const score = calcScore('swing', { ...scoreInputs, rsi })
       return { signal: 'PULLBACK_TO_SMA50', price, rsi, rsiPeriod, volMult,
         sma20, sma50,
@@ -231,7 +236,7 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
       const last = candles[candles.length - 1]
       if (last.high > 0 && last.close / last.high < 0.85) return null
     }
-    if (isBreakout(candles) && rsi && rsi > rsiMin && rsi <= rsiMax && volMult && volMult >= volThr) {
+    if (isBreakout(candles) && rsi && rsi > rsiMin && rsi <= rsiMax && volMult && volMult >= volThr && (sma50Slope == null || sma50Slope > 0)) {
       const sma150Warning = sma150 != null && price <= sma150
       const score = calcScore('aggressive', { ...scoreInputs, rsi })
       return { signal: 'BREAKOUT', price, rsi, rsiPeriod, volMult,
@@ -255,6 +260,10 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
   const bands   = calculateBollinger(closes)
   const macd    = calculateMACD(closes)
   const macdSig = getMACDSignal(macd)
+  const sma50s  = calcSMASeries(closes, 50)
+  const sma50Slope = sma50s.length >= 11
+    ? Math.round((sma50s[sma50s.length - 1] - sma50s[sma50s.length - 11]) * 100) / 100
+    : null
   return {
     rsi:             calcRSI(closes),
     sma20:           calcSMA(closes, 20),
@@ -289,5 +298,6 @@ export function calcIndicators(candles, strategy, thresholds = {}, exchange = 'G
     divergence:      detectRSIDivergence(closes),
     indexTrend,
     rs:              sig?.rs ?? null,
+    sma50Slope,
   }
 }
