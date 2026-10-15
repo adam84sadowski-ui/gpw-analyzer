@@ -280,7 +280,7 @@ function buildFundBlock(f, ticker) {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null, change3m = null, change6m = null, changeYTD = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null, change3m = null, change6m = null, changeYTD = null, sma50Slope = null }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -370,7 +370,10 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
   const rsBlock = rs != null
     ? `Relative Strength (20d vs indeks): ${rs.ratio != null ? `${rs.ratio > 0 ? '+' : ''}${(rs.ratio * 100).toFixed(1)}%` : 'brak danych'}${rs.ratio != null ? ` | ${rs.ratio > 0.10 ? '🏆 LEADER — rośnie wyraźnie mocniej od rynku' : rs.ratio > 0.03 ? '↑ POWYŻEJ rynku' : rs.ratio < -0.10 ? '🚩 LAGGARD — wyraźnie słabszy od rynku' : rs.ratio < -0.03 ? '↓ PONIŻEJ rynku' : '≈ INLINE z rynkiem'}` : ''}`
     : ''
-  const techLines = [macdBlock, sma150Block, sma20Block, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock, rsBlock].filter(Boolean).join('\n')
+  const sma50SlopeBlock = sma50Slope != null
+    ? `SMA50 slope (10d): ${sma50Slope > 0 ? `ROSNĄCY ✅ (+${sma50Slope})` : `OPADAJĄCY ⚠️ (${sma50Slope}) — unikaj pullback long przy spadającym SMA50`}`
+    : ''
+  const techLines = [macdBlock, sma150Block, sma20Block, sma50SlopeBlock, bollingerBlock, nearSupportBlock, divergenceBlock, stopBlock, rsBlock].filter(Boolean).join('\n')
 
   const perfLine = [
     change3m  != null ? `3M: ${change3m > 0 ? '+' : ''}${change3m}%`   : null,

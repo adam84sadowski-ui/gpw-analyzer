@@ -229,3 +229,61 @@ describe('detectSignal — PULLBACK_TO_SMA20', () => {
     }
   })
 })
+
+describe('detectSignal — SMA50 slope filter', () => {
+  function makeDecliningSma50Candles() {
+    // 150 rising candles, then 60 declining — SMA50 is declining by the end
+    const candles = Array.from({ length: 150 }, (_, i) => ({
+      open: 100 + i * 0.5, high: 100 + i * 0.5 + 0.3,
+      low: 100 + i * 0.5 - 0.2, close: 100 + i * 0.5, volume: 1_000_000,
+    }))
+    for (let i = 0; i < 60; i++) {
+      const close = 175 - i * 0.8
+      candles.push({ open: close + 0.1, high: close + 0.3, low: close - 0.2, close, volume: 1_200_000 })
+    }
+    return candles
+  }
+
+  it('PULLBACK_TO_SMA50 does not fire when SMA50 is declining', () => {
+    const candles = makeDecliningSma50Candles()
+    const result = detectSignal(candles, 'swing', {
+      swing_volume_multiplier: 1.0,
+    }, 'GPW')
+    if (result !== null) {
+      expect(result.signal).not.toBe('PULLBACK_TO_SMA50')
+    }
+  })
+
+  it('BREAKOUT does not fire when SMA50 is declining', () => {
+    // Rising then falling: last prices break above 20-day max of the decline
+    const rising = Array.from({ length: 100 }, (_, i) => ({
+      open: 100 + i * 0.5, high: 100 + i * 0.5 + 0.3,
+      low: 100 + i * 0.5 - 0.2, close: 100 + i * 0.5, volume: 1_000_000,
+    }))
+    // 50 declining candles: SMA50 slope negative
+    for (let i = 0; i < 50; i++) {
+      const close = 150 - i * 1.2
+      rising.push({ open: close + 0.2, high: close + 0.3, low: close - 0.3, close, volume: 1_000_000 })
+    }
+    // Spike above 20-day max (creates apparent breakout)
+    const prev20High = Math.max(...rising.slice(-21, -1).map(c => c.high))
+    rising.push({ open: prev20High * 1.01, high: prev20High * 1.06, low: prev20High * 1.005,
+      close: prev20High * 1.05, volume: 3_500_000 })
+    const result = detectSignal(rising, 'aggressive', { rsi_min: 0, rsi_max: 100 }, 'GPW')
+    if (result !== null) {
+      expect(result.signal).not.toBe('BREAKOUT')
+    }
+  })
+
+  it('sma50Slope is exposed in signal result for rising trend', () => {
+    const candles = Array.from({ length: 100 }, (_, i) => ({
+      open: 50 + i * 0.4, high: 50 + i * 0.4 + 0.3,
+      low: 50 + i * 0.4 - 0.2, close: 50 + i * 0.4, volume: 1_200_000,
+    }))
+    const result = detectSignal(candles, 'scalping', {}, 'GPW')
+    if (result !== null) {
+      expect(result.sma50Slope).toBeDefined()
+      expect(result.sma50Slope).toBeGreaterThan(0)
+    }
+  })
+})
