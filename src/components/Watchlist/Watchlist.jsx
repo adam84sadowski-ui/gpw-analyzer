@@ -62,19 +62,25 @@ function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onVa
 
   const isExpired = item.status === 'expired'
 
-  async function toggleIndics() {
-    const next = !indicsOpen
-    setIndicsOpen(next)
-    if (next && !indicsData && !indicsLoading) {
+  useEffect(() => {
+    if (isExpired) return
+    let cancelled = false
+    async function loadLiveIndics() {
       setIndicsLoading(true)
       try {
         const d = await fetch(
           `/api/market?mode=indicators&ticker=${item.ticker}&exchange=${item.exchange ?? 'GPW'}&strategy=${item.strategy}`
         ).then(r => r.json())
-        if (d && !d.error) setIndicsData(d)
+        if (!cancelled && d && !d.error) setIndicsData(d)
       } catch { /* silent */ }
-      setIndicsLoading(false)
+      if (!cancelled) setIndicsLoading(false)
     }
+    loadLiveIndics()
+    return () => { cancelled = true }
+  }, [item.ticker, item.exchange, item.strategy, isExpired])
+
+  async function toggleIndics() {
+    setIndicsOpen(prev => !prev)
   }
 
   return (
@@ -99,21 +105,35 @@ function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onVa
         )}
       </div>
 
-      {/* Indicators grid — snapshot at signal time */}
+      {/* Live indicator tiles — fetched on mount */}
       <div className="space-y-1">
-        <div className="text-[10px] text-gray-600 uppercase tracking-wide">Przy sygnale</div>
+        <div className="text-[10px] text-gray-600 uppercase tracking-wide">
+          Wskaźniki teraz{indicsLoading && <span className="ml-1 animate-pulse">·</span>}
+        </div>
         <div className="grid grid-cols-4 gap-1.5 text-xs text-center">
-          {[
-            { label: 'RSI', val: item.rsi != null ? item.rsi.toFixed(1) : '—' },
-            { label: 'Vol', val: item.volMult != null ? `${item.volMult}x` : '—' },
-            { label: 'Tech', val: item.score != null ? `${item.score}/100` : '—' },
-            { label: 'AI score', val: item.compositeScore != null ? `${item.compositeScore}/100` : item.buffettScore != null ? `${item.buffettScore}/10` : '—' },
-          ].map(({ label, val }) => (
-            <div key={label} className={`bg-gpw-dark rounded p-1.5 ${label === 'AI score' && item.compositeScore != null ? 'ring-1 ring-gpw-blue/40' : ''}`}>
-              <div className="text-gray-500 text-[10px]">{label}</div>
-              <div className={`font-bold ${label === 'AI score' && item.compositeScore != null ? (item.compositeScore >= 70 ? 'text-gpw-green' : item.compositeScore >= 50 ? 'text-yellow-400' : 'text-gpw-red') : 'text-gray-200'}`}>{val}</div>
-            </div>
-          ))}
+          {(() => {
+            const liveRsi   = indicsData?.rsi
+            const liveVol   = indicsData?.volMult
+            const liveSma50 = indicsData?.sma50 != null && indicsData?.price != null
+              ? Math.round((indicsData.price - indicsData.sma50) / indicsData.sma50 * 1000) / 10
+              : null
+            const liveMacd  = indicsData?.macd?.trend
+            const dot = indicsLoading ? '…' : null
+            return [
+              { label: 'RSI teraz',   val: dot ?? (liveRsi  != null ? liveRsi.toFixed(1)                    : '—') },
+              { label: 'Vol. teraz',  val: dot ?? (liveVol  != null ? `${liveVol.toFixed(1)}x`             : '—') },
+              { label: 'SMA50 teraz', val: dot ?? (liveSma50 != null ? `${liveSma50 > 0 ? '+' : ''}${liveSma50}%` : '—') },
+              { label: 'MACD teraz',  val: dot ?? (liveMacd === 'bullish' ? 'BULL ↑' : liveMacd === 'bearish' ? 'BEAR ↓' : liveMacd ? '→' : '—') },
+            ].map(({ label, val }) => (
+              <div key={label} className="bg-gpw-dark rounded p-1.5">
+                <div className="text-gray-500 text-[10px]">{label}</div>
+                <div className={`font-bold ${
+                  label === 'MACD teraz' && val === 'BULL ↑' ? 'text-gpw-green' :
+                  label === 'MACD teraz' && val === 'BEAR ↓' ? 'text-gpw-red'  : 'text-gray-200'
+                }`}>{val}</div>
+              </div>
+            ))
+          })()}
         </div>
       </div>
 
