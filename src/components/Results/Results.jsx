@@ -758,7 +758,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                     }</span>
                     <span className="ml-1 text-xs text-gray-500">{cur}</span>
                     {pos.entryScore != null && (
-                      <span className="ml-2 text-xs text-yellow-400">⭐ {pos.entryScore}/100</span>
+                      <span className="ml-2 text-xs text-yellow-400" title="Score techniczny przy sygnale wejścia">⭐ {pos.entryScore}/100 <span className="text-yellow-600 font-normal">sygnał</span></span>
                     )}
                   </div>
                   <div className="text-right flex items-center gap-2">
@@ -839,10 +839,10 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                   const ind = indics[pos.id]
                   const macdLabel = t => !t ? '—' : t.includes('bull') ? '↑ bull' : t.includes('bear') ? '↓ bear' : '→'
                   const tiles = [
-                    { label: 'RSI teraz',  val: ind ? (ind.rsi?.toFixed(1) ?? '—')                                                          : null },
-                    { label: 'Wolumen',    val: ind ? (ind.volMult != null ? `${ind.volMult}x` : '—')                                       : null },
-                    { label: 'vs SMA50',   val: ind ? (ind.sma50Delta != null ? `${ind.sma50Delta > 0 ? '+' : ''}${ind.sma50Delta}%` : '—') : null },
-                    { label: 'MACD',       val: ind ? macdLabel(ind.macd?.trend)                                                            : null },
+                    { label: 'RSI teraz',   val: ind ? (ind.rsi?.toFixed(1) ?? '—')                                                          : null },
+                    { label: 'Vol. teraz',  val: ind ? (ind.volMult != null ? `${ind.volMult}x` : '—')                                       : null },
+                    { label: 'SMA50 teraz', val: ind ? (ind.sma50Delta != null ? `${ind.sma50Delta > 0 ? '+' : ''}${ind.sma50Delta}%` : '—') : null },
+                    { label: 'MACD teraz',  val: ind ? macdLabel(ind.macd?.trend)                                                            : null },
                   ]
                   const c3 = ind?.change3m, c6 = ind?.change6m, cy = ind?.changeYTD
                   const pctCls = v => v == null ? 'text-gray-600' : v >= 0 ? 'text-gpw-green' : 'text-gpw-red'
@@ -902,7 +902,7 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
 
                 {pos.entryRsi != null && (
                   <div className="text-xs text-gray-500">
-                    RSI przy wejściu: <span className={`font-semibold ${pos.entryRsi < 30 ? 'text-gpw-green' : pos.entryRsi > 70 ? 'text-gpw-red' : 'text-gray-300'}`}>{pos.entryRsi.toFixed(1)}</span>
+                    RSI przy sygnale: <span className={`font-semibold ${pos.entryRsi < 30 ? 'text-gpw-green' : pos.entryRsi > 70 ? 'text-gpw-red' : 'text-gray-300'}`}>{pos.entryRsi.toFixed(1)}</span>
                   </div>
                 )}
 
