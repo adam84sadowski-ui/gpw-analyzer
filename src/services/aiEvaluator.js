@@ -261,8 +261,19 @@ function na(val, format) {
 
 function buildFundBlock(f, ticker) {
   if (!f) return `BRAK DANYCH Z API — użyj wiedzy treningowej dla ${ticker ?? 'tej spółki'}. Podaj szacunkowe wartości oznaczone [~est.] i oceń je. Nie pisz "brak danych" — wiesz co to za spółka.`
+  const peFlag = f.trailingPE == null ? ''
+    : f.trailingPE > 40 ? ' 🚨 EKSTREMALNIE WYSOKA WYCENA'
+    : f.trailingPE > 30 ? ' ⚠️ WYSOKA WYCENA — wrażliwa na rozczarowania wynikowe'
+    : f.trailingPE < 15 ? ' ✅ ATRAKCYJNA WYCENA'
+    : ''
+  const peg = f.trailingPE != null && f.revenueGrowth != null && f.revenueGrowth > 0
+    ? Math.round(f.trailingPE / f.revenueGrowth * 10) / 10
+    : null
+  const pegStr = peg != null
+    ? ` | PEG (P/E÷wzrost przych.): ${peg.toFixed(1)}${peg <= 1 ? ' ✅ atrakcyjny' : peg <= 2 ? ' — akceptowalny' : ' ⚠️ drogi'}`
+    : ''
   return [
-    `P/E trailing: ${na(f.trailingPE, v => v.toFixed(1))} | Forward P/E: ${na(f.forwardPE, v => v.toFixed(1))}`,
+    `P/E trailing: ${na(f.trailingPE, v => v.toFixed(1))}${peFlag} | Forward P/E: ${na(f.forwardPE, v => v.toFixed(1))}${pegStr}`,
     `ROE: ${na(f.returnOnEquity, v => v + '%')} | Marża operacyjna: ${na(f.operatingMargins, v => v + '%')}`,
     `FCF Yield: ${na(f.fcfYield, v => v + '%')} | EV/EBITDA: ${na(f.evEbitda, v => v.toFixed(1))}`,
     `Dług/Equity: ${na(f.debtToEquity, v => v.toFixed(2) + 'x')}`,
@@ -285,6 +296,14 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
   const fundBlock = buildFundBlock(fundamentals, ticker)
+  const pe = fundamentals?.trailingPE ?? null
+  const peGuardrail = (() => {
+    if (pe == null || strategy === 'scalping') return ''
+    if (pe > 40) return `\n🚨 P/E GUARDRAIL: P/E trailing = ${pe.toFixed(1)} — EKSTREMALNIE WYSOKA WYCENA. Technika niewystarczająca. Wymagaj wzrostu EPS > 40% YoY jako uzasadnienia. Bez tego: decision = UNIKAJ.`
+    if (pe > 30 && strategy === 'swing') return `\n⚠️ P/E GUARDRAIL (SWING): P/E trailing = ${pe.toFixed(1)} > 30 — spółka wyceniona premium, wrażliwa na miss wynikowy. OBOWIĄZKOWO uzasadnij w "analysis" dlaczego ta wycena jest zasadna (wzrost EPS > 20% YoY, economic moat, ekspansja rynkowa). Bez konkretnego uzasadnienia: degraduj decision do OBSERWUJ.`
+    if (pe > 30 && strategy === 'aggressive') return `\n⚠️ P/E GUARDRAIL (AGGRESSIVE): P/E trailing = ${pe.toFixed(1)} > 30 — breakout uzasadniony tylko przy wzroście przych./EPS > ${Math.round(pe / 2)}% YoY (PEG < 2). Sprawdź kryterium 1 (C — Current Earnings).`
+    return ''
+  })()
 
   const priceDriftPct = signalPrice && livePrice
     ? Math.round((livePrice - signalPrice) / signalPrice * 1000) / 10
@@ -471,7 +490,7 @@ ${dataBlock}
 ${jsonSchema}
 
 Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
-1. C — CURRENT EARNINGS — EPS/przychody kw/kw: ≥ +25% = silny sygnał
+1. C — CURRENT EARNINGS — EPS/przychody kw/kw: ≥ +25% = silny sygnał. PEG (P/E÷wzrost przych.): PEG < 1 = zakup uzasadniony wyceniowo, 1-2 = akceptowalny przy silnym momentum, > 2 = drogi — wymagaj volMult ≥ 2x i RS top-tier jako kompensaty. P/E > 40 bez wzrostu EPS ≥ 30% = "story stock" bez zakotwiczenia w realnych zyskach.
 2. A — ANNUAL EARNINGS — trend 3-letni: konsekwentny wzrost?
 3. N — NOVELTY — nowy produkt/rynek/management/52W high proximity?
 4. S — SUPPLY/DEMAND — wolumen na wybiciu: ≥ 1.5x = instytucjonalne zainteresowanie
@@ -483,7 +502,7 @@ Punkty w "analysis" (12 kryteriów O'Neil CANSLIM):
 10. BETA / ZMIENNOŚĆ — ryzyko specyficzne dla tego setup'u agresywnego
 11. MOMENTUM FUNDAMENTÓW — wzrost przychodów YoY: przyspiesza czy hamuje?
 12. REGUŁA SPRZEDAŻY O'NEIL — stop ${dynamicStopLoss != null ? `-${dynamicStopLoss}% ATR-based` : '-7-8% fixed'}; kiedy bezwarunkowo wychodzimy${dynamicStopLoss != null && dynamicStopLoss > 8 ? ' ⚠️ ATR sugeruje szerszy stop niż -8% — rozważ redukcję size' : ''}
-13. EARNINGS RUN-UP — wyniki za 3-7 dni: czy historycznie spółka rośnie przed publikacją (earnings whisper)? Czy konsensus EPS rośnie? Jeśli tak: czyste momentum play — zaplanuj wyjście przed wynikami + tight stop`
+13. EARNINGS RUN-UP — wyniki za 3-7 dni: czy historycznie spółka rośnie przed publikacją (earnings whisper)? Czy konsensus EPS rośnie? Jeśli tak: czyste momentum play — zaplanuj wyjście przed wynikami + tight stop${peGuardrail}`
   } else if (strategy === 'long_term') {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger. Oceniasz wejście w pozycję długoterminową (horyzont 6-18 miesięcy, stop -10%). Zasada: "Our favorite holding period is forever — unless the fundamentals change."
 
@@ -528,10 +547,10 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
 7. TREND SMA150 I RSI — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary uptrend intaktny' : 'PONIŻEJ ❌ — ostrzeżenie'}` : 'SMA150: brak danych'} | RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.
 8. MARGIN OF SAFETY — cena vs cel analityków: upside > 20%?
 9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
-10. LYNCH — WZROST vs WYCENA (PEG) — P/E / wzrost przych.: PEG < 1 tanie, > 2 drogie
-11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor
+10. LYNCH — WZROST vs WYCENA (PEG) — P/E trailing / wzrost przych. YoY: PEG < 1 tanie, 1-2 akceptowalny, > 2 drogi. P/E > 30 na spółce cyklicznej/przemysłowej = "priced for perfection" — jeden miss wynikowy → korekta -20-30%. Wymagaj konkretnego uzasadnienia premium lub degraduj do OBSERWUJ.
+11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor i historyczna średnia. Niska wycena (P/E < 15) = dodatkowy bufor bezpieczeństwa dla swing.
 12. MACD PRZY COFNIĘCIU — ${macd ? `MACD: linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | Trend: ${macd.trend?.toUpperCase() ?? '?'}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.` : 'MACD: brak danych — oceń z kontekstu'}
-13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka`
+13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka${peGuardrail}`
   }
 
   prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
