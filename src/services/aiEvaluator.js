@@ -259,11 +259,12 @@ function na(val, format) {
   return format ? format(val) : String(val)
 }
 
-function buildFundBlock(f, ticker) {
+function buildFundBlock(f, ticker, exchange = 'GPW') {
   if (!f) return `BRAK DANYCH Z API — użyj wiedzy treningowej dla ${ticker ?? 'tej spółki'}. Podaj szacunkowe wartości oznaczone [~est.] i oceń je. Nie pisz "brak danych" — wiesz co to za spółka.`
+  const isNYSE = exchange === 'NYSE'
   const peFlag = f.trailingPE == null ? ''
-    : f.trailingPE > 40 ? ' 🚨 EKSTREMALNIE WYSOKA WYCENA'
-    : f.trailingPE > 30 ? ' ⚠️ WYSOKA WYCENA — wrażliwa na rozczarowania wynikowe'
+    : f.trailingPE > (isNYSE ? 60 : 40) ? ' 🚨 EKSTREMALNIE WYSOKA WYCENA'
+    : f.trailingPE > (isNYSE ? 45 : 30) ? ' ⚠️ WYSOKA WYCENA — wrażliwa na rozczarowania wynikowe'
     : f.trailingPE < 15 ? ' ✅ ATRAKCYJNA WYCENA'
     : ''
   const peg = f.trailingPE != null && f.revenueGrowth != null && f.revenueGrowth > 0
@@ -295,13 +296,31 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
-  const fundBlock = buildFundBlock(fundamentals, ticker)
+  const fundBlock = buildFundBlock(fundamentals, ticker, exchange)
   const pe = fundamentals?.trailingPE ?? null
   const peGuardrail = (() => {
     if (pe == null || strategy === 'scalping') return ''
-    if (pe > 40) return `\n🚨 P/E GUARDRAIL: P/E trailing = ${pe.toFixed(1)} — EKSTREMALNIE WYSOKA WYCENA. Technika niewystarczająca. Wymagaj wzrostu EPS > 40% YoY jako uzasadnienia. Bez tego: decision = UNIKAJ.`
-    if (pe > 30 && strategy === 'swing') return `\n⚠️ P/E GUARDRAIL (SWING): P/E trailing = ${pe.toFixed(1)} > 30 — spółka wyceniona premium, wrażliwa na miss wynikowy. OBOWIĄZKOWO uzasadnij w "analysis" dlaczego ta wycena jest zasadna (wzrost EPS > 20% YoY, economic moat, ekspansja rynkowa). Bez konkretnego uzasadnienia: degraduj decision do OBSERWUJ.`
-    if (pe > 30 && strategy === 'aggressive') return `\n⚠️ P/E GUARDRAIL (AGGRESSIVE): P/E trailing = ${pe.toFixed(1)} > 30 — breakout uzasadniony tylko przy wzroście przych./EPS > ${Math.round(pe / 2)}% YoY (PEG < 2). Sprawdź kryterium 1 (C — Current Earnings).`
+    const isNYSE = exchange === 'NYSE'
+    // Compute PEG for override logic (same formula as buildFundBlock)
+    const peg = fundamentals?.revenueGrowth != null && fundamentals.revenueGrowth > 0
+      ? Math.round(pe / fundamentals.revenueGrowth * 10) / 10
+      : null
+    const pegNote = peg != null ? ` | PEG ${peg.toFixed(1)}${peg < 1.5 ? ' ✅' : peg < 2 ? '' : ' ⚠️'}` : ''
+    // Extreme threshold: NYSE >60 / GPW >40
+    if (pe > (isNYSE ? 60 : 40)) {
+      if (peg != null && peg < 1.5)
+        return `\n📊 P/E WYSOKA: P/E trailing = ${pe.toFixed(1)}${pegNote} — ekstremalna wycena, ale PEG ✅ wzrost uzasadnia premium. Explicitly opisz wzrost EPS/przychodów w "analysis". WEJDŹ dozwolone przy potwierdzeniu wzrostu.`
+      return `\n🚨 P/E GUARDRAIL: P/E trailing = ${pe.toFixed(1)}${pegNote} — EKSTREMALNIE WYSOKA WYCENA. Technika niewystarczająca. Wymagaj wzrostu EPS > 40% YoY jako uzasadnienia. Bez tego: decision = UNIKAJ.`
+    }
+    // Elevated threshold: NYSE >45 / GPW >30
+    const elevatedThreshold = isNYSE ? 45 : 30
+    if (pe > elevatedThreshold && strategy === 'swing') {
+      if (peg != null && peg < 1.5)
+        return `\n📊 P/E NOTE (SWING): P/E trailing = ${pe.toFixed(1)}${pegNote} — wycena premium uzasadniona wzrostem przychodów. Uwzględnij dodatkowy bufor w stop-loss. Nie blokuj wejścia z powodu wyceny.`
+      return `\n⚠️ P/E GUARDRAIL (SWING): P/E trailing = ${pe.toFixed(1)}${pegNote} > ${elevatedThreshold} — spółka wyceniona premium, wrażliwa na miss wynikowy. OBOWIĄZKOWO uzasadnij w "analysis" dlaczego ta wycena jest zasadna (wzrost EPS > 20% YoY, economic moat, ekspansja rynkowa). Bez konkretnego uzasadnienia: degraduj decision do OBSERWUJ.`
+    }
+    if (pe > elevatedThreshold && strategy === 'aggressive')
+      return `\n⚠️ P/E GUARDRAIL (AGGRESSIVE): P/E trailing = ${pe.toFixed(1)}${pegNote} > ${elevatedThreshold} — breakout uzasadniony tylko przy wzroście przych./EPS > ${Math.round(pe / 2)}% YoY (PEG < 2). Sprawdź kryterium 1 (C — Current Earnings).`
     return ''
   })()
 
@@ -569,7 +588,7 @@ export async function evaluatePosition({ ticker, exchange, signal, entryPrice, c
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
-  const fundBlock = buildFundBlock(fundamentals, ticker)
+  const fundBlock = buildFundBlock(fundamentals, ticker, exchange)
   const defaultStop = DEFAULT_STOP[strategy] ?? 5
   const staticStop  = entryPrice && stopLoss  ? (entryPrice * (1 - stopLoss / 100)).toFixed(2)  : null
   const targetPrice = entryPrice && target     ? (entryPrice * (1 + target / 100)).toFixed(2)    : null
@@ -701,7 +720,7 @@ export async function evaluateHorizon({ ticker, exchange, signal, strategy, days
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
-  const fundBlock = buildFundBlock(fundamentals, ticker)
+  const fundBlock = buildFundBlock(fundamentals, ticker, exchange)
   const today = new Date().toISOString().slice(0, 10)
   const addDays = n => { const d = new Date(today); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 
