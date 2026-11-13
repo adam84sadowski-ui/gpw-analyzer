@@ -554,6 +554,14 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 
 Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
 
+⛔ ZASADY FALLEN ANGEL — OBOWIĄZKOWE, NIE MODYFIKUJ:
+• Cena PONIŻEJ SMA150 i SMA50 opadające = NORMA i WARUNEK WEJŚCIA dla fallen angel — NIE penalizuj, NIE traktuj jako ostrzeżenie
+• NIE wymagaj wybicia powyżej SMA50/SMA150 przed wejściem — to zniszczyłoby potencjał zwrotu strategii
+• Wejście jest właśnie na dnie akumulacji (RSI 20-52), NIE po potwierdzeniu trendu wzrostowego
+• Pytanie kluczowe: czy spółka PRZEŻYJE kryzys i odbije w 6-12 miesiącach? — NIE: czy jest teraz w uptrendzie
+• RS (relative strength) może być ujemna na dnie — to oczekiwane, nie dyskwalifikujące
+• UNIKAJ rekomenduj TYLKO gdy: ryzyko bankructwa, permanent business destruction lub brak FCF
+
 ${dataBlock}
 
 ═══════════════
@@ -568,11 +576,11 @@ Punkty w "analysis" (13 kryteriów recovery — fallen angel value rebound):
 6. DŁUG — Dług/Equity: czy dług jest do obsługi przy obecnych przepływach? Covenant risk?
 7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki?
 8. MARGIN OF SAFETY — cena vs intrinsic value: upside > 40% dla recovery play (wyższe ryzyko = wyższy wymóg)?
-9. REKOMENDACJE INSTYTUCJONALNE — czy intytucje kupują na dołku (accumulation) czy redukują?
+9. REKOMENDACJE INSTYTUCJONALNE — czy instytucje kupują na dołku (accumulation) czy redukują (distribution)?
 10. KATALIZATOR ODBICIA — co konkretnie może odwrócić trend? Wyniki Q, CEO change, macro, segment recovery?
 11. WYCENA NA DOŁKU — P/E (może być distressed/N/A), EV/EBITDA, P/Book vs historyczne minima sektora
-12. RYZYKO TRWAŁEGO ZNISZCZENIA — secular decline, disruption technologiczny, bankruptcy risk — odróżnij od korekty
-13. RSI I TECHNICZNE DNA — RSI ${rsi ?? '?'} (20-52 = accumulation zone). Dywergencja bullish? Wolumen akumulacji?`
+12. RYZYKO TRWAŁEGO ZNISZCZENIA — secular decline, disruption technologiczny, bankruptcy risk — odróżnij od cyklicznej korekty
+13. RSI I STREFA AKUMULACJI — RSI ${rsi ?? '?'} w przedziale 20-52 = strefa akumulacji (oczekiwana dla fallen angel). Dywergencja bullish RSI? Rosnący wolumen przy stabilizacji ceny?`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
