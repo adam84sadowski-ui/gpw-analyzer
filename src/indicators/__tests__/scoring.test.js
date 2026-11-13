@@ -126,4 +126,32 @@ describe('calcScore', () => {
       expect(score).toBeLessThanOrEqual(100)
     })
   })
+
+  describe('recovery stabilizedBottom', () => {
+    it('stabilized bottom scores higher than falling knife', () => {
+      const stabilized = calcScore('recovery', { ...base, rsi: 32, stabilizedBottom: true })
+      const fallingKnife = calcScore('recovery', { ...base, rsi: 32, stabilizedBottom: false })
+      expect(stabilized).toBeGreaterThan(fallingKnife)
+    })
+
+    it('stabilizedBottom has no effect on scalping', () => {
+      const without = calcScore('scalping', { ...base, stabilizedBottom: false })
+      const with_   = calcScore('scalping', { ...base, stabilizedBottom: true })
+      expect(with_).toBe(without)
+    })
+
+    it('stabilizedBottom has no effect on swing', () => {
+      const without = calcScore('swing', { ...base, stabilizedBottom: false })
+      const with_   = calcScore('swing', { ...base, stabilizedBottom: true })
+      expect(with_).toBe(without)
+    })
+
+    it('recovery score stays within 0-100 with stabilizedBottom', () => {
+      const score = calcScore('recovery', {
+        ...base, rsi: 25, macdScore: 15, bollingerScore: 20, seasonalityScore: 10, stabilizedBottom: true,
+      })
+      expect(score).toBeGreaterThanOrEqual(0)
+      expect(score).toBeLessThanOrEqual(100)
+    })
+  })
 })

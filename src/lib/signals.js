@@ -262,12 +262,18 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const pctFrom52wHigh = Math.round((price - high52w) / high52w * 1000) / 10
     if (pctFrom52wHigh > cfg.pctFrom52wHighMax) return null
 
-    const score = calcScore('recovery', { ...scoreInputs, rsi })
+    // No new low in last 10 sessions vs prior 15 — bottom formation, not falling knife
+    const last10min  = Math.min(...closes.slice(-10))
+    const prior15min = Math.min(...closes.slice(-25, -10))
+    const stabilizedBottom = last10min >= prior15min
+
+    const score = calcScore('recovery', { ...scoreInputs, rsi, stabilizedBottom })
     return {
       signal: 'RECOVERY_SETUP', price, rsi, rsiPeriod, volMult,
       pctFrom52wHigh, high52w,
       sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
       dynamicStopLoss: calcDynamicStopLoss(atr, price, 'recovery'),
+      stabilizedBottom,
       score, ...extra,
     }
   }

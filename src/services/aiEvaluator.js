@@ -442,7 +442,7 @@ ${newsLines}${violentMoveBlockEntry}`
 
   const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca). compositeScore = synteza końcowa 0-100: techniczny score (waga 40%) + buffettScore×10 (waga 35%) + potwierdzenie analitykami/makro (waga 25%). signalStrength: SŁABY (<40), UMIARKOWANY (40-54), SILNY (55-74), BARDZO SILNY (≥75).
 {
-  "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
+  "decision": "WEJDŹ" | "WEJDŹ TRANSZĄ 1/3" | "OBSERWUJ" | "UNIKAJ",
   "buffettScore": <0-10>,
   "compositeScore": <0-100>,
   "signalStrength": "SŁABY" | "UMIARKOWANY" | "SILNY" | "BARDZO SILNY",
@@ -548,47 +548,100 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 13. ŚRODOWISKO MAKRO — długoterminowy trend stóp, rotacja sektorowa, mega-trendy (AI, energia, demografika)`
   } else if (strategy === 'recovery') {
     const recoveryCtx = rsi != null && pctFrom52w != null
-      ? `\n⚠️ FALLEN ANGEL CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi} (strefa akumulacji 20-52). Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40% w 6-12 miesiącach.`
+      ? `\n⚠️ QUALITY DIP CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi}. Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40%.`
       : ''
     const recoveryJsonSchema = jsonSchema
       .replace('proporcja z 13 kryteriów × 10/13', 'proporcja z 15 kryteriów × 10/15')
       .replace('"analysis": "<checklist 13 punktów', '"analysis": "<checklist 15 punktów')
-    prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger, specjalizującym się w inwestycjach value recovery — "fallen angel" quality stocks. Oceniasz wejście w pozycję średnioterminową (horyzont 6-12 miesięcy, stop -12%). Zasada: "Be fearful when others are greedy, and greedy when others are fearful."
+    prompt = `Jesteś analitykiem specjalizującym się w strategii Quality Dip Rebound. Filozofia: silne spółki regularnie tracą 25-50% z powodu TYMCZASOWYCH negatywów — skandal zarządu, panika sektorowa, makro shock, geopolityka — podczas gdy ich biznes pozostaje nienaruszony. Rynek przesadza z wyprzedażą. To Twoja szansa wejścia zanim sentyment wróci.
 
-Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
+Twoje zadanie: oceń czy ta spółka to WYSOKIEJ JAKOŚCI BIZNES z TYMCZASOWYM problemem, czy ma REALNY problem fundamentalny.${recoveryCtx}
 
-⛔ NIE STOSUJ SWING LOGIKI DO FALLEN ANGEL:
-• Cena poniżej SMA150 i SMA50 opadające = NORMA dla fallen angel, NIE powód do UNIKAJ ani czekania
-• NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie na dnie, nie po potwierdzeniu trendu
-• RS ujemna na dnie = oczekiwana, nie dyskwalifikująca
+Kluczowa zasada: EPS może być na szczycie (NVIDIA po skandalu CEO), może być tymczasowo niski (EPAM po wojnie), może być cykliczny (pamięć NAND). Poziom EPS NIE kwalifikuje ani nie dyskwalifikuje — liczy się wyłącznie czy BIZNES JEST INTAKTNY i czy POWÓD SPADKU JEST TYMCZASOWY.
 
-✅ WŁAŚCIWA SKALA OCENY — BĄDŹ REALISTYCZNY:
-• WEJDŹ: mocne fundamenty (moat intaktny, FCF dodatnie, dług zarządzalny) + widoczny katalizator w ≤3 kwartałach (9 miesięcy) + RSI stabilizuje się lub dywergencja bullish + instytucje akumulują + faza late-cycle bottoming potwierdzona
-• OBSERWUJ: dobra spółka, ale: brak wyraźnego katalizatora w 3Q, lub RSI wciąż opada, lub early/mid-cycle downturn (dno jeszcze przed nami), lub dług podwyższony lecz zarządzalny — czekaj na potwierdzenie inflection point
-• UNIKAJ: (a) value trap — forward P/E wciąż wysoki bo earnings dalej spadają (tanie tylko na papierze), (b) FCF ujemne + dług >3× EBITDA, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów
-• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Wątpliwości co do fazy cyklu → OBSERWUJ, nie WEJDŹ
+⛔ NIE STOSUJ SWING LOGIKI:
+• Cena poniżej SMA150, SMA50 opadające = NORMA przy dip, NIE powód do odrzucenia
+• NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie przy dnie paniki
+• RS ujemna przy dnie = oczekiwana
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+KROK 0 — TYP QUALITY DIP (określ PRZED analizą, wpisz w "analysis"):
+
+• TYP A — EVENT-DRIVEN: skandal CEO/zarządu, sprawa sądowa, pojedyncza zła wiadomość korporacyjna, insider trading → horyzont 2-4 miesiące (sentyment wraca po wyjaśnieniu zdarzenia)
+• TYP B — MAKRO/SEKTOR PANIC: podwyżki stóp, geopolityka, rotation out of sector, macro shock bez zmiany biznesu → horyzont 3-6 miesięcy
+• TYP C — DISRUPTION OPERACYJNY: war, supply chain, tymczasowy problem produkcyjny/operacyjny → horyzont 6-12 miesięcy (odbudowa operacji zajmuje czas)
+• BRAK KWALIFIKACJI: trwała disrupcja strukturalna (Kodak, Nokia, Blockbuster), spirala zadłużenia, utrata kluczowego rynku permanentnie → NIE jest quality dip → UNIKAJ
+
+Horyzont w "recommendation" musi odpowiadać typowi A/B/C. Nie używaj domyślnie "6-12 miesięcy" gdy masz type A.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+KROK 1 — 4 CHECKLISTY WERYFIKACYJNE (odpowiedz TAK / NIE / NIEPEWNE):
+
+A. TYMCZASOWOŚĆ POTWIERDZONA — Czy dowody wskazują że powód spadku jest tymczasowy, nie strukturalny? Tymczasowy = jednorazowy event korporacyjny, makro shock bez trwałego wpływu na model biznesu, geopolityka bez permanent market share loss, cykl sektorowy. NIE tymczasowy = trwała disrupcja technologiczna, utrata kluczowego partnera permanentnie, regulacja która niszczy model biznesu na stałe, spirala zadłużeniowa. Odpowiedź: TAK / NIE / NIEPEWNE.
+
+B. BIZNES INTAKTNY PRE- I POST-DROP — Czy ostatni opublikowany raport Q pokazuje: (1) przychody bez trwałego trendu spadkowego spowodowanego NIE przez tymczasowy czynnik, (2) marże brutto stabilne lub przejściowo obniżone z widocznym planem odbudowy, (3) klienci/kontrakty bez znaczącego odpływu do konkurencji? TAK = biznes działa, NIE = biznes się realnie psuje. Odpowiedź: TAK / NIE.
+
+C. FCF POTWIERDZONE DODATNIE — FCF za ostatnie 12 miesięcy (LTM) dodatnie na podstawie ostatniego raportu. Nie "będzie dodatnie" — teraz, w liczbach. Wyjątek: TYP C (disruption operacyjny) — akceptuj ujemne FCF jeśli jest konkretny plan powrotu do dodatniego w ciągu 2 kwartałów z dostępem do finansowania. Odpowiedź: TAK / NIE / WYJĄTEK-C.
+
+D. OVERREACTION GAP — Czy skala spadku jest nieproporcjonalnie duża względem rzeczywistego wpływu biznesowego negatywu? Oceń: jaki % przychodów/zysku faktycznie zagraża powód spadku, vs ile % kapitalizacji zostało zniszczone. Jeśli rynek skasował 3× więcej niż wynosi realne ryzyko biznesowe → TAK (overreaction). Jeśli spadek jest proporcjonalny do realnego ryzyka → NIE. Odpowiedź: TAK / NIE / NIEPEWNE.
+
+Jeśli B = NIE → UNIKAJ (biznes realnie się psuje, nie jest quality dip)
+Jeśli A = NIE → UNIKAJ lub OBSERWUJ z zastrzeżeniem tymczasowości
+Jeśli C = NIE i nie ma wyjątku TYP C → obniż decyzję o jeden poziom (WEJDŹ→TRANSZA, TRANSZA→OBSERWUJ)
+Jeśli D = NIE → OBSERWUJ (rynek wycenia ryzyko proporcjonalnie, brak overreaction edge)
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+KROK 2 — SKALA OCENY:
+
+• WEJDŹ (pełna pozycja, 100%): A=TAK + B=TAK + C=TAK/WYJĄTEK-C + D=TAK + RSI < 38 (panika absorbowana, overreaction na maksimum) + 10+ sesji bez nowego dna cenowego (stabilizedBottom potwierdzony)
+
+• WEJDŹ TRANSZĄ 1/3: A=TAK/NIEPEWNE + B=TAK + C=TAK/WYJĄTEK-C + D=TAK/NIEPEWNE + RSI 20-52.
+  Uzasadnienie transzy: (a) RSI 38-52 — overreaction może trwać, wyprzedaż nie skończyła się, lub (b) A=NIEPEWNE — tymczasowość niejednoznaczna, nie chcemy pełnej ekspozycji.
+  RSI 38-52 = MAKSYMALNIE TRANSZA zawsze, nawet gdy pozostałe warunki idealne.
+  Uzupełnij do pełnej gdy: RSI < 38 LUB negatyw potwierdzony jako tymczasowy (CEO cleared, sprawa zamknięta, macro się odwraca).
+
+• OBSERWUJ: A=NIE lub B=NIEPEWNE lub D=NIE. Biznes możliwie dobry, ale brak potwierdzenia tymczasowości lub brak overreaction edge.
+  Obowiązkowo wypełnij WATCHLIST TRIGGERY w "recommendation".
+
+• UNIKAJ: B=NIE (biznes realnie się psuje) LUB A=NIE + dług > 3× EBITDA LUB trwała disrupcja strukturalna LUB covenant breach / bankruptcy risk LUB masowa sprzedaż insiderów bez buybacków
+
+• DOMYŚLNA DECYZJA = OBSERWUJ. Przekraczaj do WEJDŹ/TRANSZY tylko z konkretnymi dowodami — nie z "to dobra spółka, odbije".
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 WATCHLIST TRIGGERY (wypełnij ZAWSZE gdy decision = OBSERWUJ):
+W polu "recommendation" podaj WSZYSTKIE 5 triggerów:
+1. TRIGGER TYMCZASOWOŚCI: co konkretnie musi się wydarzyć żeby potwierdzić że negatyw jest tymczasowy [np. "CEO cleared by board investigation", "BIS no new export controls for 60 days", "Q3 earnings show stable revenue"]
+2. TRIGGER TECHNICZNY: RSI spada poniżej 38 LUB cena tworzy pierwsze wyższe dno przez 10+ sesji bez nowego minimum
+3. TRIGGER BIZNESOWY: który raport lub event potwierdzi intaktność biznesu [konkretny kwartał, data, wskaźnik]
+4. TRIGGER WYCENY: przy jakiej cenie lub P/E wejście jest atrakcyjne [liczba]
+5. STRATEGIA PRZY WEJŚCIU: recovery (jeśli nadal typ A/B/C) / agresywna (jeśli event-driven krótkoterminowy) + horyzont + stop
+Ustaw entryZoneMin/Max na ±5% od obecnej ceny. reviewDays = 30-60 (typ A), 60-90 (typ B), 90-180 (typ C).
+━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${dataBlock}
 
 ═══════════════
 ${recoveryJsonSchema}
 
-Punkty w "analysis" (15 kryteriów recovery — fallen angel value rebound):
-1. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)? Jedno zdanie konkluzji.
-2. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci nie odeszli do konkurencji? Patenty, skala, switching costs zachowane?
-3. EARNINGS RECOVERY PATH — czy consensus analityków zakłada odbicie EPS w ciągu 4-6 kwartałów? Czy rewizje idą w górę czy w dół?
-4. RETURN ON EQUITY — ROE historyczne (pre-crisis) vs obecne: pogorszenie tymczasowe (cykl) czy strukturalne (utrata przewagi)?
-5. FREE CASH FLOW — FCF dodatnie czy ujemne? Przy ujemnym FCF: jak długo spółka wytrzyma bez emisji akcji lub nowego długu?
-6. DŁUG — Interest coverage ratio: EBIT / koszty odsetek > 3× = bezpieczne. Harmonogram zapadalności — czy refinansowanie wymagane w ciągu 18 miesięcy?
-7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki, transparency z inwestorami? Insider buying?
-8. MARGIN OF SAFETY — wycena na dołku: P/Book vs historyczne minimum sektora. EV/EBITDA znormalizowane vs poprzednie dołki cykliczne. Upside >40% wymagany dla recovery risk.
-9. REKOMENDACJE INSTYTUCJONALNE — % rekomendacji Kup vs Sprzedaj. Czy duże fundusze (13F) zwiększają pozycje na dołku (accumulation) czy redukują (distribution)?
-10. KATALIZATOR ODBICIA — podaj KONKRETNY katalizator z datą lub oknem czasowym: (a) inflection point przychodów — kiedy revenue przestanie spadać? (b) margin recovery — kiedy gross margin wróci do normy? (c) normalizacja inventory / backlogu zamówień, (d) makro — obniżka stóp, ożywienie capex, cykl popytu, (e) event korporacyjny — CEO change, spin-off, buyback program. Bez konkretnego katalizatora → OBSERWUJ.
-11. WYCENA NA DOŁKU — trailing P/E może być zaburzone (distressed). Skup się na: (a) EV/EBITDA vs historyczne minimum cyklu, (b) P/Book vs book value trwale, (c) forward P/E za 12M na zdepresjonowanych prognozach — czy wciąż >25×? Jeśli tak → potencjalna value trap.
-12. RYZYKO TRWAŁEGO ZNISZCZENIA — odróżnij: cykl (tymczasowy spadek popytu → spółka odbije) vs secular decline (disrupcja technologiczna, zmiana modelu branży, utrata rynku permanentna). Podaj konkretny argument za/przeciw.
-13. RSI I STREFA AKUMULACJI — RSI ${rsi ?? '?'} w przedziale 20-52 = strefa akumulacji. Czy RSI stabilizuje się (dno) czy wciąż opada (nóż w locie)? Dywergencja bullish RSI (cena nowe dno, RSI wyższe dno)? Wolumen przy stabilizacji rosnący?
-14. VALUE TRAP TEST — najważniejsze pytanie: czy spółka jest tanio wyceniana na ZNORMALIZOWANYCH zyskach (po odbiciu cyklu), czy tylko tanio wygląda na obecnych depresyjnych wynikach? Policz: jeśli EPS wróci do 70% poprzedniego szczytu, jaki będzie P/E przy obecnej cenie? Jeśli >20× na zdepresjonowanym EPS → prawdopodobna value trap, nie fallen angel.
-15. FAZA CYKLU — gdzie w cyklu jest spółka/branża? Early downturn (spadki dopiero zaczynają się, nie wchodź), mid-cycle (dno niepewne, OBSERWUJ), late-cycle bottoming (sygnały stabilizacji, marże przestają spadać, inventory normalizacja → optymalny moment wejścia). Jaka jest obecna faza i dlaczego?`
+Punkty w "analysis" (15 kryteriów quality dip rebound):
+1. TYP QUALITY DIP — Zaklasyfikuj jako TYP A/B/C lub BRAK KWALIFIKACJI. Uzasadnij w jednym zdaniu. To determinuje horyzont.
+2. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '25%+'} od szczytu? Tymczasowy event vs trwała zmiana fundamentów? Nowy negatyw (eskalacja) czy stary znany ryzy? Konkluzja: checklist A = TAK/NIE/NIEPEWNE.
+3. OVERREACTION GAP — Policz: jaki % przychodów/zysku faktycznie zagraża powód spadku? Ile % kapitalizacji zostało zniszczone? Proporcja >3:1 (rynek zniszczył 3× więcej niż realne ryzyko) = wyraźny overreaction edge. Checklist D = TAK/NIE/NIEPEWNE.
+4. BIZNES PRE-DROP — Jak wyglądały finanse przed momentem wyprzedaży: przychody, FCF, marże, pozycja rynkowa? Czy to była spółka silna fundamentalnie?
+5. BIZNES POST-DROP — Czy negatyw faktycznie zmienił wyniki? Ostatni raport Q: przychody, klienci, pipeline, marże. Odpływ klientów do konkurencji? Checklist B = TAK/NIE.
+6. MOAT INTAKTNY — Przewaga konkurencyjna po zdarzeniu: czy klienci/partnerzy odeszli? Czy produkt/usługa nadal lepsza od konkurencji? Patenty, skala, switching costs zachowane?
+7. FCF I PŁYNNOŚĆ — FCF LTM: podaj kwotę. Checklist C = TAK/NIE/WYJĄTEK-C. Przy ujemnym: runway do powrotu do FCF+ bez emisji akcji?
+8. DŁUG I WYPŁACALNOŚĆ — Interest coverage ratio > 3× = bezpieczne. Harmonogram zapadalności — refinansowanie wymagane w ciągu 18 mies.? Dług/EBITDA znormalizowane.
+9. ZARZĄD I REAKCJA NA KRYZYS — Jak zarząd komunikuje się z inwestorami? Buybacki, insider buying, przejrzystość? Restrukturyzacja jeśli potrzebna?
+10. INSTYTUCJE I SMART MONEY — Short interest trend: spada (accumulation) czy rośnie (distribution)? Opcje — czy duże fundusze kupują calls? 13F: nowe pozycje vs wyjścia.
+11. KATALIZATOR POWROTU SENTYMENTU — Co konkretnie sprawi że rynek "przebaczy" tej spółce i wróci do wyceny pre-drop? Podaj trigger z szacowanym timeframe: (a) event resolved (CEO sprawa, regulacja), (b) kolejny raport Q bez deterioracji, (c) macro się odwraca, (d) sektor rotation back. Bez konkretnego triggera → OBSERWUJ.
+12. WYCENA NA BIEŻĄCYCH ZYSKACH — P/E na AKTUALNYM EPS (nie zdepresjonowanym, nie projektowanym). < 20× = atrakcyjne, 20-30× = quality premium OK, > 35× = drogie nawet po spadku → wymagaj mocniejszego uzasadnienia. EV/EBITDA vs historyczna norma sektora.
+13. RYZYKO ESKALACJI — Czy tymczasowy negatyw może stać się permanentny? Co musiałoby się stać żeby thesis się załamała? Podaj konkretny worst-case scenariusz i jego prawdopodobieństwo.
+14. RSI I TECHNICZNE — RSI ${rsi ?? '?'}. < 38 = panika maksymalna, overreaction prawdopodobnie w pełni (kwalifikuje WEJDŹ). 38-52 = częściowy dip, overreaction może trwać (max TRANSZA). > 52 = za mało dip, nie kwalifikuje. StabilizedBottom (10+ sesji bez nowego dna)? Wolumen na down-dniach vs up-dniach?
+15. ANALOGIA HISTORYCZNA + EXIT PLAN — (A) Podaj historyczny precedens: czy ta spółka lub podobna miała analogiczny event? Jak wyszło i ile czasu trwało odbicie? (B) EXIT: wyjdź gdy: RSI > 60 (rynek wycenił odbicie), trigger tymczasowości spełniony + cena +20% od wejścia, lub gdy fundamenty faktycznie się pogorszyły → natychmiastowe wyjście bez czekania na target.`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
@@ -621,6 +674,8 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
   if (!text) throw new Error('Claude returned empty response')
   const parsed = parseJSON(text, null)
   if (!parsed?.decision) throw new Error('Claude returned invalid or truncated JSON')
+  // Normalize decision string — Claude may return Polish chars in NFD vs NFC form
+  if (parsed.decision) parsed.decision = parsed.decision.normalize('NFC').trim()
   parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   return parsed
 }

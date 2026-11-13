@@ -10,7 +10,7 @@ import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38, onConfirm, onCancel }) {
   const currency      = exchange === 'NYSE' ? 'USD' : 'PLN'
-  const defaultAmt    = Math.round(portfolio * maxPct / 100)
+  const defaultAmt    = Math.round(portfolio * maxPct / 100 * (rec._trancheFactor ?? 1))
   const basePrice     = rec.livePrice ?? rec.price
   const defaultPrice  = (basePrice * (1 + commission / 100)).toFixed(2)
   const [price,  setPrice]  = useState(String(defaultPrice))
@@ -91,7 +91,7 @@ const STRATEGY_META = {
   scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni',      rsiPeriod: 9  },
   swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.',     rsiPeriod: 14 },
   aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A',          rsiPeriod: 14 },
-  recovery:   { label: '🔄 Odbicia',   color: 'text-green-400',  defaults: SWING_DEFAULTS,      target: '25-40%', time: '6-12 miesięcy', rsiPeriod: 14 },
+  recovery:   { label: '🔄 Odbicia',   color: 'text-green-400',  defaults: SWING_DEFAULTS,      target: '25-40%', time: '2-12 mies.', rsiPeriod: 14 },
 }
 
 function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
@@ -501,18 +501,19 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               {batchRsiResults.map(r => (
                 <div key={r.ticker} className="flex items-center gap-2 text-xs bg-gpw-card rounded px-2 py-1.5">
                   <span className="font-bold w-12 shrink-0">{r.tickerDisplay}</span>
-                  <span className={`font-bold w-16 shrink-0 ${r.decision === 'WEJDŹ' ? 'text-gpw-green' : r.decision === 'UNIKAJ' ? 'text-gpw-red' : r.decision === 'BŁĄD' ? 'text-gray-500' : 'text-yellow-400'}`}>{r.decision}</span>
+                  <span className={`font-bold w-20 shrink-0 ${r.decision === 'WEJDŹ' ? 'text-gpw-green' : r.decision === 'WEJDŹ TRANSZĄ 1/3' ? 'text-blue-400' : r.decision === 'UNIKAJ' ? 'text-gpw-red' : r.decision === 'BŁĄD' ? 'text-gray-500' : 'text-yellow-400'}`}>{r.decision === 'WEJDŹ TRANSZĄ 1/3' ? '🔀 TRANSZA' : r.decision}</span>
                   {r.compositeScore != null && <span className="text-gray-400">{r.compositeScore}/100</span>}
                   {r.suggestedTargetPct != null && <span className="text-gpw-green ml-auto">+{r.suggestedTargetPct}% 🤖</span>}
                   {r.signalStrength && <span className={`text-[10px] px-1 py-0.5 rounded shrink-0 ${r.signalStrength === 'BARDZO SILNY' || r.signalStrength === 'SILNY' ? 'bg-gpw-green/20 text-gpw-green' : r.signalStrength === 'UMIARKOWANY' ? 'bg-yellow-700/30 text-yellow-400' : 'bg-gpw-red/20 text-gpw-red'}`}>{r.signalStrength}</span>}
                 </div>
               ))}
               {!batchRsiRunning && (() => {
-                const c = { WEJDŹ: 0, OBSERWUJ: 0, UNIKAJ: 0 }
+                const c = { WEJDŹ: 0, 'WEJDŹ TRANSZĄ 1/3': 0, OBSERWUJ: 0, UNIKAJ: 0 }
                 batchRsiResults.forEach(r => { if (r.decision in c) c[r.decision]++ })
                 return (
                   <div className="text-xs pt-1 flex gap-3">
                     {c['WEJDŹ']   > 0 && <span className="text-gpw-green font-semibold">{c['WEJDŹ']}× WEJDŹ</span>}
+                    {c['WEJDŹ TRANSZĄ 1/3'] > 0 && <span className="text-blue-400 font-semibold">{c['WEJDŹ TRANSZĄ 1/3']}× TRANSZA 1/3</span>}
                     {c['OBSERWUJ'] > 0 && <span className="text-yellow-400">{c['OBSERWUJ']}× OBSERWUJ</span>}
                     {c['UNIKAJ']  > 0 && <span className="text-gpw-red">{c['UNIKAJ']}× UNIKAJ</span>}
                   </div>
@@ -599,10 +600,14 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   strategy={strategy}
                   exchange={exchange}
                   livePrice={livePrices[validating.ticker] ?? validating.livePrice}
-                  onOpenPosition={(_, aiResult) => {
-                    const updatedRec = aiResult?.suggestedTargetPct != null
-                      ? { ...validating, target: aiResult.suggestedTargetPct }
-                      : validating
+                  onOpenPosition={(entryRec, aiResult) => {
+                    const updatedRec = {
+                      ...(aiResult?.suggestedTargetPct != null
+                        ? { ...validating, target: aiResult.suggestedTargetPct }
+                        : validating),
+                      _aiValidation: aiResult ?? null,
+                      _trancheFactor: entryRec?._trancheFactor ?? 1,
+                    }
                     setValidating(null)
                     setConfirming(updatedRec)
                   }}

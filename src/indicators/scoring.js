@@ -1,12 +1,15 @@
-// Max raw score = 130 pts → normalized to 100
+// Max raw score = 130 pts → normalized to 100 (recovery: 145 pts with stabilizedBottom)
 // RSI(25) + Vol(20) + SMA150(15) + Index(10) + Support(5) + Divergence(5)
 // + MACD(±15) + Bollinger(±20) + Seasonality(±10) + HistEff(5, always 0)
+// Recovery bonus: StabilizedBottom(+15) → MAX_RAW = 145
 const MAX_RAW = 130
+const MAX_RAW_RECOVERY = 145
 
 export function calcScore(strategy, inputs) {
   const {
     rsi, volMult, sma150trend, nearSupport, divergence, indexTrend,
     macdScore = 0, bollingerScore = 0, seasonalityScore = 0, rsScore = 0,
+    stabilizedBottom = false,
   } = inputs
   let raw = 0
 
@@ -75,6 +78,9 @@ export function calcScore(strategy, inputs) {
   // RSI divergence (5 pts)
   if (divergence === 'bullish') raw += 5
 
+  // Stabilized bottom (15 pts, recovery only) — no new 10-session low vs prior 15 sessions
+  if (strategy === 'recovery' && stabilizedBottom) raw += 15
+
   // MACD (±15 pts)
   raw += Math.max(-15, Math.min(15, macdScore))
 
@@ -87,7 +93,8 @@ export function calcScore(strategy, inputs) {
   // Historical effectiveness — 5 pts, always 0 until KV data populated
   // raw += histEffScore ?? 0
 
-  const normalized = Math.min(100, Math.max(0, Math.round(raw / MAX_RAW * 100)))
+  const maxRaw = strategy === 'recovery' ? MAX_RAW_RECOVERY : MAX_RAW
+  const normalized = Math.min(100, Math.max(0, Math.round(raw / maxRaw * 100)))
   if (strategy === 'aggressive' && rsScore !== 0) {
     return Math.min(100, Math.max(0, normalized + rsScore))
   }

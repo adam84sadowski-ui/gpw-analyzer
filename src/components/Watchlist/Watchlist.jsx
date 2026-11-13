@@ -2,9 +2,17 @@ import { useState, useEffect, useRef } from 'react'
 import EntryValidationModal from '../Strategies/ReboundRadar/EntryValidationModal.jsx'
 import TechnicalPanel from '../TechnicalPanel.jsx'
 
+const TRANCHE_OPTIONS = [
+  { label: '1/3',  factor: 1/3, tranche: { current: 1, total: 3 } },
+  { label: '1/2',  factor: 1/2, tranche: { current: 1, total: 2 } },
+  { label: '2/3',  factor: 2/3, tranche: { current: 2, total: 3 } },
+  { label: '100%', factor: 1,   tranche: null },
+]
+
 function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onValidate }) {
   const [confirming,    setConfirming]    = useState(false)
   const [opening,       setOpening]       = useState(false)
+  const [trancheIdx,    setTrancheIdx]    = useState(0)
   const [indicsOpen,    setIndicsOpen]    = useState(false)
   const [indicsData,    setIndicsData]    = useState(null)
   const [indicsLoading, setIndicsLoading] = useState(false)
@@ -15,38 +23,39 @@ function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onVa
     : item.ticker.replace('.pl', '').toUpperCase()
 
   const STATUS = item.status === 'expired'
-    ? { label: '⏰ Wygasło', cls: 'text-gray-500 border-gray-700 bg-transparent' }
-    : item.aiDecision === 'WEJDŹ'
-      ? { label: '✅ WEJDŹ', cls: 'text-gpw-green border-gpw-green/40 bg-gpw-green/10' }
-      : item.aiDecision === 'OBSERWUJ'
-        ? { label: '👁 OBSERWUJ', cls: 'text-yellow-400 border-yellow-600/40 bg-yellow-900/10' }
-        : item.aiDecision === 'UNIKAJ'
-          ? { label: '🚫 UNIKAJ', cls: 'text-gpw-red border-gpw-red/40 bg-gpw-red/10' }
-          : { label: '— brak oceny', cls: 'text-gray-500 border-gray-700 bg-transparent' }
+    ? { label: '⏰ Wygasło',  cls: 'text-gray-500 border-gray-700 bg-transparent' }
+    : item.aiDecision?.includes('TRANSZ')
+      ? { label: '🔀 TRANSZA',  cls: 'text-blue-400 border-blue-700/40 bg-blue-900/10' }
+      : item.aiDecision === 'WEJDŹ'
+        ? { label: '✅ WEJDŹ',   cls: 'text-gpw-green border-gpw-green/40 bg-gpw-green/10' }
+        : item.aiDecision === 'OBSERWUJ'
+          ? { label: '👁 OBSERWUJ', cls: 'text-yellow-400 border-yellow-600/40 bg-yellow-900/10' }
+          : item.aiDecision === 'UNIKAJ'
+            ? { label: '🚫 UNIKAJ', cls: 'text-gpw-red border-gpw-red/40 bg-gpw-red/10' }
+            : { label: '— brak oceny', cls: 'text-gray-500 border-gray-700 bg-transparent' }
 
-  async function openPosition() {
+  async function openPosition(trancheFactor = 1, aiValidation = null) {
     setOpening(true)
     try {
-      const settings = await fetch('/api/market?mode=scan&strategy=scalping&exchange=GPW')
-        .then(() => null).catch(() => null)
-      const portfolio  = 10000
-      const positionSize = Math.round(portfolio * 0.10)
+      const portfolio    = 10000
+      const positionSize = Math.round(portfolio * 0.10 * trancheFactor)
       const entryPrice   = item.livePrice ?? item.priceAtAnalysis
       await fetch('/api/positions', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticker:      item.ticker,
-          strategy:    item.strategy,
-          exchange:    item.exchange,
+          ticker:       item.ticker,
+          strategy:     item.strategy,
+          exchange:     item.exchange,
           entryPrice,
           positionSize,
-          target:      item.target,
-          stopLoss:    item.stopLoss,
-          signal:      item.signal,
-          entryRsi:    item.rsi    ?? null,
-          entryScore:  item.score  ?? null,
+          target:       item.target,
+          stopLoss:     item.stopLoss,
+          signal:       item.signal,
+          entryRsi:     item.rsi     ?? null,
+          entryScore:   item.score   ?? null,
           entryVolMult: item.volMult ?? null,
+          aiValidation,
         }),
       })
       await fetch('/api/positions?mode=watchlist', {
@@ -246,12 +255,18 @@ function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onVa
             <button
               onClick={() => setConfirming(true)}
               className={`w-full py-2 rounded-lg text-xs font-medium transition-colors border ${
-                status === 'in'
+                item.aiDecision === 'WEJDŹ'
                   ? 'bg-gpw-green/20 hover:bg-gpw-green/40 border-gpw-green/40 text-gpw-green'
-                  : 'bg-gpw-card hover:bg-gpw-border border-gpw-border text-gray-400 hover:text-white'
+                  : item.aiDecision?.includes('TRANSZ')
+                    ? 'bg-blue-900/20 hover:bg-blue-900/40 border-blue-700/40 text-blue-400'
+                    : 'bg-gpw-card hover:bg-gpw-border border-gpw-border text-gray-400 hover:text-white'
               }`}
             >
-              {status === 'in' ? '✅ Otwórz pozycję (w strefie)' : '📌 Wejdź teraz (poza strefą)'}
+              {item.aiDecision === 'WEJDŹ'
+                ? '✅ Otwórz pozycję (w strefie)'
+                : item.aiDecision?.includes('TRANSZ')
+                  ? '🔀 Realizuj transzę'
+                  : '📌 Wejdź teraz (poza strefą)'}
             </button>
           ) : (
             <div className="bg-gpw-dark border border-gpw-border rounded-lg p-3 space-y-2">
@@ -259,13 +274,49 @@ function WatchCard({ item, swapCandidate, perf, onDelete, onPositionOpened, onVa
                 Otwórz pozycję: <span className="font-bold text-white">{display}</span> po{' '}
                 <span className="font-bold text-yellow-300">{item.livePrice ?? item.priceAtAnalysis} {currency}</span>
               </p>
+
+              {item.aiDecision?.includes('TRANSZ') && (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {TRANCHE_OPTIONS.map((opt, i) => (
+                    <button
+                      key={opt.label}
+                      onClick={() => setTrancheIdx(i)}
+                      className={`py-1.5 rounded text-xs font-semibold transition-colors border ${
+                        trancheIdx === i
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-gpw-card border-gpw-border text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button
                   disabled={opening}
-                  onClick={openPosition}
+                  onClick={() => {
+                    const isTranche = item.aiDecision?.includes('TRANSZ')
+                    const opt    = isTranche ? TRANCHE_OPTIONS[trancheIdx] : null
+                    const factor = opt?.factor ?? 1
+                    const tranche = opt?.tranche
+                      ? { ...opt.tranche, confirmSignal: 'RSI wyższe dno lub wolumen przy odbiciu' }
+                      : null
+                    openPosition(
+                      factor,
+                      isTranche ? { decision: item.aiDecision, tranche } : null
+                    )
+                  }}
                   className="flex-1 bg-gpw-green hover:bg-green-600 disabled:opacity-50 text-white py-1.5 rounded text-xs font-semibold transition-colors"
                 >
-                  {opening ? 'Otwieranie…' : '✅ Potwierdź'}
+                  {opening ? 'Otwieranie…' : (
+                    item.aiDecision?.includes('TRANSZ')
+                      ? (trancheIdx < 3
+                          ? `🔀 Realizuję transzę ${TRANCHE_OPTIONS[trancheIdx].label}`
+                          : '✅ Realizuję wejście (100%)')
+                      : '✅ Potwierdź'
+                  )}
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
@@ -506,7 +557,42 @@ export default function Watchlist() {
           exchange={modalExchange}
           livePrice={modalRec.livePrice}
           watchlistItemId={modalWatchlistId}
-          onOpenPosition={() => {}}
+          onOpenPosition={async (entryRec, aiResult) => {
+            const portfolio    = 10000
+            const factor       = entryRec?._trancheFactor ?? 1
+            const positionSize = Math.round(portfolio * 0.10 * factor)
+            const entryPrice   = entryRec?.livePrice ?? entryRec?.price ?? modalRec.livePrice
+            try {
+              await fetch('/api/positions', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ticker:       modalRec.ticker,
+                  strategy:     modalStrategy,
+                  exchange:     modalExchange,
+                  entryPrice,
+                  positionSize,
+                  target:       aiResult?.suggestedTargetPct ?? modalRec.target,
+                  stopLoss:     modalRec.stopLoss,
+                  signal:       modalRec.signal,
+                  entryRsi:     modalRec.rsi     ?? null,
+                  entryScore:   modalRec.score   ?? null,
+                  entryVolMult: modalRec.volMult ?? null,
+                  aiValidation: aiResult ?? null,
+                }),
+              })
+              if (modalWatchlistId) {
+                await fetch('/api/positions?mode=watchlist', {
+                  method:  'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body:    JSON.stringify({ id: modalWatchlistId }),
+                })
+              }
+            } catch { /* silent */ }
+            setModalRec(null)
+            setModalWatchlistId(null)
+            load()
+          }}
           onClose={() => { setModalRec(null); setModalWatchlistId(null); load() }}
         />
       )}
