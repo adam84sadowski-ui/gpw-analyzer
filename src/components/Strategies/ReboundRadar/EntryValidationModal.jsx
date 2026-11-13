@@ -536,12 +536,15 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                     onClick={() => {
                       const p = parseFloat(entryPriceInput)
                       if (!p || p <= 0) return
+                      const tranche = result.decision === 'WEJDŹ TRANSZĄ 1/3'
+                        ? { current: 1, total: 3, confirmSignal: 'RSI wyższe dno lub wolumen przy odbiciu' }
+                        : null
                       onClose()
-                      onOpenPosition({ ...rec, livePrice: p }, result)
+                      onOpenPosition({ ...rec, livePrice: p }, { ...result, tranche })
                     }}
-                    className="w-full bg-gpw-green hover:bg-green-600 disabled:opacity-40 text-white py-3 rounded-lg font-semibold transition-colors"
+                    className={`w-full disabled:opacity-40 text-white py-3 rounded-lg font-semibold transition-colors ${result.decision === 'WEJDŹ TRANSZĄ 1/3' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gpw-green hover:bg-green-600'}`}
                   >
-                    ✅ Realizuję wejście
+                    {result.decision === 'WEJDŹ TRANSZĄ 1/3' ? '🔀 Realizuję transzę 1/3' : '✅ Realizuję wejście'}
                   </button>
                 </div>
               ) : (
