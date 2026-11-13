@@ -622,6 +622,8 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
   if (!text) throw new Error('Claude returned empty response')
   const parsed = parseJSON(text, null)
   if (!parsed?.decision) throw new Error('Claude returned invalid or truncated JSON')
+  // Normalize decision string — Claude may return Polish chars in NFD vs NFC form
+  if (parsed.decision) parsed.decision = parsed.decision.normalize('NFC').trim()
   parsed.suggestedTargetPct = clampSuggestedTarget(parsed.suggestedTargetPct, strategy)
   return parsed
 }
