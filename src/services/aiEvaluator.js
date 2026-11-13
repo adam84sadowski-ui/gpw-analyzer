@@ -548,31 +548,47 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 13. ŚRODOWISKO MAKRO — długoterminowy trend stóp, rotacja sektorowa, mega-trendy (AI, energia, demografika)`
   } else if (strategy === 'recovery') {
     const recoveryCtx = rsi != null && pctFrom52w != null
-      ? `\n⚠️ FALLEN ANGEL CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi} (głęboko wyprzedana strefa). Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40% w 6-12 miesiącach.`
+      ? `\n⚠️ FALLEN ANGEL CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi} (strefa akumulacji 20-52). Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40% w 6-12 miesiącach.`
       : ''
+    const recoveryJsonSchema = jsonSchema
+      .replace('proporcja z 13 kryteriów × 10/13', 'proporcja z 15 kryteriów × 10/15')
+      .replace('"analysis": "<checklist 13 punktów', '"analysis": "<checklist 15 punktów')
     prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger, specjalizującym się w inwestycjach value recovery — "fallen angel" quality stocks. Oceniasz wejście w pozycję średnioterminową (horyzont 6-12 miesięcy, stop -12%). Zasada: "Be fearful when others are greedy, and greedy when others are fearful."
 
 Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
 
+⛔ NIE STOSUJ SWING LOGIKI DO FALLEN ANGEL:
+• Cena poniżej SMA150 i SMA50 opadające = NORMA dla fallen angel, NIE powód do UNIKAJ ani czekania
+• NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie na dnie, nie po potwierdzeniu trendu
+• RS ujemna na dnie = oczekiwana, nie dyskwalifikująca
+
+✅ WŁAŚCIWA SKALA OCENY — BĄDŹ REALISTYCZNY:
+• WEJDŹ: mocne fundamenty (moat intaktny, FCF dodatnie, dług zarządzalny) + widoczny katalizator w ≤3 kwartałach (9 miesięcy) + RSI stabilizuje się lub dywergencja bullish + instytucje akumulują + faza late-cycle bottoming potwierdzona
+• OBSERWUJ: dobra spółka, ale: brak wyraźnego katalizatora w 3Q, lub RSI wciąż opada, lub early/mid-cycle downturn (dno jeszcze przed nami), lub dług podwyższony lecz zarządzalny — czekaj na potwierdzenie inflection point
+• UNIKAJ: (a) value trap — forward P/E wciąż wysoki bo earnings dalej spadają (tanie tylko na papierze), (b) FCF ujemne + dług >3× EBITDA, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów
+• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Wątpliwości co do fazy cyklu → OBSERWUJ, nie WEJDŹ
+
 ${dataBlock}
 
 ═══════════════
-${jsonSchema}
+${recoveryJsonSchema}
 
-Punkty w "analysis" (13 kryteriów recovery — fallen angel value rebound):
-1. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)?
-2. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci, patenty, skala?
-3. EARNINGS RECOVERY PATH — czy zyski mają szansę wrócić do poprzednich poziomów w 12-18 miesiącach?
-4. RETURN ON EQUITY — ROE historyczne vs obecne: czy pogorszenie tymczasowe czy strukturalne?
-5. FREE CASH FLOW — czy FCF nadal dodatnie? Spółka może przetrwać bez emisji akcji?
-6. DŁUG — Dług/Equity: czy dług jest do obsługi przy obecnych przepływach? Covenant risk?
-7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki?
-8. MARGIN OF SAFETY — cena vs intrinsic value: upside > 40% dla recovery play (wyższe ryzyko = wyższy wymóg)?
-9. REKOMENDACJE INSTYTUCJONALNE — czy intytucje kupują na dołku (accumulation) czy redukują?
-10. KATALIZATOR ODBICIA — co konkretnie może odwrócić trend? Wyniki Q, CEO change, macro, segment recovery?
-11. WYCENA NA DOŁKU — P/E (może być distressed/N/A), EV/EBITDA, P/Book vs historyczne minima sektora
-12. RYZYKO TRWAŁEGO ZNISZCZENIA — secular decline, disruption technologiczny, bankruptcy risk — odróżnij od korekty
-13. RSI I TECHNICZNE DNA — RSI ${rsi ?? '?'} (20-52 = accumulation zone). Dywergencja bullish? Wolumen akumulacji?`
+Punkty w "analysis" (15 kryteriów recovery — fallen angel value rebound):
+1. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)? Jedno zdanie konkluzji.
+2. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci nie odeszli do konkurencji? Patenty, skala, switching costs zachowane?
+3. EARNINGS RECOVERY PATH — czy consensus analityków zakłada odbicie EPS w ciągu 4-6 kwartałów? Czy rewizje idą w górę czy w dół?
+4. RETURN ON EQUITY — ROE historyczne (pre-crisis) vs obecne: pogorszenie tymczasowe (cykl) czy strukturalne (utrata przewagi)?
+5. FREE CASH FLOW — FCF dodatnie czy ujemne? Przy ujemnym FCF: jak długo spółka wytrzyma bez emisji akcji lub nowego długu?
+6. DŁUG — Interest coverage ratio: EBIT / koszty odsetek > 3× = bezpieczne. Harmonogram zapadalności — czy refinansowanie wymagane w ciągu 18 miesięcy?
+7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki, transparency z inwestorami? Insider buying?
+8. MARGIN OF SAFETY — wycena na dołku: P/Book vs historyczne minimum sektora. EV/EBITDA znormalizowane vs poprzednie dołki cykliczne. Upside >40% wymagany dla recovery risk.
+9. REKOMENDACJE INSTYTUCJONALNE — % rekomendacji Kup vs Sprzedaj. Czy duże fundusze (13F) zwiększają pozycje na dołku (accumulation) czy redukują (distribution)?
+10. KATALIZATOR ODBICIA — podaj KONKRETNY katalizator z datą lub oknem czasowym: (a) inflection point przychodów — kiedy revenue przestanie spadać? (b) margin recovery — kiedy gross margin wróci do normy? (c) normalizacja inventory / backlogu zamówień, (d) makro — obniżka stóp, ożywienie capex, cykl popytu, (e) event korporacyjny — CEO change, spin-off, buyback program. Bez konkretnego katalizatora → OBSERWUJ.
+11. WYCENA NA DOŁKU — trailing P/E może być zaburzone (distressed). Skup się na: (a) EV/EBITDA vs historyczne minimum cyklu, (b) P/Book vs book value trwale, (c) forward P/E za 12M na zdepresjonowanych prognozach — czy wciąż >25×? Jeśli tak → potencjalna value trap.
+12. RYZYKO TRWAŁEGO ZNISZCZENIA — odróżnij: cykl (tymczasowy spadek popytu → spółka odbije) vs secular decline (disrupcja technologiczna, zmiana modelu branży, utrata rynku permanentna). Podaj konkretny argument za/przeciw.
+13. RSI I STREFA AKUMULACJI — RSI ${rsi ?? '?'} w przedziale 20-52 = strefa akumulacji. Czy RSI stabilizuje się (dno) czy wciąż opada (nóż w locie)? Dywergencja bullish RSI (cena nowe dno, RSI wyższe dno)? Wolumen przy stabilizacji rosnący?
+14. VALUE TRAP TEST — najważniejsze pytanie: czy spółka jest tanio wyceniana na ZNORMALIZOWANYCH zyskach (po odbiciu cyklu), czy tylko tanio wygląda na obecnych depresyjnych wynikach? Policz: jeśli EPS wróci do 70% poprzedniego szczytu, jaki będzie P/E przy obecnej cenie? Jeśli >20× na zdepresjonowanym EPS → prawdopodobna value trap, nie fallen angel.
+15. FAZA CYKLU — gdzie w cyklu jest spółka/branża? Early downturn (spadki dopiero zaczynają się, nie wchodź), mid-cycle (dno niepewne, OBSERWUJ), late-cycle bottoming (sygnały stabilizacji, marże przestają spadać, inventory normalizacja → optymalny moment wejścia). Jaka jest obecna faza i dlaczego?`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
