@@ -501,18 +501,19 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
               {batchRsiResults.map(r => (
                 <div key={r.ticker} className="flex items-center gap-2 text-xs bg-gpw-card rounded px-2 py-1.5">
                   <span className="font-bold w-12 shrink-0">{r.tickerDisplay}</span>
-                  <span className={`font-bold w-16 shrink-0 ${r.decision === 'WEJDŹ' ? 'text-gpw-green' : r.decision === 'UNIKAJ' ? 'text-gpw-red' : r.decision === 'BŁĄD' ? 'text-gray-500' : 'text-yellow-400'}`}>{r.decision}</span>
+                  <span className={`font-bold w-20 shrink-0 ${r.decision === 'WEJDŹ' ? 'text-gpw-green' : r.decision === 'WEJDŹ TRANSZĄ 1/3' ? 'text-blue-400' : r.decision === 'UNIKAJ' ? 'text-gpw-red' : r.decision === 'BŁĄD' ? 'text-gray-500' : 'text-yellow-400'}`}>{r.decision === 'WEJDŹ TRANSZĄ 1/3' ? '🔀 TRANSZA' : r.decision}</span>
                   {r.compositeScore != null && <span className="text-gray-400">{r.compositeScore}/100</span>}
                   {r.suggestedTargetPct != null && <span className="text-gpw-green ml-auto">+{r.suggestedTargetPct}% 🤖</span>}
                   {r.signalStrength && <span className={`text-[10px] px-1 py-0.5 rounded shrink-0 ${r.signalStrength === 'BARDZO SILNY' || r.signalStrength === 'SILNY' ? 'bg-gpw-green/20 text-gpw-green' : r.signalStrength === 'UMIARKOWANY' ? 'bg-yellow-700/30 text-yellow-400' : 'bg-gpw-red/20 text-gpw-red'}`}>{r.signalStrength}</span>}
                 </div>
               ))}
               {!batchRsiRunning && (() => {
-                const c = { WEJDŹ: 0, OBSERWUJ: 0, UNIKAJ: 0 }
+                const c = { WEJDŹ: 0, 'WEJDŹ TRANSZĄ 1/3': 0, OBSERWUJ: 0, UNIKAJ: 0 }
                 batchRsiResults.forEach(r => { if (r.decision in c) c[r.decision]++ })
                 return (
                   <div className="text-xs pt-1 flex gap-3">
                     {c['WEJDŹ']   > 0 && <span className="text-gpw-green font-semibold">{c['WEJDŹ']}× WEJDŹ</span>}
+                    {c['WEJDŹ TRANSZĄ 1/3'] > 0 && <span className="text-blue-400 font-semibold">{c['WEJDŹ TRANSZĄ 1/3']}× TRANSZA 1/3</span>}
                     {c['OBSERWUJ'] > 0 && <span className="text-yellow-400">{c['OBSERWUJ']}× OBSERWUJ</span>}
                     {c['UNIKAJ']  > 0 && <span className="text-gpw-red">{c['UNIKAJ']}× UNIKAJ</span>}
                   </div>

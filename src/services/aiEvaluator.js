@@ -442,7 +442,7 @@ ${newsLines}${violentMoveBlockEntry}`
 
   const jsonSchema = `Odpowiedz TYLKO w JSON bez markdown. buffettScore = wynik 0-10 (proporcja z 13 kryteriów × 10/13, zaokrąglij do 1 miejsca). compositeScore = synteza końcowa 0-100: techniczny score (waga 40%) + buffettScore×10 (waga 35%) + potwierdzenie analitykami/makro (waga 25%). signalStrength: SŁABY (<40), UMIARKOWANY (40-54), SILNY (55-74), BARDZO SILNY (≥75).
 {
-  "decision": "WEJDŹ" | "OBSERWUJ" | "UNIKAJ",
+  "decision": "WEJDŹ" | "WEJDŹ TRANSZĄ 1/3" | "OBSERWUJ" | "UNIKAJ",
   "buffettScore": <0-10>,
   "compositeScore": <0-100>,
   "signalStrength": "SŁABY" | "UMIARKOWANY" | "SILNY" | "BARDZO SILNY",
@@ -562,11 +562,12 @@ Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odb
 • NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie na dnie, nie po potwierdzeniu trendu
 • RS ujemna na dnie = oczekiwana, nie dyskwalifikująca
 
-✅ WŁAŚCIWA SKALA OCENY — BĄDŹ REALISTYCZNY:
-• WEJDŹ: mocne fundamenty (moat intaktny, FCF dodatnie, dług zarządzalny) + widoczny katalizator w ≤3 kwartałach (9 miesięcy) + RSI stabilizuje się lub dywergencja bullish + instytucje akumulują + faza late-cycle bottoming potwierdzona
-• OBSERWUJ: dobra spółka, ale: brak wyraźnego katalizatora w 3Q, lub RSI wciąż opada, lub early/mid-cycle downturn (dno jeszcze przed nami), lub dług podwyższony lecz zarządzalny — czekaj na potwierdzenie inflection point
-• UNIKAJ: (a) value trap — forward P/E wciąż wysoki bo earnings dalej spadają (tanie tylko na papierze), (b) FCF ujemne + dług >3× EBITDA, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów
-• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Wątpliwości co do fazy cyklu → OBSERWUJ, nie WEJDŹ
+✅ WŁAŚCIWA SKALA OCENY — TRANSZOWE PODEJŚCIE:
+• WEJDŹ (pełna pozycja, 100%): WSZYSTKIE 5 warunków spełnione: (1) moat intaktny, (2) FCF dodatnie lub recovery path <2 kwartały, (3) widoczny konkretny katalizator w ≤3 kwartałach, (4) RSI stabilizuje się lub dywergencja bullish (brak nowego dna 10 sesji), (5) faza late-cycle bottoming potwierdzona + instytucje akumulują
+• WEJDŹ TRANSZĄ 1/3 (częściowa pozycja — czekaj na potwierdzenie): spełnione 3–4 z 5 warunków — dobra spółka, ale brak pełnego potwierdzenia fazy lub katalizator niewyraźny. Uzupełnij pozycję do pełnej gdy: RSI wyższe dno lub wolumen przy odbicie wzrośnie. Parametry: cel i stop jak przy pełnej pozycji, ale max 1/3 planowanej kwoty na start.
+• OBSERWUJ: spełnione 1–2 z 5 warunków — dobra spółka, ale: RSI wciąż opada (nóż w locie), lub early/mid-cycle downturn (dno jeszcze przed nami), lub dług podwyższony + brak katalizatora. Ustaw alert na RSI stabilizację lub inflection point przychodów.
+• UNIKAJ: (a) value trap — forward P/E >20× na 70% peak EPS, (b) FCF ujemne + dług >3× EBITDA bez restrukturyzacji, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów
+• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Wątpliwości co do fazy cyklu → WEJDŹ TRANSZĄ 1/3, nie WEJDŹ. Mniej niż 3 warunki → OBSERWUJ.
 
 ${dataBlock}
 

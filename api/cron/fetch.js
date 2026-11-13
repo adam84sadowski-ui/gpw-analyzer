@@ -312,8 +312,20 @@ export default async function handler(req, res) {
     await logSkip(signal.ticker, 'max_alerts', signal.score, signal.score)
   }
 
+  // Weekly dedup key for recovery: prevent repeat alerts for same ticker within 7 days
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7)) // Monday of current week
+  const weekKey = weekStart.toISOString().slice(0, 10)
+
   let sent = 0
   for (const signal of signals.slice(0, config.maxAlerts)) {
+    // Recovery: skip if already alerted this week (7-day dedup per ticker)
+    if (strategy === 'recovery') {
+      const dedupKey = `${ENV}:dedup:recovery:${signal.ticker}:${weekKey}`
+      const alreadySent = await kv.get(dedupKey).catch(() => null)
+      if (alreadySent) { await logSkip(signal.ticker, 'weekly_dedup', signal.score, signal.score); continue }
+    }
+
     // Macro score adjustment
     const macroAdj      = macro?.scoreAdjustment ?? 0
     const adjustedScore = signal.score + macroAdj
@@ -414,6 +426,12 @@ export default async function handler(req, res) {
       positionSize, shares,
       ...config.kvExtra(signal),
     }, { ex: 365 * 24 * 60 * 60 })
+
+    // Store weekly dedup for recovery to prevent repeat alerts same week
+    if (strategy === 'recovery') {
+      const dedupKey = `${ENV}:dedup:recovery:${signal.ticker}:${weekKey}`
+      await kv.set(dedupKey, 1, { ex: 8 * 24 * 60 * 60 }).catch(() => {})
+    }
 
     sent++
   }

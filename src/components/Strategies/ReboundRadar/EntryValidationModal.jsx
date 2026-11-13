@@ -1,9 +1,10 @@
 import { useState } from 'react'
 
 const DECISION_STYLE = {
-  'WEJDŹ':   { icon: '✅', cls: 'text-gpw-green'  },
-  'OBSERWUJ':{ icon: '⏳', cls: 'text-yellow-400' },
-  'UNIKAJ':  { icon: '❌', cls: 'text-gpw-red'    },
+  'WEJDŹ':              { icon: '✅', cls: 'text-gpw-green'   },
+  'WEJDŹ TRANSZĄ 1/3':  { icon: '🔀', cls: 'text-blue-400'   },
+  'OBSERWUJ':           { icon: '⏳', cls: 'text-yellow-400'  },
+  'UNIKAJ':             { icon: '❌', cls: 'text-gpw-red'     },
 }
 
 function BuffettMeter({ score }) {
@@ -518,7 +519,7 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                 </div>
               </div>
 
-              {result.decision === 'WEJDŹ' ? (
+              {(result.decision === 'WEJDŹ' || result.decision === 'WEJDŹ TRANSZĄ 1/3') ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-gray-400 shrink-0">Cena wejścia ({exchange === 'NYSE' ? 'USD' : 'PLN'})</label>
