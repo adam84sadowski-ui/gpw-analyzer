@@ -192,7 +192,7 @@ export default async function handler(req, res) {
   // NYSE: max 5 misses/run with 12s delay = ~56s safe within Vercel 60s limit.
   // Recovery: parallel batch of 15 misses/run, 4s timeout, 24h TTL (long-horizon strategy).
   const isRecovery  = strategy === 'recovery'
-  const CANDLE_TTL  = isRecovery ? 24 * 60 * 60 : (exchange === 'NYSE' ? 90 * 60 : 25 * 60)
+  const CANDLE_TTL  = isRecovery ? 48 * 60 * 60 : (exchange === 'NYSE' ? 90 * 60 : 25 * 60)
   const MISS_LIMIT  = exchange === 'NYSE' ? 5 : 8
   const MISS_DELAY  = 12000
 
