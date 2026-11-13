@@ -189,8 +189,10 @@ export default async function handler(req, res) {
   // ── Rate-limited candle fetching (Layer 1+2) ────────────────────────────
   // Check KV cache in parallel first; only call Yahoo on cache miss.
   // GPW: max 8 misses/run × 5s timeout = 40s worst case (under 55s curl limit).
-  // NYSE: max 3 misses/run with 12s delay = ~36s safe within Vercel 60s limit.
-  const CANDLE_TTL  = exchange === 'NYSE' ? 90 * 60 : 25 * 60
+  // NYSE: max 5 misses/run with 12s delay = ~56s safe within Vercel 60s limit.
+  // Recovery: parallel batch of 15 misses/run, 4s timeout, 24h TTL (long-horizon strategy).
+  const isRecovery  = strategy === 'recovery'
+  const CANDLE_TTL  = isRecovery ? 24 * 60 * 60 : (exchange === 'NYSE' ? 90 * 60 : 25 * 60)
   const MISS_LIMIT  = exchange === 'NYSE' ? 5 : 8
   const MISS_DELAY  = 12000
 
@@ -204,19 +206,40 @@ export default async function handler(req, res) {
   const cacheMisses = cacheChecks.filter(c => c.data === null)
 
   const fetchedData = []
-  for (let i = 0; i < Math.min(cacheMisses.length, MISS_LIMIT); i++) {
-    if (i > 0 && exchange === 'NYSE') await new Promise(r => setTimeout(r, MISS_DELAY))
-    const { ticker } = cacheMisses[i]
-    try {
+
+  if (isRecovery) {
+    // Parallel batch: 15 misses per run, 4s timeout each — data persists 24h between daily cron runs.
+    // 180 tickers ÷ 15/run = 12 daily cron runs to warm full cache (~2 weeks worst case).
+    const batch = cacheMisses.slice(0, 15)
+    const settled = await Promise.allSettled(batch.map(async ({ ticker }) => {
       const data = await Promise.race([
         fetchCandles(ticker, exchange),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
       ])
       if (data) {
         await kv.set(`${ENV}:candles:${exchange}:${ticker}`, data, { ex: CANDLE_TTL }).catch(() => {})
-        fetchedData.push({ ticker, data })
+        return { ticker, data }
       }
-    } catch { /* skip this ticker this run */ }
+      return null
+    }))
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value) fetchedData.push(r.value)
+    }
+  } else {
+    for (let i = 0; i < Math.min(cacheMisses.length, MISS_LIMIT); i++) {
+      if (i > 0 && exchange === 'NYSE') await new Promise(r => setTimeout(r, MISS_DELAY))
+      const { ticker } = cacheMisses[i]
+      try {
+        const data = await Promise.race([
+          fetchCandles(ticker, exchange),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
+        ])
+        if (data) {
+          await kv.set(`${ENV}:candles:${exchange}:${ticker}`, data, { ex: CANDLE_TTL }).catch(() => {})
+          fetchedData.push({ ticker, data })
+        }
+      } catch { /* skip this ticker this run */ }
+    }
   }
 
   const allCandles = [...cacheHits, ...fetchedData]
