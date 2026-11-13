@@ -554,13 +554,16 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 
 Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
 
-⛔ ZASADY FALLEN ANGEL — OBOWIĄZKOWE, NIE MODYFIKUJ:
-• Cena PONIŻEJ SMA150 i SMA50 opadające = NORMA i WARUNEK WEJŚCIA dla fallen angel — NIE penalizuj, NIE traktuj jako ostrzeżenie
-• NIE wymagaj wybicia powyżej SMA50/SMA150 przed wejściem — to zniszczyłoby potencjał zwrotu strategii
-• Wejście jest właśnie na dnie akumulacji (RSI 20-52), NIE po potwierdzeniu trendu wzrostowego
-• Pytanie kluczowe: czy spółka PRZEŻYJE kryzys i odbije w 6-12 miesiącach? — NIE: czy jest teraz w uptrendzie
-• RS (relative strength) może być ujemna na dnie — to oczekiwane, nie dyskwalifikujące
-• UNIKAJ rekomenduj TYLKO gdy: ryzyko bankructwa, permanent business destruction lub brak FCF
+⛔ NIE STOSUJ SWING LOGIKI DO FALLEN ANGEL:
+• Cena poniżej SMA150 i SMA50 opadające = NORMA dla fallen angel, NIE powód do UNIKAJ ani czekania
+• NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie na dnie, nie po potwierdzeniu trendu
+• RS ujemna na dnie = oczekiwana, nie dyskwalifikująca
+
+✅ WŁAŚCIWA SKALA OCENY — BĄDŹ REALISTYCZNY:
+• WEJDŹ: mocne fundamenty (moat intaktny, FCF dodatnie, dług zarządzalny) + widoczny katalizator w ≤2 kwartałach + RSI stabilizuje się (nie ciągle spada) + instytucje akumulują
+• OBSERWUJ: dobra spółka, ale (a) brak wyraźnego katalizatora w najbliższych 2 kwartałach, lub (b) RSI wciąż opada bez oznak stabilizacji, lub (c) dług podwyższony lecz zarządzalny — czekaj na lepsze potwierdzenie
+• UNIKAJ: (a) ryzyko bankructwa / covenant breach, (b) FCF ujemne + dług >3× EBITDA, (c) secular decline — model biznesowy permanentnie zniszczony przez disrupcję (nie cykl), (d) masowa sprzedaż przez insiderów bez oznak kupna
+• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Niepewność co do timing → OBSERWUJ, nie WEJDŹ
 
 ${dataBlock}
 
