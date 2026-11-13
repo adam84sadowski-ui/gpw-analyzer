@@ -608,11 +608,21 @@ export default async function handler(req, res) {
 
   if (mode === 'scan' || strategy === 'recovery') {
     // Parallel cache-only scan — KV reads are <10ms each so this completes in <500ms.
-    // recovery uses cache-only even in signals mode: 180-ticker universe + 6-12mo horizon
-    // means live Yahoo batches would timeout; cached data is fresh enough.
     const settled = await Promise.allSettled(universe.map(t => processTicker(t, true)))
     for (const r of settled) {
       if (r.status === 'fulfilled' && r.value) results.push(r.value)
+    }
+
+    // Cold-cache fallback: if KV has < 5 entries (e.g. fresh staging deploy or expired cache),
+    // live-fetch the first 20 missing tickers in one parallel batch (4s timeout each —
+    // same approach as the cron warmup). This self-heals without needing a manual warmup trigger.
+    if (results.length < 5 && strategy === 'recovery') {
+      const cachedTickers = new Set(results.map(r => r.ticker))
+      const misses = universe.filter(t => !cachedTickers.has(t)).slice(0, 20)
+      const liveSettled = await Promise.allSettled(misses.map(t => processTicker(t, false)))
+      for (const r of liveSettled) {
+        if (r.status === 'fulfilled' && r.value) results.push(r.value)
+      }
     }
   } else {
     // signals mode — batches of 10 with live Yahoo fallback on cache miss
