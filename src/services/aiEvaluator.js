@@ -557,17 +557,62 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 
 Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━
+KROK 0 — STRATEGY MISMATCH TEST (wykonaj PRZED analizą):
+Pytanie: Czy EPS spółki jest zdepresjonowany względem 3-letniej historycznej normy (aktualny EPS co najmniej 20% poniżej średniego EPS z ostatnich 3 lat)?
+
+• Jeśli NIE (EPS na historycznym szczycie lub rośnie) → teza fallen angel NIE obowiązuje. To nie jest spółka cyklicznie wyprzedana — to spółka wzrostowa lub event-driven korygująca z premium wyceny.
+  Wpisz w "analysis": "STRATEGY MISMATCH: EPS nie jest zdepresjonowany względem normy historycznej — ta spółka nie jest fallen angel. Spadek wynika z [podaj powód: event ryzyka / korekta z bańki / ...]."
+  W "recommendation": napisz KONKRETNE 5 kryteriów wejścia jako event-driven setup (patrz sekcja EVENT-DRIVEN WATCHLIST poniżej).
+  Wyrok: decision = OBSERWUJ. Kontynuuj analizę 15 kryteriów dla kontekstu, ale wyrok jest już ustalony.
+
+• Jeśli TAK (EPS zdepresjonowany) → kontynuuj pełną analizę fallen angel poniżej.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ⛔ NIE STOSUJ SWING LOGIKI DO FALLEN ANGEL:
 • Cena poniżej SMA150 i SMA50 opadające = NORMA dla fallen angel, NIE powód do UNIKAJ ani czekania
 • NIE rekomenduj "poczekaj na wybicie SMA50" — wejście jest właśnie na dnie, nie po potwierdzeniu trendu
 • RS ujemna na dnie = oczekiwana, nie dyskwalifikująca
 
-✅ WŁAŚCIWA SKALA OCENY — TRANSZOWE PODEJŚCIE:
-• WEJDŹ (pełna pozycja, 100%): WSZYSTKIE 5 warunków spełnione: (1) moat intaktny, (2) FCF dodatnie lub recovery path <2 kwartały, (3) widoczny konkretny katalizator w ≤3 kwartałach, (4) RSI stabilizuje się lub dywergencja bullish (brak nowego dna 10 sesji), (5) faza late-cycle bottoming potwierdzona + instytucje akumulują
-• WEJDŹ TRANSZĄ 1/3 (częściowa pozycja — czekaj na potwierdzenie): spełnione 3–4 z 5 warunków — dobra spółka, ale brak pełnego potwierdzenia fazy lub katalizator niewyraźny. Uzupełnij pozycję do pełnej gdy: RSI wyższe dno lub wolumen przy odbicie wzrośnie. Parametry: cel i stop jak przy pełnej pozycji, ale max 1/3 planowanej kwoty na start.
-• OBSERWUJ: spełnione 1–2 z 5 warunków — dobra spółka, ale: RSI wciąż opada (nóż w locie), lub early/mid-cycle downturn (dno jeszcze przed nami), lub dług podwyższony + brak katalizatora. Ustaw alert na RSI stabilizację lub inflection point przychodów.
-• UNIKAJ: (a) value trap — forward P/E >20× na 70% peak EPS, (b) FCF ujemne + dług >3× EBITDA bez restrukturyzacji, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów
-• Pamiętaj: fallen angel MOŻE dalej spadać 2-6 miesięcy — stop -12% jest właśnie po to. Wątpliwości co do fazy cyklu → WEJDŹ TRANSZĄ 1/3, nie WEJDŹ. Mniej niż 3 warunki → OBSERWUJ.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+KROK 1 — 4 CHECKLISTY WERYFIKACYJNE (odpowiedz TAK/NIE na każdą):
+
+A. KATALIZATOR WERYFIKOWALNY DZIŚ — Czy istnieje konkretny dowód inflection point w już opublikowanych danych? Akceptowalne: (a) ostatni raport kwartalny pokazał pierwsze stabilizację/wzrost przychodów po serii spadków, (b) management podniósł guidance, (c) ogłoszony konkretny event korporacyjny (buyback, nowy CEO, spin-off). NIE akceptowalne: "eventual recovery", "AI tailwind", "memory cycle will recover", "macro will improve" — to projekcje, nie dowody. Odpowiedź: TAK / NIE.
+
+B. FCF POTWIERDZONE DODATNIE — Czy FCF za ostatnie 12 miesięcy (LTM) jest dodatnie na podstawie ostatniego opublikowanego raportu? Nie "będzie dodatnie gdy odbije" — teraz, w danych. Odpowiedź: TAK / NIE.
+
+C. POWÓD SPADKU NIE POGARSZA TEZY — Czy informacja, która wywołała ostatni duży spadek, NIE jest nowym negatywem fundamentalnym? Nowy negatyw = nowe ryzyko prawne/regulacyjne, utrata kluczowego partnera/kontraktu, ujawnienie problemu z zarządem, eskalacja długu. Stary negatyw = ogólnie znane makro, cykl sektorowy, wyprzedaż bez nowych danych. Odpowiedź: TAK / NIE.
+
+D. WYCENA NA ZNORMALIZOWANYCH ZYSKACH — Policz: jeśli EPS wróci do 70% poprzedniego szczytu (3y peak), jaki będzie P/E przy obecnej cenie? Jeśli < 20× → TAK. Jeśli > 20× → NIE (value trap risk). Odpowiedź: TAK / NIE.
+
+Jeśli 2 lub więcej checklistów = NIE → obowiązkowe OBSERWUJ lub UNIKAJ. Nie kontynuuj do WEJDŹ/TRANSZY.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ KROK 2 — SKALA OCENY (tylko gdy KROK 0 = fallen angel + KROK 1 ≥ 3×TAK):
+
+• WEJDŹ (pełna pozycja, 100%): WSZYSTKIE checklisty A+B+C+D = TAK + WSZYSTKIE 5 warunków spełnione + RSI < 38 (deep oversold potwierdzony):
+  (1) moat intaktny i udokumentowany, (2) FCF dodatnie LTM, (3) katalizator konkretny i weryfikowalny DZIŚ, (4) RSI < 38 + brak nowego dna przez ostatnie 10 sesji (stabilizedBottom), (5) faza late-cycle bottoming + krótkie pozycje instytucjonalne zamykają się (short interest spada) lub 13F pokazuje nowe pozycje
+
+• WEJDŹ TRANSZĄ 1/3 (częściowa pozycja): Wszystkie 4 checklisty TAK + 3–4 z 5 warunków + RSI 20–52. Uzasadnienie transzy: dobra spółka, brak pełnego potwierdzenia fazy LUB RSI 38–52 (za wcześnie na pełną pozycję). Uzupełnij do pełnej gdy RSI wyższe dno + wolumen instytucjonalny wzrośnie.
+  UWAGA: RSI 38–52 = MAKSYMALNIE TRANSZA, nawet gdy wszystkie 5 warunków spełnione. Za wcześnie na pełną pozycję.
+
+• OBSERWUJ: (a) którakolwiek z checklisty A/B/C/D = NIE, lub (b) RSI wciąż opada (nóż w locie), lub (c) early/mid-cycle (dno niepewne), lub (d) strategy mismatch z KROKU 0.
+  W polu "recommendation" podaj KONKRETNE kryteria wejścia — co musi się stać żeby zmienić na WEJDŹ.
+
+• UNIKAJ: (a) value trap — D = NIE i dług > 3× EBITDA, (b) FCF ujemne LTM + brak wiarygodnego planu restrukturyzacji, (c) secular decline (disrupcja strukturalna, nie cykl), (d) covenant breach / bankruptcy risk, (e) masowa sprzedaż przez insiderów bez buybacków
+
+• DOMYŚLNA DECYZJA = OBSERWUJ. Zmień na WEJDŹ/TRANSZĄ tylko gdy masz KONKRETNE dowody z opublikowanych danych — nie z prognoz i nie z reputacji spółki. "To świetna spółka, odbije" to nie jest dowód.
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 EVENT-DRIVEN WATCHLIST (wypełnij gdy decision = OBSERWUJ):
+Gdy piszesz pole "recommendation" dla OBSERWUJ — podaj WSZYSTKIE 5 poniższych punktów jako konkretne triggery wejścia:
+1. TRIGGER CEO/MANAGEMENT: [co musi się stać z sytuacją zarządu — jeśli dotyczy]
+2. TRIGGER REGULACYJNY/PRAWNY: [jakie ryzyko musi być rozstrzygnięte — jeśli dotyczy]
+3. TRIGGER TECHNICZNY: [cena tworzy pierwsze wyższe dno przez X sesji + RSI stabilizuje się powyżej Y]
+4. TRIGGER FUNDAMENTALNY: [który raport/data/event musi potwierdzić tezę]
+5. WYCENA I STRATEGIA: [P/E lub PEG gate + jaka strategia właściwa: recovery / agresywna / swing]
+Ustaw entryZoneMin/Max na ±5% od obecnej ceny. reviewDays = 30–60 dni.
+━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${dataBlock}
 
@@ -575,21 +620,21 @@ ${dataBlock}
 ${recoveryJsonSchema}
 
 Punkty w "analysis" (15 kryteriów recovery — fallen angel value rebound):
-1. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)? Jedno zdanie konkluzji.
-2. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci nie odeszli do konkurencji? Patenty, skala, switching costs zachowane?
-3. EARNINGS RECOVERY PATH — czy consensus analityków zakłada odbicie EPS w ciągu 4-6 kwartałów? Czy rewizje idą w górę czy w dół?
-4. RETURN ON EQUITY — ROE historyczne (pre-crisis) vs obecne: pogorszenie tymczasowe (cykl) czy strukturalne (utrata przewagi)?
-5. FREE CASH FLOW — FCF dodatnie czy ujemne? Przy ujemnym FCF: jak długo spółka wytrzyma bez emisji akcji lub nowego długu?
-6. DŁUG — Interest coverage ratio: EBIT / koszty odsetek > 3× = bezpieczne. Harmonogram zapadalności — czy refinansowanie wymagane w ciągu 18 miesięcy?
-7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki, transparency z inwestorami? Insider buying?
-8. MARGIN OF SAFETY — wycena na dołku: P/Book vs historyczne minimum sektora. EV/EBITDA znormalizowane vs poprzednie dołki cykliczne. Upside >40% wymagany dla recovery risk.
-9. REKOMENDACJE INSTYTUCJONALNE — % rekomendacji Kup vs Sprzedaj. Czy duże fundusze (13F) zwiększają pozycje na dołku (accumulation) czy redukują (distribution)?
-10. KATALIZATOR ODBICIA — podaj KONKRETNY katalizator z datą lub oknem czasowym: (a) inflection point przychodów — kiedy revenue przestanie spadać? (b) margin recovery — kiedy gross margin wróci do normy? (c) normalizacja inventory / backlogu zamówień, (d) makro — obniżka stóp, ożywienie capex, cykl popytu, (e) event korporacyjny — CEO change, spin-off, buyback program. Bez konkretnego katalizatora → OBSERWUJ.
-11. WYCENA NA DOŁKU — trailing P/E może być zaburzone (distressed). Skup się na: (a) EV/EBITDA vs historyczne minimum cyklu, (b) P/Book vs book value trwale, (c) forward P/E za 12M na zdepresjonowanych prognozach — czy wciąż >25×? Jeśli tak → potencjalna value trap.
-12. RYZYKO TRWAŁEGO ZNISZCZENIA — odróżnij: cykl (tymczasowy spadek popytu → spółka odbije) vs secular decline (disrupcja technologiczna, zmiana modelu branży, utrata rynku permanentna). Podaj konkretny argument za/przeciw.
-13. RSI I STREFA AKUMULACJI — RSI ${rsi ?? '?'} w przedziale 20-52 = strefa akumulacji. Czy RSI stabilizuje się (dno) czy wciąż opada (nóż w locie)? Dywergencja bullish RSI (cena nowe dno, RSI wyższe dno)? Wolumen przy stabilizacji rosnący?
-14. VALUE TRAP TEST + GUARDRAIL KOREKTY Z BAŃKI — dwa pytania: (A) VALUE TRAP: czy spółka jest tanio wyceniana na ZNORMALIZOWANYCH zyskach (po odbiciu cyklu), czy tylko tanio wygląda na obecnych depresyjnych wynikach? Policz: jeśli EPS wróci do 70% poprzedniego szczytu, jaki będzie P/E przy obecnej cenie? Jeśli >20× → prawdopodobna value trap. (B) KOREKTA Z BAŃKI (nowy guardrail): czy spadek -25%/-35% to odbicie od dna cyklu, czy korekta z zawyżonej wyceny do fair value? Sprawdź: jeśli forward P/E (NTM) jest nadal >30× przy wzroście EPS <25% YoY → spółka jest WCIĄŻ DROGA po spadku, to nie fallen angel — to racjonalizacja wyceny. Może spaść kolejne 30-40%. W takim przypadku obowiązkowo OBSERWUJ, nie WEJDŹ, nawet jeśli RSI = 25. Wyjątek: jeśli wzrost EPS >30% YoY potwierdza premium (np. AI capex cycle) → można zaakceptować P/E 35-40× z uzasadnieniem.
-15. FAZA CYKLU — gdzie w cyklu jest spółka/branża? Early downturn (spadki dopiero zaczynają się, nie wchodź), mid-cycle (dno niepewne, OBSERWUJ), late-cycle bottoming (sygnały stabilizacji, marże przestają spadać, inventory normalizacja → optymalny moment wejścia). Jaka jest obecna faza i dlaczego?`
+1. STRATEGY MISMATCH TEST — Czy EPS aktualny jest ≥20% poniżej 3-letniego średniego EPS? TAK = fallen angel, kontynuuj. NIE = napisz "STRATEGY MISMATCH" i opisz powód spadku (event-driven / growth correction) + kieruj do właściwej strategii.
+2. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)? Czy to stary znany problem czy NOWY negatyw (checklist C)? Jedno zdanie konkluzji.
+3. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci nie odeszli do konkurencji? Patenty, skala, switching costs zachowane?
+4. EARNINGS RECOVERY PATH — czy consensus analityków zakłada odbicie EPS w ciągu 4-6 kwartałów? Czy rewizje idą w górę czy w dół?
+5. RETURN ON EQUITY — ROE historyczne (pre-crisis) vs obecne: pogorszenie tymczasowe (cykl) czy strukturalne (utrata przewagi)?
+6. FREE CASH FLOW (checklist B) — FCF LTM dodatnie czy ujemne? Podaj wartość. Przy ujemnym: jak długo spółka wytrzyma bez emisji akcji lub nowego długu? Checklist B = TAK/NIE.
+7. DŁUG — Interest coverage ratio: EBIT / koszty odsetek > 3× = bezpieczne. Harmonogram zapadalności — czy refinansowanie wymagane w ciągu 18 miesięcy?
+8. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki, transparency z inwestorami? Insider buying vs selling?
+9. MARGIN OF SAFETY — wycena na dołku: P/Book vs historyczne minimum sektora. EV/EBITDA znormalizowane vs poprzednie dołki cykliczne. Upside >40% wymagany dla recovery risk.
+10. REKOMENDACJE INSTYTUCJONALNE — % rekomendacji Kup vs Sprzedaj. Short interest trend: rośnie (dystrybuacja) czy spada (accumulation)? 13F: nowe pozycje dużych funduszy?
+11. KATALIZATOR ODBICIA (checklist A) — Czy katalizator jest WERYFIKOWALNY W OPUBLIKOWANYCH DANYCH DZIŚ? Podaj konkretny dowód (raport Q, guidance, event ogłoszony) lub napisz "brak weryfikowalnego katalizatora dziś → OBSERWUJ". NIE akceptuj projekcji jako katalizatora. Checklist A = TAK/NIE.
+12. WYCENA NA DOŁKU — trailing P/E zaburzone (distressed). Skup się na: (a) EV/EBITDA vs historyczne minimum cyklu, (b) P/Book, (c) checklist D: P/E na 70% peak EPS — podaj wyliczenie. Checklist D = TAK/NIE.
+13. RYZYKO TRWAŁEGO ZNISZCZENIA — odróżnij: cykl (tymczasowy spadek popytu → spółka odbije) vs secular decline (disrupcja technologiczna, zmiana modelu branży, utrata rynku permanentna). Podaj konkretny argument za/przeciw.
+14. RSI I STREFA AKUMULACJI — RSI ${rsi ?? '?'}. Poniżej 38 = deep oversold (kwalifikuje do WEJDŹ przy pozostałych warunkach). 38–52 = strefa akumulacji ale za wcześnie (max TRANSZA). Powyżej 52 = nie kwalifikuje do recovery entry. Dywergencja bullish? StabilizedBottom (brak nowego dna 10 sesji)?
+15. VALUE TRAP + FAZA CYKLU — (A) VALUE TRAP (checklist D): P/E na 70% peak EPS > 20× = value trap. (B) FAZA CYKLU: Early downturn (nie wchodź), mid-cycle (OBSERWUJ), late-cycle bottoming (optymalny moment). (C) GUARDRAIL GROWTH STOCKS: forward P/E NTM >30× + EPS growth <25% YoY → OBSERWUJ. Wyjątek tylko gdy EPS growth >30% YoY + moat monopolistyczny.`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
