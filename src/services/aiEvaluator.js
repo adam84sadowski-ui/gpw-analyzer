@@ -292,7 +292,7 @@ function buildFundBlock(f, ticker, exchange = 'GPW') {
 
 // AI entry validation — returns { decision, buffettScore, confidence, summary, analysis, recommendation }
 // strategy: 'scalping' → PTJ framework, 'aggressive' → O'Neil CANSLIM, 'swing' → Buffett/Lynch
-export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null, change3m = null, change6m = null, changeYTD = null, sma50Slope = null }) {
+export async function validateEntry({ ticker, exchange, signal, score, rsi, volMult, sma50Delta, signalPrice, livePrice, sector, correlated, sectorPositions, news, fundamentals, priceAction = null, strategy = 'swing', macd = null, sma150trend = null, sma20 = null, bollinger = null, nearSupport = null, divergence = null, dynamicStopLoss = null, rs = null, high52w = null, highATH = null, pctFrom52w = null, pctFromATH = null, change3m = null, change6m = null, changeYTD = null, sma50Slope = null, indexTrend = 'neutral', macdVelocity = 'neutral' }) {
   const newsLines = news?.length
     ? news.map((h, i) => `${i + 1}. ${h}`).join('\n')
     : 'Brak nagłówków'
@@ -550,6 +550,20 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
     const recoveryCtx = rsi != null && pctFrom52w != null
       ? `\n⚠️ QUALITY DIP CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi}. Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40%.`
       : ''
+
+    const indexLabel = exchange === 'GPW' ? 'WIG20' : 'S&P500'
+    const marketRegimeBlock = indexTrend === 'down'
+      ? `\n🌐 MARKET REGIME GUARD — ${indexLabel} W DOWNTREND (cena < SMA50 × 0.98):\n• Quality dipy w bearish market często pogłębiają się o dodatkowe 10-20% przed odbiciem — rynek ciągnie wszystko w dół niezależnie od fundamentów\n• WYMAGANA KOREKTA DECYZJI: preferuj TRANSZĘ zamiast pełnego wejścia; podwyższ próg RSI do <32 dla WEJDŹ PEŁNE; poszerzaj stop do -15% jeśli ATR-based < 15%\n• Zapisz w "analysis" punkt 14: "Market regime: BEARISH — ${indexLabel} poniżej SMA50"\n• Uwzględnij w suggestedTargetPct: horyzont może być dłuższy bo recovery zajmuje więcej czasu w bearish market`
+      : indexTrend === 'neutral'
+      ? `\n🌐 MARKET REGIME: ${indexLabel} NEUTRALNY (SMA50 ± 2%) — normalna analiza; żaden bias kierunkowy ze strony rynku`
+      : `\n🌐 MARKET REGIME: ${indexLabel} W UPTRENDZIE (cena > SMA50) — pozytywny tailwind; jakościowy dip odbija szybciej gdy rynek współpracuje`
+
+    const velocityLabel = {
+      decelerating: `DECELERUJE ✅ — siła sprzedaży słabnie (histogram MACD rośnie przez ostatnie 5 sesji). Dno formacyjne się tworzy. Wzmacnia argumenty za wejściem.`,
+      accelerating:  `ESKALUJE ⚠️ — siła sprzedaży rośnie (histogram MACD spada przez ostatnie 5 sesji). Możliwe dalsze dno. Preferuj TRANSZĘ; czekaj na stabilizację histogramu.`,
+      stable:        `STABILNA → — siła sprzedaży bez wyraźnego kierunku (histogram MACD płaski). Neutralna przesłanka.`,
+    }[macdVelocity] ?? 'brak danych'
+    const velocityBlock = `\n⚡ VELOCITY CHECK — TEMPO SPRZEDAŻY: ${velocityLabel}\n• Uwzględnij w ocenie RSI (kryterium 14) i decyzji końcowej: przy ESKALUJE preferuj OBSERWUJ lub max TRANSZA nawet przy RSI < 38`
     const recoveryJsonSchema = jsonSchema
       .replace('proporcja z 13 kryteriów × 10/13', 'proporcja z 15 kryteriów × 10/15')
       .replace('"analysis": "<checklist 13 punktów', '"analysis": "<checklist 15 punktów')
@@ -620,6 +634,8 @@ W polu "recommendation" podaj WSZYSTKIE 5 triggerów:
 5. STRATEGIA PRZY WEJŚCIU: recovery (jeśli nadal typ A/B/C) / agresywna (jeśli event-driven krótkoterminowy) + horyzont + stop
 Ustaw entryZoneMin/Max na ±5% od obecnej ceny. reviewDays = 30-60 (typ A), 60-90 (typ B), 90-180 (typ C).
 ━━━━━━━━━━━━━━━━━━━━━━━━━
+${marketRegimeBlock}
+${velocityBlock}
 
 ${dataBlock}
 
