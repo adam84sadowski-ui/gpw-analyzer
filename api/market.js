@@ -5,6 +5,7 @@ import { calcRSI } from '../src/indicators/rsi.js'
 import { volumeMultiplier } from '../src/indicators/volume.js'
 import { calcSMA } from '../src/indicators/sma.js'
 import { calcScore } from '../src/indicators/scoring.js'
+import { calculateMACD } from '../src/indicators/macd.js'
 import { UNIVERSES } from '../src/lib/universes.js'
 import { fetchIndexTrend, fetchIndexReturn } from '../src/lib/indextrend.js'
 import { calcDynamicTarget, calcDynamicHorizon } from '../src/lib/kvHistory.js'
@@ -185,6 +186,21 @@ export default async function handler(req, res) {
 
     const { change3m, change6m, changeYTD } = calcPriceChanges(candles1y, lpNum ?? spNum)
 
+    // Velocity Check: MACD histogram slope over last 5 sessions (recovery only)
+    let macdVelocity = 'neutral'
+    if ((strategy ?? 'swing') === 'recovery' && candles1y?.length >= 30) {
+      const closes = candles1y.map(c => c.close)
+      const { histogram: histSeries } = calculateMACD(closes)
+      const recentHist = histSeries.filter(v => v != null).slice(-5)
+      if (recentHist.length >= 3) {
+        const first = recentHist[0]
+        const last  = recentHist[recentHist.length - 1]
+        if (last > first + 0.0001)      macdVelocity = 'decelerating'
+        else if (last < first - 0.0001) macdVelocity = 'accelerating'
+        else                            macdVelocity = 'stable'
+      }
+    }
+
     let result
     try {
       result = await validateEntry({
@@ -210,6 +226,8 @@ export default async function handler(req, res) {
         sma50Slope:       indicators?.sma50Slope ?? null,
         high52w, highATH, pctFrom52w, pctFromATH,
         change3m, change6m, changeYTD,
+        indexTrend:   indexTrend ?? 'neutral',
+        macdVelocity,
         ...sectorCtx,
         news,
         fundamentals,
