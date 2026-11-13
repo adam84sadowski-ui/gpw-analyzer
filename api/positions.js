@@ -152,6 +152,7 @@ export default async function handler(req, res) {
       status: 'open',
       exitPrice: null,
       exitDate: null,
+      aiValidation: aiValidation ?? null,
     }
     const lifecycle = {
       ticker, exchange: position.exchange, signal, entryPrice, entryDate: position.entryDate,
