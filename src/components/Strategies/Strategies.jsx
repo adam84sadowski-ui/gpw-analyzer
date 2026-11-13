@@ -601,9 +601,12 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   exchange={exchange}
                   livePrice={livePrices[validating.ticker] ?? validating.livePrice}
                   onOpenPosition={(_, aiResult) => {
-                    const updatedRec = aiResult?.suggestedTargetPct != null
-                      ? { ...validating, target: aiResult.suggestedTargetPct }
-                      : validating
+                    const updatedRec = {
+                      ...(aiResult?.suggestedTargetPct != null
+                        ? { ...validating, target: aiResult.suggestedTargetPct }
+                        : validating),
+                      _aiValidation: aiResult ?? null,
+                    }
                     setValidating(null)
                     setConfirming(updatedRec)
                   }}
