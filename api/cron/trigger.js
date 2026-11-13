@@ -16,10 +16,10 @@ const kv = createClient({
 
 const FORCE_TICKER  = { GPW: 'pkn.pl',  NYSE: 'AMD'   }
 const FORCE_PRICE   = { GPW: 48.50,     NYSE: 200.00  }
-const STRATEGY_LABEL  = { scalping: '⚡ Scalping', swing: '📈 Swing', aggressive: '🚀 Agresywna' }
-const STRATEGY_TARGET = { scalping: 5, swing: 15, aggressive: 35 }
-const STRATEGY_STOP   = { scalping: 3, swing: 5,  aggressive: 8 }
-const HORIZONS        = { scalping: '2-5 dni', swing: '4-8 tyg.', aggressive: 'brak (wysoki risk)' }
+const STRATEGY_LABEL  = { scalping: '⚡ Scalping', swing: '📈 Swing', aggressive: '🚀 Agresywna', recovery: '🔄 Odbicia' }
+const STRATEGY_TARGET = { scalping: 5, swing: 15, aggressive: 35, recovery: 25 }
+const STRATEGY_STOP   = { scalping: 3, swing: 5,  aggressive: 8,  recovery: 12 }
+const HORIZONS        = { scalping: '2-5 dni', swing: '4-8 tyg.', aggressive: 'brak (wysoki risk)', recovery: '6-12 miesięcy' }
 
 export default async function handler(req, res) {
   if (!IS_STAGING) return res.status(403).json({ error: 'Only available on staging' })
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
   const { strategy = 'swing', force = false, exchange = 'GPW' } = req.body ?? {}
   const universe = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
-  if (!universe) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+  if (!universe) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|recovery' })
 
   const thresholds = await kv.get(`${ENV_PREFIX}:thresholds`).catch(() => null) ?? {}
   const signals = []

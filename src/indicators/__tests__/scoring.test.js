@@ -110,4 +110,20 @@ describe('calcScore', () => {
       expect(low).toBeGreaterThanOrEqual(0)
     })
   })
+
+  describe('recovery RSI scoring', () => {
+    it('recovery RSI 20-30 scores highest (deep oversold = best entry)', () => {
+      const deep     = calcScore('recovery', { ...base, rsi: 25 })
+      const moderate = calcScore('recovery', { ...base, rsi: 35 })
+      const mild     = calcScore('recovery', { ...base, rsi: 48 })
+      expect(deep).toBeGreaterThan(moderate)
+      expect(moderate).toBeGreaterThan(mild)
+    })
+
+    it('recovery score is within 0-100', () => {
+      const score = calcScore('recovery', { ...base, rsi: 25, macdScore: 15, bollingerScore: 20, seasonalityScore: 10 })
+      expect(score).toBeGreaterThanOrEqual(0)
+      expect(score).toBeLessThanOrEqual(100)
+    })
+  })
 })

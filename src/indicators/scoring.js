@@ -10,7 +10,7 @@ export function calcScore(strategy, inputs) {
   } = inputs
   let raw = 0
 
-  // RSI (25 pts scalping/aggressive, 20 pts swing)
+  // RSI (25 pts scalping/aggressive/recovery, 20 pts swing)
   if (strategy === 'scalping') {
     if (rsi != null) {
       if (rsi < 30)      raw += 25
@@ -22,6 +22,13 @@ export function calcScore(strategy, inputs) {
       if (rsi >= 60 && rsi < 65)      raw += 25
       else if (rsi >= 65 && rsi < 75) raw += 20
       else if (rsi >= 75)             raw += 5
+    }
+  } else if (strategy === 'recovery') {
+    // Deep oversold = best entry for fallen angel plays
+    if (rsi != null) {
+      if (rsi >= 20 && rsi < 30)      raw += 25
+      else if (rsi >= 30 && rsi < 40) raw += 20
+      else if (rsi >= 40 && rsi <= 52) raw += 12
     }
   } else if (strategy === 'swing') {
     if (rsi != null) {
@@ -50,8 +57,13 @@ export function calcScore(strategy, inputs) {
     }
   }
 
-  // SMA150 trend (15 pts)
-  if (sma150trend === 'above') raw += 15
+  // SMA150 trend (15 pts) — recovery: below SMA150 is expected for fallen angels
+  if (strategy === 'recovery') {
+    if (sma150trend === 'below') raw += 15  // confirms fallen angel entry zone
+    else if (sma150trend === 'above') raw += 5  // early recovery already above — less upside
+  } else {
+    if (sma150trend === 'above') raw += 15
+  }
 
   // Index correlation (10 pts)
   if (indexTrend === 'up')      raw += 10

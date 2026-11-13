@@ -88,9 +88,10 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38
 }
 
 const STRATEGY_META = {
-  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni', rsiPeriod: 9  },
-  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.', rsiPeriod: 14 },
-  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A', rsiPeriod: 14 },
+  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni',      rsiPeriod: 9  },
+  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.',     rsiPeriod: 14 },
+  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A',          rsiPeriod: 14 },
+  recovery:   { label: '🔄 Odbicia',   color: 'text-green-400',  defaults: SWING_DEFAULTS,      target: '25-40%', time: '6-12 miesięcy', rsiPeriod: 14 },
 }
 
 function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
@@ -320,7 +321,9 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                 ? (r.exchange === 'NYSE' ? 1.15 : 1.5)
                 : strategy === 'swing'
                   ? (r.exchange === 'NYSE' ? 1.3 : 1.2)
-                  : (r.exchange === 'NYSE' ? 1.5 : 2.0)
+                  : strategy === 'recovery'
+                    ? 1.0
+                    : (r.exchange === 'NYSE' ? 1.5 : 2.0)
 
               // Per-indicator check rows
               const checks = []
@@ -342,6 +345,16 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   req:   `> ${rsiThr}`,
                   ok:    rsiOk,
                   note:  r.rsi != null && !rsiOk ? `brakuje ${(rsiThr - r.rsi).toFixed(1)} pkt` : rsiOk ? 'spełnione' : '—',
+                })
+              }
+              if (strategy === 'recovery') {
+                const rsiOk = r.rsi != null && r.rsi >= 20 && r.rsi <= 52
+                checks.push({
+                  label: `RSI(${rsiPeriod})`,
+                  value: r.rsi != null ? r.rsi.toFixed(1) : '—',
+                  req:   '20–52',
+                  ok:    rsiOk,
+                  note:  rsiOk ? 'strefa akumulacji' : r.rsi != null ? `poza strefą (20-52)` : '—',
                 })
               }
               if (strategy === 'swing') {
