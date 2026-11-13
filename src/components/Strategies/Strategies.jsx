@@ -10,7 +10,7 @@ import TechnicalPanel from '../TechnicalPanel.jsx'
 
 function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38, onConfirm, onCancel }) {
   const currency      = exchange === 'NYSE' ? 'USD' : 'PLN'
-  const defaultAmt    = Math.round(portfolio * maxPct / 100)
+  const defaultAmt    = Math.round(portfolio * maxPct / 100 * (rec._trancheFactor ?? 1))
   const basePrice     = rec.livePrice ?? rec.price
   const defaultPrice  = (basePrice * (1 + commission / 100)).toFixed(2)
   const [price,  setPrice]  = useState(String(defaultPrice))
@@ -600,12 +600,13 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   strategy={strategy}
                   exchange={exchange}
                   livePrice={livePrices[validating.ticker] ?? validating.livePrice}
-                  onOpenPosition={(_, aiResult) => {
+                  onOpenPosition={(entryRec, aiResult) => {
                     const updatedRec = {
                       ...(aiResult?.suggestedTargetPct != null
                         ? { ...validating, target: aiResult.suggestedTargetPct }
                         : validating),
                       _aiValidation: aiResult ?? null,
+                      _trancheFactor: entryRec?._trancheFactor ?? 1,
                     }
                     setValidating(null)
                     setConfirming(updatedRec)

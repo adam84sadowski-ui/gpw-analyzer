@@ -29,12 +29,20 @@ const FRAMEWORK_LABEL = {
   recovery:   'Buffett/Munger (Value)',
 }
 
+const TRANCHE_OPTIONS = [
+  { label: '1/3', factor: 1/3, tranche: { current: 1, total: 3 } },
+  { label: '1/2', factor: 1/2, tranche: { current: 1, total: 2 } },
+  { label: '2/3', factor: 2/3, tranche: { current: 2, total: 3 } },
+  { label: '100%', factor: 1,  tranche: null },
+]
+
 export default function EntryValidationModal({ rec, strategy, exchange, livePrice, watchlistItemId, onOpenPosition, onClose }) {
   const [selectedStrategy, setSelectedStrategy] = useState(strategy)
   const frameworkLabel = FRAMEWORK_LABEL[selectedStrategy] ?? 'Fundamentalna'
   const [state,  setState]  = useState('idle') // idle | loading | result
   const [result, setResult] = useState(null)
   const [error,  setError]  = useState(null)
+  const [trancheIdx, setTrancheIdx] = useState(0) // default 1/3
   const [chatMsgs,    setChatMsgs]    = useState([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
@@ -520,7 +528,27 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
               </div>
 
               {(result.decision === 'WEJDŹ' || result.decision?.includes('TRANSZ')) ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
+                  {result.decision?.includes('TRANSZ') && (
+                    <div>
+                      <p className="text-xs text-gray-400 mb-1.5">Rozmiar pozycji <span className="text-blue-400">(AI rekomenduje 1/3)</span></p>
+                      <div className="flex gap-1">
+                        {TRANCHE_OPTIONS.map((opt, i) => (
+                          <button
+                            key={opt.label}
+                            onClick={() => setTrancheIdx(i)}
+                            className={`flex-1 py-1.5 rounded text-xs font-semibold border transition-colors ${
+                              trancheIdx === i
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-gpw-dark border-gpw-border text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <label className="text-xs text-gray-400 shrink-0">Cena wejścia ({exchange === 'NYSE' ? 'USD' : 'PLN'})</label>
                     <input
@@ -537,15 +565,25 @@ export default function EntryValidationModal({ rec, strategy, exchange, livePric
                       const p = parseFloat(entryPriceInput)
                       if (!p || p <= 0) return
                       const isTranche = result.decision?.includes('TRANSZ')
-                      const tranche = isTranche
-                        ? { current: 1, total: 3, confirmSignal: 'RSI wyższe dno lub wolumen przy odbiciu' }
+                      const selected  = isTranche ? TRANCHE_OPTIONS[trancheIdx] : null
+                      const tranche   = selected?.tranche
+                        ? { ...selected.tranche, confirmSignal: 'RSI wyższe dno lub wolumen przy odbiciu' }
                         : null
+                      const factor    = selected ? selected.factor : 1
                       onClose()
-                      onOpenPosition({ ...rec, livePrice: p }, { ...result, tranche })
+                      onOpenPosition({ ...rec, livePrice: p, _trancheFactor: factor }, { ...result, tranche })
                     }}
-                    className={`w-full disabled:opacity-40 text-white py-3 rounded-lg font-semibold transition-colors ${result.decision?.includes('TRANSZ') ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gpw-green hover:bg-green-600'}`}
+                    className={`w-full disabled:opacity-40 text-white py-3 rounded-lg font-semibold transition-colors ${
+                      result.decision?.includes('TRANSZ') && trancheIdx < 3
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-gpw-green hover:bg-green-600'
+                    }`}
                   >
-                    {result.decision?.includes('TRANSZ') ? '🔀 Realizuję transzę 1/3' : '✅ Realizuję wejście'}
+                    {result.decision?.includes('TRANSZ')
+                      ? trancheIdx === 3
+                        ? '✅ Realizuję wejście (100%)'
+                        : `🔀 Realizuję transzę ${TRANCHE_OPTIONS[trancheIdx].label}`
+                      : '✅ Realizuję wejście'}
                   </button>
                 </div>
               ) : (
