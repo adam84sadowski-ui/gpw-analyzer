@@ -606,9 +606,10 @@ export default async function handler(req, res) {
     }
   }
 
-  if (mode === 'scan') {
-    // All tickers in parallel, cache-only — KV reads are <10ms each so this completes in <500ms.
-    // Cron jobs pre-warm KV; if a ticker isn't cached it's skipped rather than timing out.
+  if (mode === 'scan' || strategy === 'recovery') {
+    // Parallel cache-only scan — KV reads are <10ms each so this completes in <500ms.
+    // recovery uses cache-only even in signals mode: 180-ticker universe + 6-12mo horizon
+    // means live Yahoo batches would timeout; cached data is fresh enough.
     const settled = await Promise.allSettled(universe.map(t => processTicker(t, true)))
     for (const r of settled) {
       if (r.status === 'fulfilled' && r.value) results.push(r.value)

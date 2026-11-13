@@ -57,8 +57,13 @@ export function calcScore(strategy, inputs) {
     }
   }
 
-  // SMA150 trend (15 pts)
-  if (sma150trend === 'above') raw += 15
+  // SMA150 trend (15 pts) — recovery: below SMA150 is expected for fallen angels
+  if (strategy === 'recovery') {
+    if (sma150trend === 'below') raw += 15  // confirms fallen angel entry zone
+    else if (sma150trend === 'above') raw += 5  // early recovery already above — less upside
+  } else {
+    if (sma150trend === 'above') raw += 15
+  }
 
   // Index correlation (10 pts)
   if (indexTrend === 'up')      raw += 10

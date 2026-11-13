@@ -225,7 +225,8 @@ export default async function handler(req, res) {
     const candles = data?.candles
     if (!candles || candles.length < 25) continue
     const sig = detectSignal(candles, strategy, thresholds, exchange, indexTrend, seasonalityMap[ticker])
-    if (sig && sig.score >= SCORE_THRESHOLD) signals.push({ ...sig, ticker })
+    const scoreThreshold = strategy === 'recovery' ? 30 : SCORE_THRESHOLD
+    if (sig && sig.score >= scoreThreshold) signals.push({ ...sig, ticker })
   }
   signals.sort((a, b) => b.score - a.score)
 
