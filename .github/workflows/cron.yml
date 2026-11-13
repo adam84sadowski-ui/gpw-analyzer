@@ -62,7 +62,7 @@ on:
         required: true
         default: 'GPW'
       slot:
-        description: 'Slot (mid|pre - scalping only)'
+        description: 'Slot (mid|pre - scalping only; warmup - recovery cache pre-population)'
         required: false
         default: ''
 
