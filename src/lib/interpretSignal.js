@@ -1,7 +1,8 @@
 export const HORIZON = {
-  scalping:   { label: '2-5 dni',              maxDays: 5  },
-  swing:      { label: '4-8 tygodni',          maxDays: 40 },
+  scalping:   { label: '2-5 dni',              maxDays: 5   },
+  swing:      { label: '4-8 tygodni',          maxDays: 40  },
   aggressive: { label: 'brak (wysoka zmienność)', maxDays: 30 },
+  recovery:   { label: '6-12 miesięcy',        maxDays: 180 },
 }
 
 const BASE_TEXT = {
@@ -13,6 +14,7 @@ const BASE_TEXT = {
   PULLBACK_TO_SMA20:       'Cena w silnym trendzie (SMA20 > SMA50 > SMA150) cofa się do 20-dniowej średniej — wcześniejsze wejście niż pullback do SMA50. Wymaga silnej alignacji wszystkich średnich. Horyzont 2-4 tygodnie, cel +8-12%, stop -4% od SMA20.',
   BREAKOUT:                'Cena wybiła powyżej lokalnego maksimum z ostatnich 20 dni przy zwiększonym wolumenie. Spekulacyjny sygnał — może generować duże zyski lub szybko się odwrócić. Stosuj ścisły stop loss.',
   VOL_SURGE:               'Wyjątkowo wysoki wolumen z silnym zamknięciem przy szczycie dnia — sygnał instytucjonalnego katalizatora (earnings beat, FDA, makro). Momentum potwierdzone przez MACD i trend SMA150. Horyzont 1-2 dni, cel +3%, stop -2%. Wejdź rano następnego dnia przy utrzymaniu impulsu.',
+  RECOVERY_SETUP:          'Fallen angel — spółka spadła ≥35% od szczytu 52-tygodniowego, RSI w strefie głębokiej wyprzedaży (20-52). Strategia value recovery: szukamy fundamentalnie silnych spółek tymczasowo wyprzedanych przez rynek. AI ocenia jakość biznesu i katalizatory odbicia. Horyzont 6-12 miesięcy, cel +25-40%.',
 }
 
 export function interpretSignal(signal, values = {}, strategy = 'scalping') {
@@ -79,6 +81,16 @@ export function interpretSignal(signal, values = {}, strategy = 'scalping') {
     if (values.sma20 && values.sma50 && values.sma20 > values.sma50) positives.push('✅ SMA20 > SMA50 — silna alignacja trendu, wcześniejsze wejście uzasadnione')
     if (values.rsi != null) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — reset w strefie 42-60, trend intaktny')
     warnings.push('⚠️ Większe ryzyko niż PULLBACK_TO_SMA50 — mniejsza korekta, wyższy poziom wejścia')
+  }
+
+  if (signal === 'RECOVERY_SETUP') {
+    if (values.pctFrom52wHigh != null) positives.push('✅ Fallen angel: cena ' + values.pctFrom52wHigh.toFixed(1) + '% od szczytu 52-tyg. — potencjał mean-reversion')
+    if (values.rsi != null && values.rsi < 30) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — głęboka wyprzedaż (< 30), akumulacja możliwa')
+    else if (values.rsi != null)               positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — strefa akumulacji (20-52)')
+    if (values.divergence === 'bullish')       positives.push('✅ Dywergencja bullish RSI — potencjalne dno')
+    warnings.push('⚠️ Strategia value recovery — spółka musi mieć solidne fundamenty. Obligatoryjnie uruchom walidację AI przed wejściem.')
+    warnings.push('⚠️ Horyzont 6-12 miesięcy, stop -12% — pozycja wymaga cierpliwości i szerszego buforu')
+    if (values.sma150trend === 'below') warnings.push('⚠️ Cena poniżej SMA150 — primary downtrend, wchodzisz "pod prąd". AI musi potwierdzić fundamenty.')
   }
 
   if (values.price && values.sma20) {

@@ -321,7 +321,9 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                 ? (r.exchange === 'NYSE' ? 1.15 : 1.5)
                 : strategy === 'swing'
                   ? (r.exchange === 'NYSE' ? 1.3 : 1.2)
-                  : (r.exchange === 'NYSE' ? 1.5 : 2.0)
+                  : strategy === 'recovery'
+                    ? 1.0
+                    : (r.exchange === 'NYSE' ? 1.5 : 2.0)
 
               // Per-indicator check rows
               const checks = []
@@ -343,6 +345,16 @@ function RecommendationPanel({ strategy, exchange, rsiPeriod }) {
                   req:   `> ${rsiThr}`,
                   ok:    rsiOk,
                   note:  r.rsi != null && !rsiOk ? `brakuje ${(rsiThr - r.rsi).toFixed(1)} pkt` : rsiOk ? 'spełnione' : '—',
+                })
+              }
+              if (strategy === 'recovery') {
+                const rsiOk = r.rsi != null && r.rsi >= 20 && r.rsi <= 52
+                checks.push({
+                  label: `RSI(${rsiPeriod})`,
+                  value: r.rsi != null ? r.rsi.toFixed(1) : '—',
+                  req:   '20–52',
+                  ok:    rsiOk,
+                  note:  rsiOk ? 'strefa akumulacji' : r.rsi != null ? `poza strefą (20-52)` : '—',
                 })
               }
               if (strategy === 'swing') {

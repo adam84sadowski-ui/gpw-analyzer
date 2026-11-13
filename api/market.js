@@ -35,6 +35,7 @@ const STRATEGY_CONFIG = {
   scalping:   { target: 5,  stopLoss: 3,  label: '⚡ Scalping' },
   swing:      { target: 15, stopLoss: 5,  label: '📈 Swing' },
   aggressive: { target: 35, stopLoss: 8,  label: '🚀 Agresywna' },
+  recovery:   { target: 25, stopLoss: 12, label: '🔄 Odbicia' },
 }
 
 function tickerDisplay(ticker, exchange) {
@@ -456,14 +457,14 @@ export default async function handler(req, res) {
   // ── Backtest mode ────────────────────────────────────────────────────
   if (mode === 'backtest') {
     if (!ticker)   return res.status(400).json({ error: 'ticker required' })
-    if (!strategy || !STRATEGY_CONFIG[strategy]) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+    if (!strategy || !STRATEGY_CONFIG[strategy]) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|recovery' })
 
     const cacheKey = `${ENV}:backtest:${exchange}:${ticker}:${strategy}`
     const cached   = await kv.get(cacheKey).catch(() => null)
     if (cached) return res.json(cached)
 
     const config  = STRATEGY_CONFIG[strategy]
-    const maxDays = { scalping: 5, swing: 40, aggressive: 30 }[strategy]
+    const maxDays = { scalping: 5, swing: 40, aggressive: 30, recovery: 180 }[strategy]
 
     const data    = await fetchWithTimeout(() => fetchCandlesExtended(ticker, exchange, '5y'), 10000).catch(() => null)
     const candles = data?.candles
@@ -548,7 +549,7 @@ export default async function handler(req, res) {
   }
 
   if (!strategy || !STRATEGY_CONFIG[strategy]) {
-    return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive' })
+    return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|recovery' })
   }
 
   const universe = UNIVERSES[exchange]?.[strategy]
