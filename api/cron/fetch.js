@@ -140,6 +140,52 @@ export default async function handler(req, res) {
     return res.json({ exchange, total: tickers.length, saved, failed })
   }
 
+  // ── Recovery warmup branch ──────────────────────────────────────────────
+  // One-time cache pre-population: fetches 40 tickers/run, no scoring, no alerts.
+  // Run 4× via GitHub Actions workflow_dispatch (strategy=recovery, slot=warmup)
+  // to warm the full 162-ticker NYSE universe in ~20 minutes instead of 11 days.
+  if (strategy === 'recovery' && req.query.slot === 'warmup') {
+    const warmupUniverse = UNIVERSES[exchange]?.[strategy] ?? UNIVERSES.GPW[strategy]
+    const WARMUP_TTL     = 48 * 60 * 60
+    const WARMUP_BATCH   = 40
+
+    const warmupChecks = await Promise.all(
+      warmupUniverse.map(async ticker => ({
+        ticker,
+        cached: !!(await kv.get(`${ENV}:candles:${exchange}:${ticker}`).catch(() => null)),
+      }))
+    )
+    const warmupMisses = warmupChecks.filter(c => !c.cached)
+    const batch        = warmupMisses.slice(0, WARMUP_BATCH)
+
+    const settled = await Promise.allSettled(batch.map(async ({ ticker }) => {
+      const data = await Promise.race([
+        fetchCandles(ticker, exchange),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+      ])
+      if (data) {
+        await kv.set(`${ENV}:candles:${exchange}:${ticker}`, data, { ex: WARMUP_TTL }).catch(() => {})
+        return ticker
+      }
+      return null
+    }))
+
+    const warmed    = settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value)
+    const remaining = Math.max(0, warmupMisses.length - WARMUP_BATCH)
+
+    return res.json({
+      mode:      'warmup',
+      exchange,
+      strategy,
+      total:     warmupUniverse.length,
+      cached:    warmupChecks.length - warmupMisses.length,
+      warmed:    warmed.length,
+      remaining,
+      done:      remaining === 0,
+      tickers:   warmed,
+    })
+  }
+
   // ── Signal detection branch ─────────────────────────────────────────────
   const config = STRATEGY_CONFIG[strategy]
   if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|recovery|seasonality' })
