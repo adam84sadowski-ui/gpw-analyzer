@@ -233,11 +233,11 @@ function parseJSON(text, fallback) {
 
 function clampSuggestedTarget(pct, strategy) {
   if (pct == null || typeof pct !== 'number' || !isFinite(pct)) return null
-  const max = { scalping: 15, swing: 45, aggressive: 100, long_term: 200 }[strategy] ?? 45
+  const max = { scalping: 15, swing: 45, aggressive: 100, long_term: 200, recovery: 150 }[strategy] ?? 45
   return Math.max(1, Math.min(Math.round(pct), max))
 }
 
-const DEFAULT_STOP = { scalping: 3, swing: 5, aggressive: 8, long_term: 10 }
+const DEFAULT_STOP = { scalping: 3, swing: 5, aggressive: 8, long_term: 10, recovery: 12 }
 function clampSuggestedStopLoss(pct, strategy) {
   if (pct == null || typeof pct !== 'number' || !isFinite(pct) || pct <= 0) return null
   const def = DEFAULT_STOP[strategy] ?? 5
@@ -299,7 +299,7 @@ export async function validateEntry({ ticker, exchange, signal, score, rsi, volM
   const fundBlock = buildFundBlock(fundamentals, ticker, exchange)
   const pe = fundamentals?.trailingPE ?? null
   const peGuardrail = (() => {
-    if (pe == null || strategy === 'scalping') return ''
+    if (pe == null || strategy === 'scalping' || strategy === 'recovery') return ''
     const isNYSE = exchange === 'NYSE'
     // Compute PEG for override logic (same formula as buildFundBlock)
     const peg = fundamentals?.revenueGrowth != null && fundamentals.revenueGrowth > 0
@@ -403,7 +403,7 @@ Konsensus: ${f.recommendationKey?.toUpperCase() ?? '?'} — ${f.analystBuy ?? 0}
     : ''
   const divergenceBlock = divergence ? `Dywergencja RSI: ${divergence}` : ''
   const stopBlock = dynamicStopLoss != null
-    ? `Stop ATR (dynamiczny): -${dynamicStopLoss}% | Stop strategii (fixed): ${strategy === 'scalping' ? '-3%' : strategy === 'aggressive' ? '-8%' : strategy === 'long_term' ? '-10%' : '-5%'}${dynamicStopLoss > (strategy === 'scalping' ? 3 : strategy === 'aggressive' ? 8 : strategy === 'long_term' ? 10 : 5) ? ' ⚠️ ATR sugeruje szerszy stop niż domyślny — rynek zmienniejszy niż standard' : ''}`
+    ? `Stop ATR (dynamiczny): -${dynamicStopLoss}% | Stop strategii (fixed): ${strategy === 'scalping' ? '-3%' : strategy === 'aggressive' ? '-8%' : strategy === 'long_term' ? '-10%' : strategy === 'recovery' ? '-12%' : '-5%'}${dynamicStopLoss > (strategy === 'scalping' ? 3 : strategy === 'aggressive' ? 8 : strategy === 'long_term' ? 10 : strategy === 'recovery' ? 12 : 5) ? ' ⚠️ ATR sugeruje szerszy stop niż domyślny — rynek zmienniejszy niż standard' : ''}`
     : ''
   const rsBlock = rs != null
     ? `Relative Strength (20d vs indeks): ${rs.ratio != null ? `${rs.ratio > 0 ? '+' : ''}${(rs.ratio * 100).toFixed(1)}%` : 'brak danych'}${rs.ratio != null ? ` | ${rs.ratio > 0.10 ? '🏆 LEADER — rośnie wyraźnie mocniej od rynku' : rs.ratio > 0.03 ? '↑ POWYŻEJ rynku' : rs.ratio < -0.10 ? '🚩 LAGGARD — wyraźnie słabszy od rynku' : rs.ratio < -0.03 ? '↓ PONIŻEJ rynku' : '≈ INLINE z rynkiem'}` : ''}`
@@ -453,7 +453,7 @@ ${newsLines}${violentMoveBlockEntry}`
   "entryZoneMin": <liczba lub null — minimalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "entryZoneMax": <liczba lub null — maksymalna cena strefy wejścia gdy OBSERWUJ, null gdy WEJDŹ/UNIKAJ>,
   "reviewDays": <liczba dni do następnego przeglądu gdy OBSERWUJ, null w pozostałych przypadkach>,
-  "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35). null tylko gdy decision=UNIKAJ>,
+  "suggestedTargetPct": <liczba całkowita % lub null — AI-determined target od ceny wejścia. Gdy targetUpside dostępny i analystBuy ≥60% całości: użyj targetUpside. Gdy brak danych analityków: użyj domyślnego celu strategii (scalping=5, swing=15, aggressive=35, recovery=25). null tylko gdy decision=UNIKAJ>,
   "highsContext": "<1-2 zdania: skąd odchylenie od maksimów — podaj konkretny czynnik (branżowy, makro, fundamentalny) i oceń czy powrót do szczytu jest realistyczny w horyzoncie tej strategii. Pomiń jeśli brak danych historycznych.>",
   "violentMoveContext": ${isViolentMove ? '"<1-2 zdania PL: (1) konkretna przyczyna gwałtownego ruchu kursu na podstawie newsów, (2) czy zmiana jest fundamentalna (nowe ryzyko/szansa) czy tymczasowy szum rynkowy>"' : 'null'}
 }`
@@ -546,6 +546,33 @@ Punkty w "analysis" (13 kryteriów Buffett/Munger dla long-term):
 11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor i 5-letnia historyczna średnia
 12. RYZYKO STRUKTURALNE — regulatory risk, secular decline, disruption (nie korekty cenowe)
 13. ŚRODOWISKO MAKRO — długoterminowy trend stóp, rotacja sektorowa, mega-trendy (AI, energia, demografika)`
+  } else if (strategy === 'recovery') {
+    const recoveryCtx = rsi != null && pctFrom52w != null
+      ? `\n⚠️ FALLEN ANGEL CONTEXT: Spółka spadła ${Math.abs(pctFrom52w)}% od szczytu 52-tyg. | RSI: ${rsi} (głęboko wyprzedana strefa). Stop: -${dynamicStopLoss != null ? dynamicStopLoss + '% ATR-based' : '12% fixed'}. Cel: +25-40% w 6-12 miesiącach.`
+      : ''
+    prompt = `Jesteś seniorem analitykiem inwestycyjnym w stylu Warren Buffett i Charlie Munger, specjalizującym się w inwestycjach value recovery — "fallen angel" quality stocks. Oceniasz wejście w pozycję średnioterminową (horyzont 6-12 miesięcy, stop -12%). Zasada: "Be fearful when others are greedy, and greedy when others are fearful."
+
+Twoje zadanie: oceń czy ta wyprzedana spółka ma fundamenty uzasadniające odbicie i czy sygnał techniczny potwierdza dno.${recoveryCtx}
+
+${dataBlock}
+
+═══════════════
+${jsonSchema}
+
+Punkty w "analysis" (13 kryteriów recovery — fallen angel value rebound):
+1. POWÓD WYPRZEDAŻY — co spowodowało spadek o ${pctFrom52w != null ? Math.abs(pctFrom52w) + '%' : '35%+'} od szczytu? Fundamentalny (słabe wyniki, dług, disruption) vs tymczasowy (makro, sektor, sentyment)?
+2. ECONOMIC MOAT — czy competitive advantage nadal intaktny po spadku? Klienci, patenty, skala?
+3. EARNINGS RECOVERY PATH — czy zyski mają szansę wrócić do poprzednich poziomów w 12-18 miesiącach?
+4. RETURN ON EQUITY — ROE historyczne vs obecne: czy pogorszenie tymczasowe czy strukturalne?
+5. FREE CASH FLOW — czy FCF nadal dodatnie? Spółka może przetrwać bez emisji akcji?
+6. DŁUG — Dług/Equity: czy dług jest do obsługi przy obecnych przepływach? Covenant risk?
+7. MANAGEMENT QUALITY — jak zarząd reaguje na kryzys: restrukturyzacja, cięcia kosztów, buybacki?
+8. MARGIN OF SAFETY — cena vs intrinsic value: upside > 40% dla recovery play (wyższe ryzyko = wyższy wymóg)?
+9. REKOMENDACJE INSTYTUCJONALNE — czy intytucje kupują na dołku (accumulation) czy redukują?
+10. KATALIZATOR ODBICIA — co konkretnie może odwrócić trend? Wyniki Q, CEO change, macro, segment recovery?
+11. WYCENA NA DOŁKU — P/E (może być distressed/N/A), EV/EBITDA, P/Book vs historyczne minima sektora
+12. RYZYKO TRWAŁEGO ZNISZCZENIA — secular decline, disruption technologiczny, bankruptcy risk — odróżnij od korekty
+13. RSI I TECHNICZNE DNA — RSI ${rsi ?? '?'} (20-52 = accumulation zone). Dywergencja bullish? Wolumen akumulacji?`
   } else {
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
@@ -572,7 +599,7 @@ Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
 13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka${peGuardrail}`
   }
 
-  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
+  prompt += `\n\nDla "recommendation":\n- WEJDŹ/OBSERWUJ: KIEDY WEJŚĆ + PARAMETRY (Stop loss, Cel, Horyzont) + NASTĘPNY PRZEGLĄD\n- UNIKAJ: konkretny powód + kiedy warto wrócić\n- CEL ANALITYKÓW (priorytet NYSE): jeśli targetMeanPrice jest dostępny i targetUpside przekracza 2× domyślny cel strategii przy ≥60% rekomendacji Kup — używaj celu analityków jako nadrzędny benchmark take-profit. Zaproponuj: realizacja 50% na domyślnym celu strategii + trzymanie 50% do celu analityków. Stop loss strategii pozostaje NIEZMIENIONY.\n- suggestedTargetPct: gdy decision≠UNIKAJ — zwróć targetUpside jeśli analystBuy ≥60% i targetUpside dostępny; inaczej zwróć domyślny cel strategii (scalping=5, swing=15, aggressive=35, recovery=25). Zawsze liczba całkowita, nigdy null gdy WEJDŹ/OBSERWUJ.`
 
   const text = await callClaudeAPI(prompt, 3000)
   if (!text) throw new Error('Claude returned empty response')

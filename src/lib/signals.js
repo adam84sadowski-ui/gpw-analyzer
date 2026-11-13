@@ -15,11 +15,13 @@ export const SIGNAL_DEFAULTS = {
     scalping:   { rsiThresholdMin: 34, rsiThreshold: 46, volumeMultiplierMin: 1.2, rsiPeriod: 9 },
     swing:      { rsiMin: 36, rsiMax: 55, volumeMultiplierMin: 1.1, sma50DeltaMin: -3, sma50DeltaMax: 5, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 70, volumeMultiplierMin: 2.5, rsiPeriod: 14 },
+    recovery:   { pctFrom52wHighMax: -35, rsiMin: 20, rsiMax: 52, sma150BufferMin: 0.88, rsiPeriod: 14 },
   },
   NYSE: {
     scalping:   { rsiThresholdMin: 35, rsiThreshold: 50, volumeMultiplierMin: 1.1, rsiPeriod: 9 },
     swing:      { rsiMin: 40, rsiMax: 58, volumeMultiplierMin: 1.1, sma50DeltaMin: -2, sma50DeltaMax: 5, rsiPeriod: 14 },
     aggressive: { rsiMin: 60, rsiMax: 75, volumeMultiplierMin: 2.0, rsiPeriod: 14 },
+    recovery:   { pctFrom52wHighMax: -35, rsiMin: 20, rsiMax: 52, sma150BufferMin: 0.88, rsiPeriod: 14 },
   },
 }
 
@@ -27,6 +29,7 @@ const ATR_STOP_CONFIG = {
   scalping:   { multiplier: 1.0, min: 1.5, max: 5.0 },
   swing:      { multiplier: 1.5, min: 3.0, max: 8.0 },
   aggressive: { multiplier: 2.0, min: 5.0, max: 15.0 },
+  recovery:   { multiplier: 2.0, min: 10.0, max: 18.0 },
 }
 
 function calcDynamicStopLoss(atr, price, strategy) {
@@ -243,6 +246,32 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
         sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'aggressive'),
         sma150Warning, score, ...extra }
+    }
+  }
+
+  if (strategy === 'recovery') {
+    if (candles.length < 55) return null
+    const cfg       = defaults.recovery
+    const rsiPeriod = thresholds.rsiPeriod ?? cfg.rsiPeriod ?? 14
+    const rsi       = calcRSI(closes, rsiPeriod)
+    if (rsi == null || rsi < cfg.rsiMin || rsi > cfg.rsiMax) return null
+
+    // 52-week high from the last 252 candles (or all available)
+    const window   = candles.slice(-252)
+    const high52w  = Math.max(...window.map(c => c.high ?? c.close))
+    const pctFrom52wHigh = Math.round((price - high52w) / high52w * 1000) / 10
+    if (pctFrom52wHigh > cfg.pctFrom52wHighMax) return null
+
+    // Price must not be in complete freefall — stays above 88% of SMA150
+    if (sma150 != null && price < sma150 * cfg.sma150BufferMin) return null
+
+    const score = calcScore('recovery', { ...scoreInputs, rsi })
+    return {
+      signal: 'RECOVERY_SETUP', price, rsi, rsiPeriod, volMult,
+      pctFrom52wHigh, high52w,
+      sma20: calcSMA(closes, 20), sma50: calcSMA(closes, 50),
+      dynamicStopLoss: calcDynamicStopLoss(atr, price, 'recovery'),
+      score, ...extra,
     }
   }
 

@@ -54,7 +54,7 @@ on:
   workflow_dispatch:
     inputs:
       strategy:
-        description: 'Strategy (scalping|swing|aggressive|dividend)'
+        description: 'Strategy (scalping|swing|aggressive|recovery|dividend)'
         required: true
         default: 'scalping'
       exchange:
@@ -114,9 +114,9 @@ jobs:
           elif [ "$SCH" = "5 14 * * 1-5" ] || [ "$SCH" = "5 15 * * 1-5" ]; then
             c swing GPW; c aggressive GPW; c scalping NYSE
 
-          # GPW EOD swing + dividend
+          # GPW EOD swing + dividend + recovery
           elif [ "$SCH" = "35 15 * * 1-5" ]; then
-            c swing GPW; c dividend GPW
+            c swing GPW; c dividend GPW; c recovery GPW
 
           # GPW EOD aggressive
           elif [ "$SCH" = "40 15 * * 1-5" ]; then
@@ -138,9 +138,9 @@ jobs:
           elif [ "$SCH" = "35 19 * * 1-5" ]; then
             c scalping NYSE
 
-          # NYSE swing + dividend EOD
+          # NYSE swing + dividend + recovery EOD
           elif [ "$SCH" = "10 20 * * 1-5" ]; then
-            c swing NYSE; c dividend NYSE
+            c swing NYSE; c dividend NYSE; c recovery NYSE
 
           # NYSE aggressive EOD
           elif [ "$SCH" = "15 20 * * 1-5" ]; then

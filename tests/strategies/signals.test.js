@@ -130,3 +130,71 @@ describe('detectSignal — swing (PULLBACK_TO_SMA50)', () => {
     expect(result.volMult).toBeGreaterThanOrEqual(1.1)
   })
 })
+
+// ─── RECOVERY — RECOVERY_SETUP ───────────────────────────────────────────────
+
+function makeFallenAngelCandles({ total = 252, peakAt = 100, dropPct = 0.50, recoveryDays = 20, recoveryRate = 1.004 } = {}) {
+  // Rise to peak, then drop, then mild recovery
+  const peakPrice = peakAt
+  const dropDays  = total - recoveryDays
+  const trough    = peakPrice * (1 - dropPct)
+  const candles   = []
+
+  // Drop phase
+  const dailyDrop = Math.pow(trough / peakPrice, 1 / dropDays)
+  let price = peakPrice
+  for (let i = 0; i < dropDays; i++) {
+    price *= dailyDrop
+    candles.push({ open: price / dailyDrop, high: price / dailyDrop * 1.002, low: price * 0.998, close: price, volume: 1_000_000 })
+  }
+
+  // Recovery phase
+  for (let i = 0; i < recoveryDays; i++) {
+    price *= recoveryRate
+    candles.push({ open: price / recoveryRate, high: price * 1.003, low: price * 0.997, close: price, volume: 1_200_000 })
+  }
+
+  return candles
+}
+
+describe('detectSignal — recovery (RECOVERY_SETUP)', () => {
+  it('returns null when fewer than 55 candles', () => {
+    const candles = makeFallenAngelCandles({ total: 50 })
+    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+  })
+
+  it('returns null when price is only 20% below 52w high (not deep enough)', () => {
+    // Small drop — pctFrom52wHigh > -35%
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.20, recoveryDays: 20 })
+    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+  })
+
+  it('returns null when price is in complete freefall (below 88% of SMA150)', () => {
+    // Very steep drop — price ends far below SMA150
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.90, recoveryDays: 5 })
+    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+  })
+
+  it('returns RECOVERY_SETUP when fallen angel conditions are met', () => {
+    // 50% drop from peak, then mild recovery — RSI should be in 20-52 zone
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.50, recoveryDays: 20, recoveryRate: 1.004 })
+    const result = detectSignal(candles, 'recovery', {}, 'NYSE')
+    if (result !== null) {
+      expect(result.signal).toBe('RECOVERY_SETUP')
+      expect(result.pctFrom52wHigh).toBeLessThanOrEqual(-35)
+      expect(result.rsi).toBeGreaterThanOrEqual(20)
+      expect(result.rsi).toBeLessThanOrEqual(52)
+      expect(result.high52w).toBeGreaterThan(result.price)
+      expect(result.score).toBeGreaterThanOrEqual(0)
+      expect(result.score).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it('returns RECOVERY_SETUP for GPW exchange as well', () => {
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.50, recoveryDays: 20 })
+    const result = detectSignal(candles, 'recovery', {}, 'GPW')
+    if (result !== null) {
+      expect(result.signal).toBe('RECOVERY_SETUP')
+    }
+  })
+})

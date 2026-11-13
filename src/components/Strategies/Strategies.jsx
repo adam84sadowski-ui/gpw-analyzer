@@ -88,9 +88,10 @@ function ConfirmTradeModal({ rec, exchange, portfolio, maxPct, commission = 0.38
 }
 
 const STRATEGY_META = {
-  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni', rsiPeriod: 9  },
-  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.', rsiPeriod: 14 },
-  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A', rsiPeriod: 14 },
+  scalping:   { label: '⚡ Scalping',  color: 'text-yellow-400', defaults: SCALPING_DEFAULTS,   target: '3-7%',   time: '2-5 dni',      rsiPeriod: 9  },
+  swing:      { label: '📈 Swing',     color: 'text-blue-400',   defaults: SWING_DEFAULTS,      target: '10-20%', time: '4-8 tyg.',     rsiPeriod: 14 },
+  aggressive: { label: '🚀 Agresywna', color: 'text-red-400',    defaults: AGGRESSIVE_DEFAULTS, target: '20-50%', time: 'N/A',          rsiPeriod: 14 },
+  recovery:   { label: '🔄 Odbicia',   color: 'text-green-400',  defaults: SWING_DEFAULTS,      target: '25-40%', time: '6-12 miesięcy', rsiPeriod: 14 },
 }
 
 function RecommendationPanel({ strategy, exchange, rsiPeriod }) {

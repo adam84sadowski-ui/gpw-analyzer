@@ -44,6 +44,13 @@ const STRATEGY_CONFIG = {
     describe:  s => `Breakout powyżej max 20 dni, RSI ${s.rsi?.toFixed(1)}, wolumen ${s.volMult}x. ⚠️ WYSOKO RYZYKOWNA SPÓŁKA.`,
     kvExtra:   s => ({ rsi: s.rsi }),
   },
+  recovery: {
+    label:     '🔄 Odbicia',
+    maxAlerts: 2,
+    horizon:   '6-12 miesięcy',
+    describe:  s => `Fallen angel: cena ${s.pctFrom52wHigh?.toFixed(1)}% od szczytu 52-tyg., RSI ${s.rsi?.toFixed(1)} (głęboko wyprzedana). Potencjał odbicia wartościowego.`,
+    kvExtra:   s => ({ rsi: s.rsi, pctFrom52wHigh: s.pctFrom52wHigh }),
+  },
 }
 
 export default async function handler(req, res) {
@@ -135,7 +142,7 @@ export default async function handler(req, res) {
 
   // ── Signal detection branch ─────────────────────────────────────────────
   const config = STRATEGY_CONFIG[strategy]
-  if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|seasonality' })
+  if (!config) return res.status(400).json({ error: 'strategy must be scalping|swing|aggressive|recovery|seasonality' })
 
   const now = new Date()
   if (now.getDay() === 0 || now.getDay() === 6) return res.json({ skipped: 'weekend' })
