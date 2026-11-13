@@ -761,11 +761,13 @@ Odpowiadasz po polsku. To analiza edukacyjna — nie jest poradą inwestycyjną.
                       <span className="ml-2 text-xs text-yellow-400" title="Score techniczny przy sygnale wejścia">⭐ {pos.entryScore}/100 <span className="text-yellow-600 font-normal">sygnał</span></span>
                     )}
                     {pos.aiValidation?.tranche && (
-                      <span
-                        className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-400"
-                        title={`Czekaj na: ${pos.aiValidation.tranche.confirmSignal}`}
-                      >
-                        🔀 TRANSZA {pos.aiValidation.tranche.current}/{pos.aiValidation.tranche.total}
+                      <span className="ml-2 inline-flex flex-col gap-0.5">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-400">
+                          🔀 TRANSZA {pos.aiValidation.tranche.current}/{pos.aiValidation.tranche.total}
+                        </span>
+                        <span className="text-[9px] text-blue-400/70 px-1">
+                          ↳ {pos.aiValidation.tranche.confirmSignal}
+                        </span>
                       </span>
                     )}
                   </div>
