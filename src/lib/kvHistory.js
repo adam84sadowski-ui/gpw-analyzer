@@ -2,18 +2,21 @@ const STRATEGY_BOUNDS = {
   scalping:   { targetMin: 3,  targetMax: 10,  defaultTarget: 5  },
   swing:      { targetMin: 8,  targetMax: 25,  defaultTarget: 15 },
   aggressive: { targetMin: 15, targetMax: 60,  defaultTarget: 35 },
+  recovery:   { targetMin: 15, targetMax: 50,  defaultTarget: 25 },
 }
 
 const HORIZON_DEFAULTS = {
   scalping:   '2-5 dni',
   swing:      '4-8 tyg.',
   aggressive: 'trudny do określenia',
+  recovery:   '6-12 miesięcy',
 }
 
 const HORIZON_BOUNDS = {
   scalping:   { minDays: 1,  maxDays: 10  },
   swing:      { minDays: 14, maxDays: 84  },
   aggressive: { minDays: 3,  maxDays: 180 },
+  recovery:   { minDays: 90, maxDays: 365 },
 }
 
 function formatDaysRange(minD, maxD) {
