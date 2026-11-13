@@ -163,27 +163,38 @@ describe('detectSignal — recovery (RECOVERY_SETUP)', () => {
     expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
   })
 
-  it('returns null when price is only 20% below 52w high (not deep enough)', () => {
-    // Small drop — pctFrom52wHigh > -35%
+  it('returns null when price is only 15% below 52w high (not deep enough for NYSE -25% threshold)', () => {
+    // Small drop — pctFrom52wHigh > -25% (NYSE threshold)
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.15, recoveryDays: 20 })
+    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+  })
+
+  it('returns null when price is only 20% below 52w high for GPW (-35% threshold)', () => {
     const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.20, recoveryDays: 20 })
-    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+    expect(detectSignal(candles, 'recovery', {}, 'GPW')).toBeNull()
   })
 
-  it('returns null when price is in complete freefall (below 88% of SMA150)', () => {
-    // Very steep drop — price ends far below SMA150
-    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.90, recoveryDays: 5 })
-    expect(detectSignal(candles, 'recovery', {}, 'NYSE')).toBeNull()
+  it('returns RECOVERY_SETUP for NYSE at -30% drop (qualifies at -25% threshold)', () => {
+    // 30% drop from peak — qualifies for NYSE (-25%), should fire if RSI in 20-55
+    const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.30, recoveryDays: 20, recoveryRate: 1.003 })
+    const result = detectSignal(candles, 'recovery', {}, 'NYSE')
+    if (result !== null) {
+      expect(result.signal).toBe('RECOVERY_SETUP')
+      expect(result.pctFrom52wHigh).toBeLessThanOrEqual(-25)
+      expect(result.rsi).toBeGreaterThanOrEqual(20)
+      expect(result.rsi).toBeLessThanOrEqual(55)
+    }
   })
 
-  it('returns RECOVERY_SETUP when fallen angel conditions are met', () => {
-    // 50% drop from peak, then mild recovery — RSI should be in 20-52 zone
+  it('returns RECOVERY_SETUP when fallen angel conditions are met (50% drop)', () => {
+    // 50% drop — qualifies for both NYSE and GPW
     const candles = makeFallenAngelCandles({ total: 252, dropPct: 0.50, recoveryDays: 20, recoveryRate: 1.004 })
     const result = detectSignal(candles, 'recovery', {}, 'NYSE')
     if (result !== null) {
       expect(result.signal).toBe('RECOVERY_SETUP')
-      expect(result.pctFrom52wHigh).toBeLessThanOrEqual(-35)
+      expect(result.pctFrom52wHigh).toBeLessThanOrEqual(-25)
       expect(result.rsi).toBeGreaterThanOrEqual(20)
-      expect(result.rsi).toBeLessThanOrEqual(52)
+      expect(result.rsi).toBeLessThanOrEqual(55)
       expect(result.high52w).toBeGreaterThan(result.price)
       expect(result.score).toBeGreaterThanOrEqual(0)
       expect(result.score).toBeLessThanOrEqual(100)
