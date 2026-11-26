@@ -195,8 +195,10 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const sma50  = sma50s[sma50s.length - 1]
     const sma50Delta = sma50 != null ? Math.round((price - sma50) / sma50 * 1000) / 10 : null
 
-    // NYSE: reject bearish MACD
-    if (exchange === 'NYSE' && macdSig.trend !== 'bullish') return null
+    // NYSE: block only strongly bearish MACD (bearish crossover + histogram worsening = score -15)
+    // Mild bearish MACD (score -5 or -10) is normal during a healthy pullback to SMA50
+    // — sma50Slope > 0 and price > sma150 already ensure we're in an uptrend context
+    if (exchange === 'NYSE' && macdSig.score < -10) return null
 
     const sma20 = calcSMA(closes, 20)
 
