@@ -659,9 +659,52 @@ Punkty w "analysis" (15 kryteriów quality dip rebound):
 14. RSI I TECHNICZNE — RSI ${rsi ?? '?'}. < 38 = panika maksymalna, overreaction prawdopodobnie w pełni (kwalifikuje WEJDŹ). 38-52 = częściowy dip, overreaction może trwać (max TRANSZA). > 52 = za mało dip, nie kwalifikuje. StabilizedBottom (10+ sesji bez nowego dna)? Wolumen na down-dniach vs up-dniach?
 15. ANALOGIA HISTORYCZNA + EXIT PLAN — (A) Podaj historyczny precedens: czy ta spółka lub podobna miała analogiczny event? Jak wyszło i ile czasu trwało odbicie? (B) EXIT: wyjdź gdy: RSI > 60 (rynek wycenił odbicie), trigger tymczasowości spełniony + cena +20% od wejścia, lub gdy fundamenty faktycznie się pogorszyły → natychmiastowe wyjście bez czekania na target.`
   } else {
+    const swingSignalLabel = (() => {
+      if (signal === 'PULLBACK_TO_SMA20')   return 'PULLBACK DO SMA20 w silnym uptrendzie (SMA20 > SMA50 > SMA150)'
+      if (signal === 'HIGHER_LOW_PATTERN')  return 'HIGHER LOW PATTERN — wznoszące minima (trend kontynuacja, cena powyżej SMA50)'
+      if (signal === 'GOLDEN_CROSS')        return 'GOLDEN CROSS — SMA20 przeszła powyżej SMA50 (potwierdzenie zmiany/kontynuacji trendu)'
+      if (signal === 'OVERSOLD_UPTREND')    return 'OVERSOLD W UPTRENDZIE — RSI wyprzedany przy intaktnym SMA150 (okazja zakupu w trendzie)'
+      if (signal === 'BB_SQUEEZE_BREAKOUT') return 'BB SQUEEZE BREAKOUT — wybicie z konsolidacji po ściskaniu pasm Bollingera'
+      return 'PULLBACK DO SMA50 w uptrendzie'
+    })()
+
+    const swingPoint1 = (() => {
+      if (signal === 'PULLBACK_TO_SMA20')
+        return `PULLBACK DO SMA20 — vs SMA20: ${sma50Delta}% | Wcześniejsze wejście w silnym trendzie (SMA20 > SMA50 > SMA150). Czy SMA20 trzyma jako wsparcie? Alignment wszystkich średnich potwierdzony?`
+      if (signal === 'HIGHER_LOW_PATTERN')
+        return `HIGHER LOW PATTERN — cena ${sma50Delta}% powyżej SMA50. Trzy tygodniowe okna z wznoszącymi minimami = trend kontynuacja. Oceń: (a) minima rzeczywiście wznoszące (nie artefakt techniczny), (b) price action sugeruje że kolejna korekta będzie płytsza od poprzedniej, (c) wolumen ${volMult}x potwierdza zainteresowanie kupujących.`
+      if (signal === 'GOLDEN_CROSS')
+        return `GOLDEN CROSS — SMA20 przeszła powyżej SMA50 w ostatnich 3 sesjach. Klasyczny sygnał potwierdzenia zmiany/kontynuacji trendu. Oceń: (a) crossover z wolumenem ${volMult}x ≥ 1.1x = instytucjonalne potwierdzenie, (b) czy poprzedzało to dno konsolidacji lub korektę, (c) RSI ${rsi} w strefie 45-70 = momentum bez wykupienia. Ryzyko: fałszywy crossover przy słabym wolumenie lub bez jasnego powodu fundamentalnego.`
+      if (signal === 'OVERSOLD_UPTREND')
+        return `OVERSOLD W UPTRENDZIE — RSI ${rsi} poniżej progu wyprzedania mimo że SMA150 intaktny (cena ${sma50Delta}% vs SMA50). Silne nieoczekiwane cofnięcie w długoterminowym uptrendzie. Oceń: (a) wyprzedanie autentyczne (panika, news jednorazowy) vs trwałe pogorszenie fundamentów, (b) SMA150 nadal rosnący ✅ = primary uptrend nienaruszony, (c) wolumen ${volMult}x — czy sprzedający się wyczerpują? Strategia: wchodzisz gdy inni panikują, bo trend long-term intaktny.`
+      if (signal === 'BB_SQUEEZE_BREAKOUT')
+        return `BB SQUEEZE BREAKOUT — cena powyżej górnego pasma Bollingera po poprzednim ściskaniu (bandwidth < 6%). Kompresja zmienności → ekspansja ruchu. Oceń: (a) wolumen ${volMult}x na wybiciu: ≥ 1.3x = autentyczne, (b) RSI ${rsi} w 50-72 = momentum bez skrajnego wykupienia, (c) czy baza konsolidacji była wystarczająco długa (minimum 10 sesji)? Ryzyko: false breakout z powrotem do pasm — stop poniżej middle BB.`
+      return `PULLBACK DO SMA50 — vs SMA50: ${sma50Delta}% | Cofnięcie do SMA50 (<5%) = optymalna strefa wejścia. Czy SMA50 trzyma jako wsparcie dynamiczne? Czy widoczne odbicie?`
+    })()
+
+    const swingRsiCtx = (() => {
+      if (signal === 'GOLDEN_CROSS')
+        return `RSI: ${rsi} — strefa 45-70 optymalna dla GOLDEN_CROSS (momentum bez wykupienia).`
+      if (signal === 'OVERSOLD_UPTREND')
+        return `RSI: ${rsi} — PONIŻEJ progu wyprzedania = panika, okazja zakupu. SMA150 potwierdza intaktny primary uptrend — NIE jest to sygnał odwrócenia trendu.`
+      if (signal === 'BB_SQUEEZE_BREAKOUT')
+        return `RSI: ${rsi} — strefa 50-72 (momentum breakout bez skrajnego wykupienia).`
+      if (signal === 'HIGHER_LOW_PATTERN')
+        return `RSI: ${rsi} — strefa 42-65 (zdrowe momentum, trend kontynuacja). NIE oczekujemy pullbacku do SMA50 — cena jest ${sma50Delta}% powyżej i utrzymuje poziom wznoszących minimów.`
+      return `RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.`
+    })()
+
+    const swingMacdPoint = (() => {
+      if (signal === 'GOLDEN_CROSS')
+        return `GOLDEN CROSS — MACD KONTEKST: ${macd ? `linia=${macd.line?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | ${macd.trend?.toUpperCase() ?? '?'}` : 'brak danych'}. WAŻNE: przy GOLDEN_CROSS MACD może być jeszcze bearish (crossover SMA właśnie wraca z dołu) — to NORMALNE, nie dyskwalifikuje. Bullish zwrot histogramu = dodatkowe potwierdzenie; brak zwrotu = wyższe ryzyko przedwczesnego wejścia.`
+      if (signal === 'BB_SQUEEZE_BREAKOUT')
+        return `MACD PRZY WYBICIU: ${macd ? `linia=${macd.line?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | ${macd.trend?.toUpperCase() ?? '?'}` : 'brak danych'}. Dla BB_SQUEEZE_BREAKOUT oczekujemy rosnącego lub bliskiego zera histogramu. Bearish MACD przy wybiciu = czerwona flaga (możliwy false breakout — ustal tight stop).`
+      return `MACD PRZY COFNIĘCIU: ${macd ? `linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | Trend: ${macd.trend?.toUpperCase() ?? '?'}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.` : 'MACD: brak danych — oceń z kontekstu'}`
+    })()
+
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
 
-Twoje zadanie: oceń ten setup SWING — PULLBACK DO SMA50 w uptrendzie — czy wchodzisz, czy czekasz, czy omijasz. Horyzont: 4-8 tygodni.
+Twoje zadanie: oceń ten setup SWING — ${swingSignalLabel} — czy wchodzisz, czy czekasz, czy omijasz. Horyzont: 4-8 tygodni.
 
 ${dataBlock}
 
@@ -669,18 +712,18 @@ ${dataBlock}
 ${jsonSchema}
 
 Punkty w "analysis" (13 kryteriów swing — technika + fundamenty):
-1. ${signal === 'PULLBACK_TO_SMA20' ? `PULLBACK DO SMA20 — vs SMA20: ${sma50Delta}% | Wcześniejsze wejście w silnym trendzie (SMA20 > SMA50 > SMA150). Czy SMA20 trzyma jako wsparcie? Alignment wszystkich średnich potwierdzony?` : `PULLBACK DO SMA50 — vs SMA50: ${sma50Delta}% | Cofnięcie do SMA50 (<5%) = optymalna strefa wejścia. Czy SMA50 trzyma jako wsparcie dynamiczne? Czy widoczne odbicie?`}
+1. ${swingPoint1}
 2. ECONOMIC MOAT — przewaga konkurencyjna: marka, sieć, koszty przełączenia?
 3. EARNINGS CONSISTENCY — zyski stabilne od 3+ lat?
 4. RETURN ON EQUITY — ROE: > 15% = dobry, > 20% = świetny
 5. FREE CASH FLOW — FCF Yield: > 5% = atrakcyjny
 6. DŁUG — Dług/Equity: < 0.5 bezpieczne, > 1.0 ryzykowne
-7. TREND SMA150 I RSI — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary uptrend intaktny' : 'PONIŻEJ ❌ — ostrzeżenie'}` : 'SMA150: brak danych'} | RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.
+7. TREND SMA150 I RSI — ${sma150trend ? `SMA150: cena ${sma150trend === 'above' ? 'POWYŻEJ ✅ — primary uptrend intaktny' : 'PONIŻEJ ❌ — ostrzeżenie'}` : 'SMA150: brak danych'} | ${swingRsiCtx}
 8. MARGIN OF SAFETY — cena vs cel analityków: upside > 20%?
 9. REKOMENDACJE INSTYTUCJONALNE — konsensus Kup/Trzymaj/Sprzedaj
 10. LYNCH — WZROST vs WYCENA (PEG) — P/E trailing / wzrost przych. YoY: PEG < 1 tanie, 1-2 akceptowalny, > 2 drogi. P/E > 30 na spółce cyklicznej/przemysłowej = "priced for perfection" — jeden miss wynikowy → korekta -20-30%. Wymagaj konkretnego uzasadnienia premium lub degraduj do OBSERWUJ.
 11. WYCENA RYNKOWA — EV/EBITDA + Forward P/E vs sektor i historyczna średnia. Niska wycena (P/E < 15) = dodatkowy bufor bezpieczeństwa dla swing.
-12. MACD PRZY COFNIĘCIU — ${macd ? `MACD: linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | Trend: ${macd.trend?.toUpperCase() ?? '?'}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.` : 'MACD: brak danych — oceń z kontekstu'}
+12. ${swingMacdPoint}
 13. ŚRODOWISKO MAKRO — faza cyklu stóp procentowych, rotacja sektorowa, sezonowość: Q4 consumer/retail, Q1 tech capex, Q2 energetyka${peGuardrail}`
   }
 
@@ -802,7 +845,15 @@ ${newsLines}${sectorEvents ? `\n\n📅 EVENTY SEKTOROWE — uwzględnij w ocenie
   } else if (strategy === 'long_term') {
     persona = `Jesteś analitykiem w stylu Warren Buffett i Charlie Munger. Oceniasz pozycję długoterminową (horyzont 6-18 miesięcy, stop -10%). Twoja zasada: "Our favorite holding period is forever — unless the fundamentals change." WAŻNE: ignoruj krótkoterminowy szum cenowy i techniczne wskaźniki momentum — liczy się siła fundamentalna. Sprawdź: (1) czy economic moat spółki pozostaje nienaruszone? (2) czy EPS i FCF rosną zgodnie z tezą? (3) czy wycena (P/E, EV/EBITDA) wciąż daje margin of safety przy 12-miesięcznej perspektywie? Krótkie korekty przy mocnych fundamentach to okazja do dokładania, nie powód do wyjścia. nextReviewDate ustaw za 28-35 dni (miesięczny cykl przeglądu).`
   } else {
-    persona = `Jesteś seniorem analitykiem w stylu Buffett/Lynch. Oceniasz pozycję swing (target +15%, stop -5%, horyzont 4-8 tygodni). Buffett: "trzymaj aż zmienią się fundamenty, nie cena". Lynch: "sprzedaj gdy historia się kończy". Sprawdź integralność tezy: czy powód dla którego wszedłeś nadal obowiązuje?`
+    const swingTezaCtx = (() => {
+      if (signal === 'HIGHER_LOW_PATTERN')  return 'Teza wejścia: wznoszące minima = trend kontynuacja. Sprawdź czy minima nadal rosną i czy cena trzyma się powyżej SMA50.'
+      if (signal === 'GOLDEN_CROSS')        return 'Teza wejścia: SMA20 przeszła powyżej SMA50 (złoty krzyż). Sprawdź czy momentum crossovera się utrzymuje i czy nie ma death-cross.'
+      if (signal === 'OVERSOLD_UPTREND')    return 'Teza wejścia: wyprzedanie w intaktnym uptrendzie (SMA150 powyżej). Sprawdź czy primary trend (SMA150) nadal rośnie i czy RSI wróciło do normalnego zakresu.'
+      if (signal === 'BB_SQUEEZE_BREAKOUT') return 'Teza wejścia: wybicie z konsolidacji (squeeze BB). Sprawdź czy cena utrzymuje się powyżej middle BB i czy wolumen podtrzymuje ruch.'
+      if (signal === 'PULLBACK_TO_SMA20')   return 'Teza wejścia: pullback do SMA20 w silnym trendzie (SMA20 > SMA50 > SMA150). Sprawdź czy alignment SMA nadal zachowany.'
+      return 'Teza wejścia: pullback do SMA50 w uptrendzie. Sprawdź czy SMA50 nadal jako wsparcie i czy primary trend intaktny.'
+    })()
+    persona = `Jesteś seniorem analitykiem w stylu Buffett/Lynch. Oceniasz pozycję swing (target +15%, stop -5%, horyzont 4-8 tygodni). Buffett: "trzymaj aż zmienią się fundamenty, nie cena". Lynch: "sprzedaj gdy historia się kończy". ${swingTezaCtx}`
   }
 
   const prompt = `${persona}
