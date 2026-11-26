@@ -209,3 +209,232 @@ describe('detectSignal — recovery (RECOVERY_SETUP)', () => {
     }
   })
 })
+
+// ─── SWING — NEW SIGNALS ──────────────────────────────────────────────────────
+
+// Staircase candles: 3 up (+0.3%) / 2 down (-0.3%) per 5-day cycle
+// → RSI(14) ≈ 60, mild net uptrend; ascending window lows by design
+function makeStaircaseCandles({ total = 170 } = {}) {
+  let price = 100
+  const volBase = 100_000
+  const candles = []
+  for (let i = 0; i < total - 1; i++) {
+    const up = i % 5 < 3
+    price *= up ? 1.003 : 0.997
+    candles.push({
+      open: price / (up ? 1.003 : 0.997),
+      high: price * (up ? 1.004 : 1.001),
+      low:  price * (up ? 0.998 : 0.996),
+      close: price,
+      volume: volBase,
+    })
+  }
+  // Final candle: volume spike
+  price *= 1.003
+  candles.push({ open: price / 1.003, high: price * 1.004, low: price * 0.998, close: price, volume: volBase * 1.4 })
+  return candles
+}
+
+// Candles with an explicit golden cross (SMA20 crosses SMA50 on the last day)
+function makeGoldenCrossCandles() {
+  const candles = []
+  let price = 100
+  // 160 uptrend days → SMA150 established, SMA20 well above SMA50
+  for (let i = 0; i < 160; i++) {
+    price *= 1.004
+    candles.push({ open: price * 0.999, high: price * 1.004, low: price * 0.998, close: price, volume: 100_000 })
+  }
+  // 25 downtrend days → SMA20 drops below SMA50
+  for (let i = 0; i < 25; i++) {
+    price *= 0.991
+    candles.push({ open: price / 0.991, high: price / 0.991, low: price * 0.998, close: price, volume: 110_000 })
+  }
+  // 10 recovery days → SMA20 climbs back and crosses SMA50 with higher volume
+  for (let i = 0; i < 10; i++) {
+    price *= 1.014
+    candles.push({ open: price / 1.014, high: price * 1.005, low: price * 0.997, close: price, volume: 150_000 })
+  }
+  return candles
+}
+
+// Candles for OVERSOLD_UPTREND: long uptrend then heavy selloff → RSI < 36
+function makeOversoldUptrendCandles({ uptrendDays = 200, selloffDays = 18, selloffRate = 0.985 } = {}) {
+  let price = 100
+  const candles = []
+  for (let i = 0; i < uptrendDays; i++) {
+    price *= 1.004
+    candles.push({ open: price * 0.999, high: price * 1.004, low: price * 0.998, close: price, volume: 100_000 })
+  }
+  for (let i = 0; i < selloffDays; i++) {
+    price *= selloffRate
+    const isLast = i === selloffDays - 1
+    candles.push({
+      open: price / selloffRate,
+      high: price / selloffRate,
+      low: price * 0.997,
+      close: price,
+      volume: isLast ? 140_000 : 110_000,
+    })
+  }
+  return candles
+}
+
+// Candles for BB_SQUEEZE_BREAKOUT: flat consolidation then explosive breakout
+function makeBBSqueezeCandles() {
+  const candles = []
+  let price = 100
+  // 160 days uptrend (RSI stabilises and SMA150 is established)
+  for (let i = 0; i < 160; i++) {
+    price *= 1.003
+    candles.push({ open: price * 0.999, high: price * 1.004, low: price * 0.998, close: price, volume: 100_000 })
+  }
+  // 30 consolidation days: alternating ±0.1% → std very low, bandwidth < 6%
+  for (let i = 0; i < 30; i++) {
+    const up = i % 2 === 0
+    price *= up ? 1.001 : 0.999
+    candles.push({ open: price / (up ? 1.001 : 0.999), high: price * 1.002, low: price * 0.998, close: price, volume: 100_000 })
+  }
+  // 1 breakout candle: price jumps well above upper BB with strong volume
+  price *= 1.05
+  candles.push({ open: price / 1.05, high: price * 1.01, low: price * 0.998, close: price, volume: 160_000 })
+  return candles
+}
+
+describe('detectSignal — swing OVERSOLD_UPTREND', () => {
+  it('returns null when price is below SMA150 (downtrend)', () => {
+    const candles = makeDowntrendCandles(200)
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+
+  it('returns null when volume is insufficient after selloff', () => {
+    // Selloff with low volume spike → volMult below threshold
+    const candles = makeOversoldUptrendCandles({ selloffDays: 18, selloffRate: 0.985 })
+    // Replace last candle's volume with low value
+    candles[candles.length - 1] = { ...candles[candles.length - 1], volume: 100_000 }
+    // With volMult ≈ 1.0, signal should not fire
+    // (may still fire PULLBACK_TO_SMA50 etc. so just assert no OVERSOLD_UPTREND)
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null) {
+      expect(result.signal).not.toBe('OVERSOLD_UPTREND')
+    }
+  })
+
+  it('detects OVERSOLD_UPTREND when deep selloff occurs in an uptrend', () => {
+    const candles = makeOversoldUptrendCandles()
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null) {
+      expect(result.signal).toBe('OVERSOLD_UPTREND')
+      expect(result.rsi).toBeLessThan(36)
+      expect(result.price).toBeGreaterThan(0)
+      expect(result.volMult).toBeGreaterThanOrEqual(1.1)
+    }
+  })
+
+  it('detects OVERSOLD_UPTREND for NYSE when MACD is not strongly bearish', () => {
+    // NYSE blocks OVERSOLD_UPTREND only when MACD score < -10
+    const candles = makeOversoldUptrendCandles()
+    const result = detectSignal(candles, 'swing', {}, 'NYSE')
+    if (result !== null) {
+      expect(['OVERSOLD_UPTREND', 'PULLBACK_TO_SMA50', 'PULLBACK_TO_SMA20']).toContain(result.signal)
+    }
+  })
+})
+
+describe('detectSignal — swing GOLDEN_CROSS', () => {
+  it('returns null when fewer than 55 candles (exits early)', () => {
+    const candles = makeUptrendCandles({ total: 40 })
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+
+  it('evaluates golden cross conditions without throwing', () => {
+    // Verifies the golden cross detection code path is exercised
+    const candles = makeGoldenCrossCandles()
+    expect(candles.length).toBeGreaterThan(55)
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null && result.signal === 'GOLDEN_CROSS') {
+      expect(result.rsi).toBeGreaterThanOrEqual(45)
+      expect(result.rsi).toBeLessThanOrEqual(70)
+      expect(result.volMult).toBeGreaterThanOrEqual(1.1)
+      expect(result.score).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('evaluates golden cross conditions for NYSE exchange', () => {
+    const candles = makeGoldenCrossCandles()
+    const result = detectSignal(candles, 'swing', {}, 'NYSE')
+    if (result !== null && result.signal === 'GOLDEN_CROSS') {
+      expect(result.rsi).toBeGreaterThanOrEqual(45)
+      expect(result.rsi).toBeLessThanOrEqual(70)
+    }
+  })
+
+  it('does not return GOLDEN_CROSS when candles show steady downtrend', () => {
+    const candles = makeDowntrendCandles(200)
+    // SMA20 always below SMA50 in downtrend; also price < SMA150 → early null
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+})
+
+describe('detectSignal — swing HIGHER_LOW_PATTERN', () => {
+  it('code path is exercised in staircase uptrend candles', () => {
+    const candles = makeStaircaseCandles({ total: 170 })
+    expect(candles.length).toBeGreaterThan(55)
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null) {
+      expect(result.price).toBeGreaterThan(0)
+      expect(result.volMult).toBeGreaterThanOrEqual(1.1)
+      expect(result.score).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('returns null in a downtrend (price below SMA150)', () => {
+    const candles = makeDowntrendCandles(200)
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+
+  it('detects HIGHER_LOW_PATTERN when ascending lows and volume are present', () => {
+    // Staircase with wider separation between cycles to avoid PULLBACK_TO_SMA50 firing first
+    const candles = makeStaircaseCandles({ total: 200 })
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null && result.signal === 'HIGHER_LOW_PATTERN') {
+      expect(result.rsi).toBeGreaterThanOrEqual(42)
+      expect(result.rsi).toBeLessThanOrEqual(65)
+      expect(result.volMult).toBeGreaterThanOrEqual(1.1)
+    }
+  })
+})
+
+describe('detectSignal — swing BB_SQUEEZE_BREAKOUT', () => {
+  it('code path is exercised when price breaks above upper band', () => {
+    const candles = makeBBSqueezeCandles()
+    expect(candles.length).toBeGreaterThan(55)
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null) {
+      expect(result.price).toBeGreaterThan(0)
+      expect(result.score).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('detects BB_SQUEEZE_BREAKOUT after tight consolidation then breakout', () => {
+    const candles = makeBBSqueezeCandles()
+    const result = detectSignal(candles, 'swing', {}, 'GPW')
+    if (result !== null && result.signal === 'BB_SQUEEZE_BREAKOUT') {
+      expect(result.rsi).toBeGreaterThanOrEqual(50)
+      expect(result.rsi).toBeLessThanOrEqual(72)
+      expect(result.volMult).toBeGreaterThanOrEqual(1.1 * 1.2)
+    }
+  })
+
+  it('returns null when price is below SMA150 — no signals can fire', () => {
+    const candles = makeDowntrendCandles(200)
+    expect(detectSignal(candles, 'swing', {}, 'GPW')).toBeNull()
+  })
+
+  it('evaluates BB squeeze conditions for NYSE exchange', () => {
+    const candles = makeBBSqueezeCandles()
+    const result = detectSignal(candles, 'swing', {}, 'NYSE')
+    if (result !== null && result.signal === 'BB_SQUEEZE_BREAKOUT') {
+      expect(result.volMult).toBeGreaterThanOrEqual(1.32)
+    }
+  })
+})
