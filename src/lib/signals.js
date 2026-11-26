@@ -190,42 +190,103 @@ export function detectSignal(candles, strategy, thresholds = {}, exchange = 'GPW
     const dMin      = defaults.swing.sma50DeltaMin
     const dMax      = defaults.swing.sma50DeltaMax
     const rsiPeriod = thresholds.rsiPeriod ?? defaults.swing.rsiPeriod ?? 14
-    const rsi    = calcRSI(closes, rsiPeriod)
-    const sma50s = sma50Series
-    const sma50  = sma50s[sma50s.length - 1]
+    const rsi     = calcRSI(closes, rsiPeriod)
+    const sma50s  = sma50Series
+    const sma50   = sma50s[sma50s.length - 1]
     const sma50Delta = sma50 != null ? Math.round((price - sma50) / sma50 * 1000) / 10 : null
+    const sma20Series = calcSMASeries(closes, 20)
+    const sma20   = sma20Series[sma20Series.length - 1]
 
-    // NYSE: block only strongly bearish MACD (bearish crossover + histogram worsening = score -15)
-    // Mild bearish MACD (score -5 or -10) is normal during a healthy pullback to SMA50
-    // — sma50Slope > 0 and price > sma150 already ensure we're in an uptrend context
+    // GOLDEN_CROSS: SMA20 crossed above SMA50 within last 3 sessions
+    // Exempt from MACD guard — the crossover itself is the momentum confirmation
+    const hasGoldenCross = (() => {
+      const last = sma20Series.length - 1
+      for (let i = 0; i <= 2; i++) {
+        const s20c = sma20Series[last - i], s50c = sma50s[last - i]
+        const s20p = sma20Series[last - i - 1], s50p = sma50s[last - i - 1]
+        if (s20c != null && s50c != null && s20p != null && s50p != null &&
+            s20c > s50c && s20p <= s50p) return true
+      }
+      return false
+    })()
+    if (hasGoldenCross && rsi != null && rsi >= 45 && rsi <= 70 && volMult != null && volMult >= volThr) {
+      const score = calcScore('swing', { ...scoreInputs, rsi })
+      return { signal: 'GOLDEN_CROSS', price, rsi, rsiPeriod, volMult, sma20, sma50, sma50Delta,
+        dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'), score, ...extra }
+    }
+
+    // OVERSOLD_UPTREND: RSI below rsiFloor but price firmly above SMA150 (uptrend intact)
+    // Differentiates from scalping RSI_OVERSOLD by requiring SMA150 uptrend context
+    // NYSE: apply lightweight MACD guard (block only if selling still accelerating)
+    if (rsi != null && rsi < rsiFloor && volMult != null && volMult >= volThr &&
+        (exchange !== 'NYSE' || macdSig.score >= -10)) {
+      const score = calcScore('swing', { ...scoreInputs, rsi })
+      return { signal: 'OVERSOLD_UPTREND', price, rsi, rsiPeriod, volMult, sma20, sma50, sma50Delta,
+        dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'), score, ...extra }
+    }
+
+    // NYSE: block strongly bearish MACD for remaining signals
+    // (bearish crossover + histogram worsening = score -15 = genuine downtrend, not pullback)
     if (exchange === 'NYSE' && macdSig.score < -10) return null
 
-    const sma20 = calcSMA(closes, 20)
-
-    // Pullback-to-SMA50: price within proximity band, RSI in reset zone, mild volume
+    // PULLBACK_TO_SMA50: price within proximity band, RSI in reset zone, mild volume
     const inPullbackZone = sma50Delta != null && sma50Delta >= dMin && sma50Delta <= dMax
     const rsiReset       = rsi != null && rsi >= rsiFloor && rsi <= rsiCeil
     if (inPullbackZone && rsiReset && volMult && volMult >= volThr && (sma50Slope == null || sma50Slope > 0)) {
       const score = calcScore('swing', { ...scoreInputs, rsi })
       return { signal: 'PULLBACK_TO_SMA50', price, rsi, rsiPeriod, volMult,
-        sma20, sma50,
-        sma50Delta,
+        sma20, sma50, sma50Delta,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
         score, ...extra }
     }
 
-    // PULLBACK_TO_SMA20 — earlier entry in strong uptrends (SMA20 > SMA50 > SMA150)
+    // PULLBACK_TO_SMA20: earlier entry in strong uptrends (SMA20 > SMA50 > SMA150)
     const sma20Delta = sma20 != null ? Math.round((price - sma20) / sma20 * 1000) / 10 : null
     const strongAlignment = sma20 != null && sma50 != null && sma150 != null && sma20 > sma50 && sma50 > sma150
-    const nearSma20Swing = sma20Delta != null && sma20Delta >= -3 && sma20Delta <= 2
-    const rsiSma20Valid = rsi != null && rsi >= 42 && rsi <= 60
+    const nearSma20Swing  = sma20Delta != null && sma20Delta >= -3 && sma20Delta <= 2
+    const rsiSma20Valid   = rsi != null && rsi >= 42 && rsi <= 60
     if (strongAlignment && nearSma20Swing && rsiSma20Valid && volMult != null && volMult >= volThr) {
       const score = calcScore('swing', { ...scoreInputs, rsi })
       return { signal: 'PULLBACK_TO_SMA20', price, rsi, rsiPeriod, volMult,
-        sma20, sma50,
-        sma50Delta: sma20Delta,
+        sma20, sma50, sma50Delta: sma20Delta,
         dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'),
         score, ...extra }
+    }
+
+    // HIGHER_LOW_PATTERN: ascending lows over last 21 sessions (3 × 7-day windows)
+    // Catches trend continuation when price is above SMA50 but not near it (no PULLBACK_TO_SMA50)
+    if (candles.length >= 21 && sma50 != null && price > sma50 &&
+        rsi != null && rsi >= 42 && rsi <= 65 && volMult != null && volMult >= volThr) {
+      const lows = candles.slice(-21).map(c => c.low ?? c.close)
+      const w1   = Math.min(...lows.slice(0, 7))
+      const w2   = Math.min(...lows.slice(7, 14))
+      const w3   = Math.min(...lows.slice(14))
+      if (w1 < w2 && w2 < w3) {
+        const score = calcScore('swing', { ...scoreInputs, rsi })
+        return { signal: 'HIGHER_LOW_PATTERN', price, rsi, rsiPeriod, volMult, sma20, sma50, sma50Delta,
+          dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'), score, ...extra }
+      }
+    }
+
+    // BB_SQUEEZE_BREAKOUT: Bollinger squeeze in prior 10 sessions then price breaks above upper band
+    // Squeeze = bandwidth < 6% — signals compressed volatility before an expansion move
+    if (bands && price > bands.upper &&
+        rsi != null && rsi >= 50 && rsi <= 72 && volMult != null && volMult >= volThr * 1.2) {
+      const hadSqueeze = closes.length >= 30 && (() => {
+        for (let i = 10; i >= 1; i--) {
+          const sl = closes.slice(-20 - i, -i)
+          if (sl.length < 20) continue
+          const mean = sl.reduce((a, b) => a + b, 0) / 20
+          const std  = Math.sqrt(sl.reduce((s, p) => s + (p - mean) ** 2, 0) / 20)
+          if (std > 0 && (4 * std / mean * 100) < 6) return true
+        }
+        return false
+      })()
+      if (hadSqueeze) {
+        const score = calcScore('swing', { ...scoreInputs, rsi })
+        return { signal: 'BB_SQUEEZE_BREAKOUT', price, rsi, rsiPeriod, volMult, sma20, sma50, sma50Delta,
+          dynamicStopLoss: calcDynamicStopLoss(atr, price, 'swing'), score, ...extra }
+      }
     }
   }
 

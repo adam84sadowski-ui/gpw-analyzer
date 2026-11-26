@@ -15,6 +15,10 @@ const BASE_TEXT = {
   BREAKOUT:                'Cena wybiła powyżej lokalnego maksimum z ostatnich 20 dni przy zwiększonym wolumenie. Spekulacyjny sygnał — może generować duże zyski lub szybko się odwrócić. Stosuj ścisły stop loss.',
   VOL_SURGE:               'Wyjątkowo wysoki wolumen z silnym zamknięciem przy szczycie dnia — sygnał instytucjonalnego katalizatora (earnings beat, FDA, makro). Momentum potwierdzone przez MACD i trend SMA150. Horyzont 1-2 dni, cel +3%, stop -2%. Wejdź rano następnego dnia przy utrzymaniu impulsu.',
   RECOVERY_SETUP:          'Fallen angel — spółka spadła ≥35% od szczytu 52-tygodniowego, RSI w strefie głębokiej wyprzedaży (20-52). Strategia value recovery: szukamy fundamentalnie silnych spółek tymczasowo wyprzedanych przez rynek. AI ocenia jakość biznesu i katalizatory odbicia. Horyzont 6-12 miesięcy, cel +25-40%.',
+  GOLDEN_CROSS:            'SMA20 właśnie przebił SMA50 od dołu — klasyczny sygnał zmiany momentum z bearish na bullish. Krótkoterminowy trend dogania długoterminowy. Wejdź przy potwierdzeniu z wolumenem, ustaw stop poniżej SMA50. Cel +10-15% w ciągu 4-8 tygodni.',
+  OVERSOLD_UPTREND:        'RSI spadł głęboko poniżej strefy pullbacku (< 36 GPW / < 40 NYSE) — spółka jest nadmiernie wyprzedana PRZY ZACHOWANYM trendzie wzrostowym (cena > SMA150). Silniejszy sygnał odwrócenia niż standardowy pullback. Stop pod ostatnim dołkiem. Cel +12-18%.',
+  HIGHER_LOW_PATTERN:      'Spółka tworzy serię wyższych den w trendzie wzrostowym (3 okna po 7 sesji, każde z wyższym minimum) — potwierdzenie kontynuacji trendu. Kupujący aktywnie bronią coraz wyższych poziomów wsparcia. Horyzont 4-8 tygodni.',
+  BB_SQUEEZE_BREAKOUT:     'Bollinger Bands wcześniej ściskały się (bandwidth < 6% — kompresja zmienności), teraz cena wybiła powyżej górnej wstęgi z rozszerzaniem pasma. Klasyczny setup squeeze → expansion. Większy potencjał ruchu niż standardowy pullback. Stop pod środkową wstęgą BB.',
 }
 
 export function interpretSignal(signal, values = {}, strategy = 'scalping') {
@@ -81,6 +85,38 @@ export function interpretSignal(signal, values = {}, strategy = 'scalping') {
     if (values.sma20 && values.sma50 && values.sma20 > values.sma50) positives.push('✅ SMA20 > SMA50 — silna alignacja trendu, wcześniejsze wejście uzasadnione')
     if (values.rsi != null) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — reset w strefie 42-60, trend intaktny')
     warnings.push('⚠️ Większe ryzyko niż PULLBACK_TO_SMA50 — mniejsza korekta, wyższy poziom wejścia')
+  }
+
+  if (signal === 'GOLDEN_CROSS') {
+    positives.push('✅ SMA20 przebił SMA50 — zmiana momentum z bearish na bullish')
+    if (values.volMult >= 1.5) positives.push('✅ Wolumen ' + values.volMult + 'x — potwierdzenie siłą popytu')
+    if (values.rsi != null && values.rsi <= 55) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — nie wykupiony, jest przestrzeń do ruchu')
+    if (values.rsi != null && values.rsi > 65) warnings.push('⚠️ RSI ' + values.rsi?.toFixed(1) + ' — momentum silne, ale wejście późno po crossover')
+    warnings.push('⚠️ Fałszywe golden cross zdarzają się przy niskim wolumenie — potwierdź kolejną sesją')
+  }
+
+  if (signal === 'OVERSOLD_UPTREND') {
+    if (values.rsi != null && values.rsi <= 30) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — ekstremalna wyprzedaż przy zachowanym trendzie wzrostowym (> SMA150)')
+    else if (values.rsi != null)                positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — głęboka wyprzedaż w uptrendzie (silniejszy setup niż PULLBACK_TO_SMA50)')
+    if (values.volMult >= 1.5) positives.push('✅ Wolumen ' + values.volMult + 'x — zainteresowanie przy głębokiej korekcie')
+    warnings.push('⚠️ Głęboka wyprzedaż może trwać dłużej — użyj szerszego stop-loss niż standardowy (ATR-based lub -6-8%)')
+    warnings.push('⚠️ Sprawdź czy nie ma negatywnych newsów fundamentalnych — jeśli tak, uruchom walidację AI')
+  }
+
+  if (signal === 'HIGHER_LOW_PATTERN') {
+    positives.push('✅ Seria wyższych den w 3 oknach 7-sesyjnych — trend wzrostowy potwierdzony strukturą rynku')
+    if (values.rsi != null) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — momentum w zdrowej strefie kontynuacji trendu')
+    if (values.sma50Delta != null && values.sma50Delta > 0) positives.push('✅ Cena powyżej SMA50 — trend intaktny, nie jest to pullback do wsparcia')
+    if (values.volMult >= 1.3) positives.push('✅ Wolumen ' + values.volMult + 'x — kupujący aktywni na wyższych poziomach')
+    warnings.push('⚠️ Setup nie gwarantuje że kolejne dno nie będzie niższe — stop pod ostatnim lokalnym minimum')
+  }
+
+  if (signal === 'BB_SQUEEZE_BREAKOUT') {
+    positives.push('✅ Prior squeeze (bandwidth < 6%) + wybicie powyżej górnej BB — klasyczny sygnał ekspansji zmienności')
+    if (values.volMult >= 1.5) positives.push('✅ Wolumen ' + values.volMult + 'x — wybicie potwierdzone przez kupujących')
+    if (values.rsi != null && values.rsi <= 60) positives.push('✅ RSI ' + values.rsi?.toFixed(1) + ' — nie wykupiony mimo wybicia, jest przestrzeń do kontynuacji')
+    if (values.rsi != null && values.rsi > 68) warnings.push('⚠️ RSI ' + values.rsi?.toFixed(1) + ' — bliski strefy wykupienia, rozważ mniejszą pozycję')
+    warnings.push('⚠️ Fałszywe wybicia Bollingera zdarzają się — stop pod środkową wstęgą BB, nie pod dolną')
   }
 
   if (signal === 'RECOVERY_SETUP') {
@@ -177,6 +213,39 @@ export function interpretPositionState(pos, currentPrice, cur) {
     if (sma50Delta > 12) return `⚠️ Cena odleciała od SMA20 (+${sma50Delta}%) — rozważ trailing stop.`
     if (sma50Delta > 0)  return `✅ Cena odbija od SMA20 (+${sma50Delta}%) — wcześniejszy pullback aktywny. RSI: ${rsi?.toFixed(1)}.`
     return `📊 Cena przy SMA20 (${sma50Delta}%). RSI: ${rsi?.toFixed(1)} — obserwuj kierunek.`
+  }
+
+  if (signal === 'GOLDEN_CROSS') {
+    if (sma50Delta < 0)   return '⚠️ Cena wróciła pod SMA50 — golden cross zanegowany. Rozważ zamknięcie pozycji.'
+    if (sma50Delta > 25)  return `⚠️ Duże oddalenie od SMA50 (+${sma50Delta}%) — korekta możliwa. Zaciągnij trailing stop.`
+    if (rsi > 70)         return '⚠️ RSI wykupiony (>70) — momentum silne, ale rozważ realizację części zysku.'
+    if (sma50Delta > 0)   return `✅ Cena nad SMA50 (+${sma50Delta}%) — golden cross podtrzymany. RSI: ${rsi?.toFixed(1)}.`
+    return `📊 GOLDEN_CROSS aktywny. RSI: ${rsi?.toFixed(1)}, vs SMA50: ${sma50Delta}%.`
+  }
+
+  if (signal === 'OVERSOLD_UPTREND') {
+    if (rsi > 60) return '💡 RSI wyszedł ze strefy wyprzedania (>60) — odbicie potwierdzone. Rozważ trailing stop lub realizację.'
+    if (rsi > 50) return '✅ RSI wrócił do 50+ — spółka wychodzi z ekstremalnej wyprzedaży. Trend wzrostowy wznowiony.'
+    if (isPriceDown && volMult >= 2) return '⚠️ Wysoki wolumen przy dalszym spadku — wyprzedaż trwa. Sprawdź fundamenty lub zacieśnij stop.'
+    if (isPriceDown) return '⚠️ Cena nadal poniżej wejścia — dno jeszcze nie potwierdzone. Monitoruj RSI.'
+    return `📊 OVERSOLD_UPTREND aktywny. RSI: ${rsi?.toFixed(1)} — obserwuj powrót do strefy 40+.`
+  }
+
+  if (signal === 'HIGHER_LOW_PATTERN') {
+    if (isPriceDown && volMult >= 2) return '⚠️ Wysoki wolumen przy spadku — wzorzec wyższych den zagrożony. Sprawdź czy ostatnie dno jest nadal wyższe.'
+    if (rsi > 65) return '💡 RSI powyżej 65 — momentum silne. Rozważ realizację części zysku lub trailing stop.'
+    if (rsi < 35) return '⚠️ RSI spadł poniżej 35 — wzorzec wyższych den może być łamany. Weryfikuj stop loss.'
+    if (sma50Delta < -5) return '⚠️ Cena spadła poniżej SMA50 — wyższe dna zanegowane. Rozważ wyjście.'
+    if (!isPriceDown) return `✅ Trend wyższych den kontynuowany. Cena +${Math.round((currentPrice - entryPrice) / entryPrice * 100 * 10) / 10}% od wejścia. RSI: ${rsi?.toFixed(1)}.`
+    return `📊 HIGHER_LOW_PATTERN aktywny. RSI: ${rsi?.toFixed(1)}, vs SMA50: ${sma50Delta}%.`
+  }
+
+  if (signal === 'BB_SQUEEZE_BREAKOUT') {
+    if (rsi > 72)        return '⚠️ RSI wykupiony (>72) — wybicie silne, ale rozważ realizację zysku lub trailing stop.'
+    if (isPriceDown)     return '⚠️ Cena wróciła poniżej górnej wstęgi BB — wybicie może być fałszywe. Sprawdź stop pod środkową BB.'
+    if (volMult < 1.2)   return '⚠️ Wolumen opada — ekspansja squeeze może wygasać. Zaciągnij trailing stop.'
+    if (!isPriceDown)    return `✅ BB squeeze expansion aktywna. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
+    return `📊 BB_SQUEEZE_BREAKOUT. RSI: ${rsi?.toFixed(1)}, wolumen: ${volMult}x.`
   }
 
   if (signal === 'SMA50_CROSSOVER') {
