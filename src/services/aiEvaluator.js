@@ -691,15 +691,26 @@ Punkty w "analysis" (15 kryteriów quality dip rebound):
         return `RSI: ${rsi} — strefa 50-72 (momentum breakout bez skrajnego wykupienia).`
       if (signal === 'HIGHER_LOW_PATTERN')
         return `RSI: ${rsi} — strefa 42-65 (zdrowe momentum, trend kontynuacja). NIE oczekujemy pullbacku do SMA50 — cena jest ${sma50Delta}% powyżej i utrzymuje poziom wznoszących minimów.`
+      if (signal === 'PULLBACK_TO_SMA20')
+        return `RSI: ${rsi} — optymalny reset 42-60 dla wejścia przy SMA20 (węższy zakres niż SMA50 — sygnał wymaga aktywnego momentum). RSI < 42 = za głębokie cofnięcie. RSI > 60 = cofnięcie niewystarczające.`
       return `RSI: ${rsi} — optymalny reset 36-55. RSI < 36 = oversold (nie pullback). RSI > 55 = cofnięcie niewystarczające.`
     })()
 
     const swingMacdPoint = (() => {
+      const macdData = macd
+        ? `linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | ${macd.trend?.toUpperCase() ?? '?'}`
+        : 'brak danych'
       if (signal === 'GOLDEN_CROSS')
-        return `GOLDEN CROSS — MACD KONTEKST: ${macd ? `linia=${macd.line?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | ${macd.trend?.toUpperCase() ?? '?'}` : 'brak danych'}. WAŻNE: przy GOLDEN_CROSS MACD może być jeszcze bearish (crossover SMA właśnie wraca z dołu) — to NORMALNE, nie dyskwalifikuje. Bullish zwrot histogramu = dodatkowe potwierdzenie; brak zwrotu = wyższe ryzyko przedwczesnego wejścia.`
+        return `GOLDEN CROSS — MACD KONTEKST: ${macdData}. WAŻNE: przy GOLDEN_CROSS MACD może być jeszcze bearish (crossover SMA właśnie wraca z dołu) — to NORMALNE, nie dyskwalifikuje. Bullish zwrot histogramu = dodatkowe potwierdzenie; brak zwrotu = wyższe ryzyko przedwczesnego wejścia.`
       if (signal === 'BB_SQUEEZE_BREAKOUT')
-        return `MACD PRZY WYBICIU: ${macd ? `linia=${macd.line?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | ${macd.trend?.toUpperCase() ?? '?'}` : 'brak danych'}. Dla BB_SQUEEZE_BREAKOUT oczekujemy rosnącego lub bliskiego zera histogramu. Bearish MACD przy wybiciu = czerwona flaga (możliwy false breakout — ustal tight stop).`
-      return `MACD PRZY COFNIĘCIU: ${macd ? `linia=${macd.line?.toFixed(3)}, sygnał=${macd.signal?.toFixed(3)}, histogram=${macd.histogram?.toFixed(3)} | Trend: ${macd.trend?.toUpperCase() ?? '?'}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.` : 'MACD: brak danych — oceń z kontekstu'}`
+        return `MACD PRZY WYBICIU Z KONSOLIDACJI: ${macdData}. Dla BB_SQUEEZE_BREAKOUT oczekujemy rosnącego lub bliskiego zera histogramu. Bearish MACD przy wybiciu = czerwona flaga (możliwy false breakout — ustal tight stop poniżej middle BB).`
+      if (signal === 'HIGHER_LOW_PATTERN')
+        return `MACD PRZY WZN. MINIMACH: ${macdData}. Dla HIGHER_LOW_PATTERN MACD powinien być neutralny lub bullish — potwierdza że trend nie traci impetu między minimami. Pogarszający się histogram (bearish, eskalujący) = ostrzeżenie, że wzn. minima mogą nie wytrzymać.`
+      if (signal === 'OVERSOLD_UPTREND')
+        return `MACD PRZY WYPRZEDANIU: ${macdData}. Przy OVERSOLD_UPTREND bearish MACD jest oczekiwany (jesteśmy w głębokiej korekcie). Kluczowe: czy histogram zaczyna się spłaszczać lub odwracać? Spłaszczenie = sprzedający tracą impet → wejście uzasadnione. Nadal eskalujące bearish = ryzyko głębszego dołka.`
+      if (signal === 'PULLBACK_TO_SMA20')
+        return `MACD W SILNYM TRENDZIE (PRZY SMA20): ${macdData}. Dla PULLBACK_TO_SMA20 MACD powinien być bullish lub neutralny — cofnięcie do SMA20 w silnym trendzie nie powinno powodować głębokiego bearish. Bearish crossover = ostrzeżenie, że trend słabnie szybciej niż oczekiwano.`
+      return `MACD PRZY COFNIĘCIU DO SMA50: ${macdData}. Bullish bias: MACD ≥ signal lub histogram rosnący = swing gotowy. Deeply negative histogram = ryzyko fałszywego sygnału.`
     })()
 
     prompt = `Jesteś seniorem analitykiem inwestycyjnym z 20-letnim doświadczeniem. Łączysz metodologię Warrena Buffetta (value investing, economic moat, margin of safety) z praktyką Petera Lyncha (growth at reasonable price, timing wejścia swing).
